@@ -38,6 +38,8 @@ import {
   Campaign,
   Assignment,
   Storefront,
+  School,
+  MenuBook,
 } from "@mui/icons-material";
 import { Money } from "@phosphor-icons/react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
@@ -155,6 +157,11 @@ const Navbar = (props) => {
     }));
   };
 
+  const isNavPathSelected = (path) =>
+    location.pathname === path ||
+    (path === "/elimu-plus" && location.pathname.startsWith("/elimu-plus")) ||
+    (path === "/curriculum" && location.pathname.startsWith("/curriculum"));
+
   const logout = () => {
     localStorage.clear();
     navigate("/");
@@ -166,6 +173,7 @@ const Navbar = (props) => {
 
   const adminItems = [
     { text: "Dashboard", icon: <Dashboard />, path: "/analytics" },
+    { text: "Elimu Plus", icon: <School />, path: "/elimu-plus" },
     {
       text: "Blogs",
       icon: <Article />,
@@ -190,6 +198,11 @@ const Navbar = (props) => {
       text: "Users",
       icon: <PeopleAlt />,
       path: "/users",
+    },
+    {
+      text: "Curriculum",
+      icon: <MenuBook />,
+      path: "/curriculum",
     },
     {
       text: "Marketplace",
@@ -379,33 +392,23 @@ const Navbar = (props) => {
                   key={item.text}
                   button
                   onClick={() => navigate(item.path)}
-                  selected={location.pathname === item.path}
+                  selected={isNavPathSelected(item.path)}
                   sx={{
                     cursor: "pointer",
-                    bgcolor:
-                      location.pathname === item.path
-                        ? "action.selected"
-                        : "transparent", // Highlight selected item
+                    bgcolor: isNavPathSelected(item.path) ? "action.selected" : "transparent",
                   }}
                 >
                   <ListItemIcon>
                     {cloneElement(item.icon, {
-                      color:
-                        location.pathname === item.path
-                          ? "primary"
-                          : "textSecondary",
+                      color: isNavPathSelected(item.path) ? "primary" : "textSecondary",
                     })}
                   </ListItemIcon>
                   <ListItemText
                     primary={item.text}
                     sx={{
                       cursor: "pointer",
-                      color:
-                        location.pathname === item.path
-                          ? "primary"
-                          : "textSecondary",
-                      fontWeight:
-                        location.pathname === item.path ? "bold" : "normal", // Highlight text for selected item
+                      color: isNavPathSelected(item.path) ? "primary" : "textSecondary",
+                      fontWeight: isNavPathSelected(item.path) ? "bold" : "normal",
                     }}
                   />
                 </ListItem>

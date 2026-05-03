@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
-  Card,
-  CardContent,
-  Grid,
   Button,
   Chip,
   IconButton,
@@ -18,10 +16,8 @@ import {
   Select,
   MenuItem,
   Stack,
-  Divider,
   CircularProgress,
   Alert,
-  Paper,
   Table,
   TableBody,
   TableCell,
@@ -30,1738 +26,759 @@ import {
   TableRow,
   TablePagination,
   Tooltip,
-  FormControlLabel,
-  Switch,
-  Avatar,
-  InputAdornment,
   Tabs,
   Tab,
 } from "@mui/material";
 import {
   Add as AddIcon,
+  UploadFile as UploadFileIcon,
+  Download as DownloadIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Person as PersonIcon,
   Email as EmailIcon,
   Phone as PhoneIcon,
   Visibility as ViewIcon,
-  Visibility as Visibility,
-  VisibilityOff as VisibilityOff,
-  AdminPanelSettings as AdminIcon,
   Close as CloseIcon,
-  CheckCircle as ActiveIcon,
-  CheckCircle,
-  Schedule,
-  Cancel as InactiveIcon,
-  Check as ApproveIcon,
-  Block as SuspendIcon,
+  ToggleOn as ToggleOnIcon,
+  Home as HomeIcon,
+  Badge as BadgeIcon,
 } from "@mui/icons-material";
-import { useTheme } from "@mui/material/styles";
 import Swal from "sweetalert2";
 
-const UsersTable = () => {
-  const theme = useTheme();
-  const palette = {
-    primary: "#B85C38",
-    primaryDark: "#8B4225",
-    accent: "#6B4E3D",
-    lightBg: "#F5F1E8",
-    border: "rgba(107, 78, 61, 0.2)",
-    text: "#3D2817",
-  };
+// Elimu Plus — match Settings / Login red palette
+const primaryRed = "#DC2626";
+const primaryDark = "#B91C1C";
+const primaryLight = "#FEE2E2";
+const backgroundLight = "#FEF2F2";
+const textMuted = "#6B7280";
 
-  // Helper to build URL for uploaded assets using Vite proxy
-  const buildImageUrl = (imageUrl) => {
-    if (!imageUrl) return "";
-    if (imageUrl.startsWith("http")) return imageUrl;
+const ALL_ROLES = [
+  "super_admin",
+  "admin",
+  "teacher",
+  "student",
+  "parent",
+  "accountant",
+  "librarian",
+];
 
-    // Use relative URLs - Vite proxy will handle routing to backend
-    if (imageUrl.startsWith("uploads/")) return `/${imageUrl}`;
-    if (imageUrl.startsWith("/uploads/")) return imageUrl;
-    return imageUrl;
-  };
+const ROLE_TABS = [
+  { label: "All users", value: null },
+  { label: "Super admin", value: "super_admin" },
+  { label: "Admin", value: "admin" },
+  { label: "Teacher", value: "teacher" },
+  { label: "Student", value: "student" },
+  { label: "Parent", value: "parent" },
+  { label: "Accountant", value: "accountant" },
+  { label: "Librarian", value: "librarian" },
+];
 
+const authJsonHeaders = (token) => ({
+  "Content-Type": "application/json",
+  Accept: "application/json",
+  Authorization: `Bearer ${token}`,
+});
+
+const fullMainBleedSx = (theme) => ({
+  width: `calc(100% + ${theme.spacing(6)})`,
+  maxWidth: "none",
+  marginLeft: theme.spacing(-3),
+  marginRight: theme.spacing(-3),
+  marginTop: "1px",
+  marginBottom: "1px",
+  boxSizing: "border-box",
+});
+
+function formatRole(role) {
+  if (!role) return "—";
+  return String(role).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function roleChipColor(role) {
+  switch (role) {
+    case "super_admin":
+      return { bg: "#991B1B", color: "#fff" };
+    case "admin":
+      return { bg: primaryRed, color: "#fff" };
+    case "teacher":
+      return { bg: "#EA580C", color: "#fff" };
+    case "student":
+      return { bg: "#2563EB", color: "#fff" };
+    case "parent":
+      return { bg: "#7C3AED", color: "#fff" };
+    case "accountant":
+      return { bg: "#0D9488", color: "#fff" };
+    case "librarian":
+      return { bg: "#4B5563", color: "#fff" };
+    default:
+      return { bg: primaryLight, color: primaryDark };
+  }
+}
+
+const emptyForm = () => ({
+  username: "",
+  email: "",
+  password: "",
+  full_name: "",
+  phone: "",
+  address: "",
+  role: "admin",
+});
+
+async function downloadUsersImportTemplate(token) {
+  const res = await fetch("/api/users/import-template", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || `Download failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "users-import-template.xlsx";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export default function UsersTable() {
+  const navigate = useNavigate();
+  const importInputRef = useRef(null);
+  const [importing, setImporting] = useState(false);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [openViewDialog, setOpenViewDialog] = useState(false);
-  const [openEditDialog, setOpenEditDialog] = useState(false);
-  const [openCreateDialog, setOpenCreateDialog] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [activeTab, setActiveTab] = useState(0);
-  const [showPassword, setShowPassword] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalUsers, setTotalUsers] = useState(0);
-  const [userForm, setUserForm] = useState({
-    full_name: "",
-    email: "",
-    phone: "",
-    position: "",
-    description: "",
-    role: "admin",
-    password: "",
-    profile_picture: null,
-    profile_picture_preview: "",
-    profile_picture_path: "", // For storing the relative path
-    isActive: true,
-    whatsapp_link: "",
-    google_link: "",
-    twitter_link: "",
-    facebook_link: "",
-  });
+  const [activeTab, setActiveTab] = useState(0);
+  const [openView, setOpenView] = useState(false);
+  const [openEdit, setOpenEdit] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [form, setForm] = useState(emptyForm());
+  const [saving, setSaving] = useState(false);
 
-  // Role tabs configuration
-  const roleTabs = [
-    { label: "All Users", value: null },
-    { label: "Super Admins", value: "super-admin" },
-    { label: "Admins", value: "admin" },
-    { label: "Regular Users", value: "regular user" },
-  ];
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setError("Please sign in again.");
+      setLoading(false);
+      return;
+    }
 
-  useEffect(() => {
-    fetchUsers();
-  }, [page, rowsPerPage, activeTab]);
+    const role = ROLE_TABS[activeTab]?.value;
+    const params = new URLSearchParams({
+      page: String(page + 1),
+      limit: String(rowsPerPage),
+    });
+    if (role) params.set("role", role);
 
-  const fetchUsers = async () => {
     try {
-      setLoading(true);
-      setError(null);
-      const token = localStorage.getItem("token");
+      const response = await fetch(`/api/users?${params.toString()}`, {
+        method: "GET",
+        headers: authJsonHeaders(token),
+      });
 
-      if (!token) {
-        setError("No authentication token found. Please login again.");
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        setError(response.status === 404 ? "API endpoint not found. Is the server running?" : "Invalid response from server.");
+        setUsers([]);
+        setTotalUsers(0);
         return;
       }
 
-      const queryParams = new URLSearchParams({
-        page: (page + 1).toString(),
-        limit: rowsPerPage.toString(),
-      });
-
-      // Add role filter if a specific role is selected
-      const selectedRole = roleTabs[activeTab]?.value;
-      if (selectedRole) {
-        queryParams.append("role", selectedRole);
+      if (!response.ok) {
+        setError(data.message || `Request failed (${response.status})`);
+        setUsers([]);
+        setTotalUsers(0);
+        return;
       }
-
-      const response = await fetch(`/api/admin-users?${queryParams}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
 
       if (data.success) {
-        setUsers(data.data || []);
-        setTotalUsers(data.pagination?.total || 0);
+        setUsers(Array.isArray(data.data) ? data.data : []);
+        setTotalUsers(data.pagination?.total ?? 0);
       } else {
-        setError("Failed to fetch users: " + (data.message || "Unknown error"));
+        setError(data.message || "Failed to load users.");
+        setUsers([]);
+        setTotalUsers(0);
       }
-    } catch (err) {
-      setError("Error fetching users: " + err.message);
+    } catch (e) {
+      setError(e.message || "Network error.");
+      setUsers([]);
+      setTotalUsers(0);
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, rowsPerPage, activeTab]);
 
-  const getRoleColor = (role) => {
-    switch (role) {
-      case "super-admin":
-        return "error";
-      case "admin":
-        return "primary";
-      case "regular user":
-        return "secondary";
-      default:
-        return "default";
+  const handleDownloadTemplate = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setError("Please sign in again.");
+      return;
+    }
+    try {
+      await downloadUsersImportTemplate(token);
+    } catch (e) {
+      setError(e.message || "Could not download template");
     }
   };
 
-  const formatRole = (role) => {
-    if (!role) return "N/A";
-    return role.replace("-", " ").replace(/_/g, " ").split(" ").map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(" ");
+  const handleImportExcelChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setError("Please sign in again.");
+      return;
+    }
+    setImporting(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/users/import-excel", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Import failed (${res.status})`);
+      }
+      const { createdCount = 0, errorCount = 0, errors = [] } = data.data || {};
+      const errLines =
+        errors.length > 0
+          ? `<ul style="text-align:left;margin:8px 0 0;padding-left:1.25rem">${errors
+              .slice(0, 30)
+              .map((errRow) => `<li>Row ${errRow.row}: ${errRow.message}</li>`)
+              .join("")}${errors.length > 30 ? `<li>…and ${errors.length - 30} more</li>` : ""}</ul>`
+          : "";
+      await Swal.fire({
+        icon: errorCount > 0 ? "warning" : "success",
+        title: "Import finished",
+        html: `<p><strong>${createdCount}</strong> user(s) created.<br/><strong>${errorCount}</strong> row(s) skipped.</p>${errLines}`,
+        width: 560,
+      });
+      await fetchUsers();
+    } catch (err) {
+      setError(err.message || "Import failed");
+    } finally {
+      setImporting(false);
+    }
   };
 
-  const getStatusColor = (isActive) => {
-    return isActive ? "success" : "error";
-  };
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
-  const getInitials = (name) => {
-    if (!name) return "U";
-    const parts = name.trim().split(/\s+/);
-    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-    return (
-      parts[0].charAt(0) + parts[parts.length - 1].charAt(0)
-    ).toUpperCase();
-  };
-
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
+  const handleTabChange = (_, newValue) => {
+    setActiveTab(newValue);
     setPage(0);
   };
 
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
-    setPage(0); // Reset to first page when switching tabs
-  };
+  const mapUserToForm = (u) => ({
+    username: u.username ?? "",
+    email: u.email ?? "",
+    password: "",
+    full_name: u.full_name ?? "",
+    phone: u.phone ?? "",
+    address: u.address ?? "",
+    role: u.role ?? "admin",
+  });
 
-  const handleProfilePictureChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      setUserForm({
-        ...userForm,
-        profile_picture: file,
-        profile_picture_preview: URL.createObjectURL(file),
-      });
-    }
-  };
-
-  const handleViewUser = (user) => {
+  const handleEditOpen = (user) => {
     setSelectedUser(user);
-    setOpenViewDialog(true);
+    setForm(mapUserToForm(user));
+    setOpenEdit(true);
   };
 
-  const handleEditUser = (user) => {
+  const handleViewOpen = (user) => {
     setSelectedUser(user);
-
-    // Convert file path to URL for display
-    let profilePictureUrl = "";
-    let profilePicturePath = "";
-    if (user.profile_image) {
-      profilePictureUrl = buildImageUrl(user.profile_image);
-      profilePicturePath = user.profile_image; // Store the relative path
-    }
-
-    setUserForm({
-      full_name: user.full_name || "",
-      email: user.email || "",
-      phone: user.phone || "",
-      position: user.position || "",
-      description: user.description || "",
-      role: user.role || "admin",
-      password: "",
-      profile_picture: null,
-      profile_picture_preview: profilePictureUrl,
-      profile_picture_path: profilePicturePath, // Store the existing path
-      isActive: user.isActive !== undefined ? user.isActive : true,
-      whatsapp_link: user.whatsapp_link || "",
-      google_link: user.google_link || "",
-      twitter_link: user.twitter_link || "",
-      facebook_link: user.facebook_link || "",
-    });
-    setOpenEditDialog(true);
+    setOpenView(true);
   };
 
-  const handleDeleteUser = async (user) => {
+  const handleDelete = async (user) => {
     const result = await Swal.fire({
-      title: "Are you sure?",
-      text: `Do you want to delete "${user.full_name}"?`,
+      title: "Delete user?",
+      text: `Remove "${user.full_name}"? This cannot be undone.`,
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
-      confirmButtonText: "Yes, delete it!",
-      cancelButtonText: "Cancel",
+      confirmButtonColor: primaryRed,
+      cancelButtonColor: "#6B7280",
+      confirmButtonText: "Delete",
     });
+    if (!result.isConfirmed) return;
 
-    if (result.isConfirmed) {
-      try {
-        setIsDeleting(true);
-        const token = localStorage.getItem("token");
+    const token = localStorage.getItem("token");
+    if (!token) return;
 
-        if (!token) {
-          setError("No authentication token found. Please login again.");
-          return;
-        }
-
-        const response = await fetch(`/api/admin-users/${user.id}`, {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to delete user");
-        }
-
-        fetchUsers();
-
-        Swal.fire({
-          icon: "success",
-          title: "Deleted!",
-          text: "User has been deleted successfully.",
-          timer: 1500,
-          showConfirmButton: false,
-        });
-      } catch (err) {
-        console.error("Error deleting user:", err);
-        Swal.fire({
-          icon: "error",
-          title: "Error",
-          text: "Failed to delete user. Please try again.",
-        });
-      } finally {
-        setIsDeleting(false);
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: "DELETE",
+        headers: authJsonHeaders(token),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Delete failed");
       }
+      await fetchUsers();
+      Swal.fire({ icon: "success", title: "Deleted", timer: 1400, showConfirmButton: false });
+    } catch (e) {
+      Swal.fire({ icon: "error", title: "Error", text: e.message });
     }
   };
 
-  const handleUpdateUser = async () => {
+  const handleToggleActive = async (user) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
     try {
-      setIsUpdating(true);
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        setError("No authentication token found. Please login again.");
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append("full_name", userForm.full_name);
-      formData.append("email", userForm.email);
-      formData.append("phone", userForm.phone);
-      formData.append("position", userForm.position);
-      formData.append("description", userForm.description);
-      formData.append("role", userForm.role);
-      formData.append("isActive", userForm.isActive);
-      formData.append("whatsapp_link", userForm.whatsapp_link);
-      formData.append("google_link", userForm.google_link);
-      formData.append("twitter_link", userForm.twitter_link);
-      formData.append("facebook_link", userForm.facebook_link);
-
-      // If a new file is selected, send the file
-      // If no new file but there's an existing path, send the path
-      if (userForm.profile_picture) {
-        formData.append("profile_image", userForm.profile_picture);
-      } else if (userForm.profile_picture_path) {
-        formData.append("profile_image_path", userForm.profile_picture_path);
-      }
-
-      const response = await fetch(`/api/admin-users/${selectedUser.id}`, {
+      const res = await fetch(`/api/users/${user.id}/toggle-status`, {
         method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
+        headers: authJsonHeaders(token),
+        body: JSON.stringify({}),
       });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || "Failed to update user");
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Could not update status");
       }
-
-      setUserForm({
-        full_name: "",
-        email: "",
-        phone: "",
-        position: "",
-        description: "",
-        role: "admin",
-        password: "",
-        profile_picture: null,
-        profile_picture_preview: "",
-        profile_picture_path: "",
-        isActive: true,
-        whatsapp_link: "",
-        google_link: "",
-        twitter_link: "",
-        facebook_link: "",
-      });
-      setOpenEditDialog(false);
-      setSelectedUser(null);
-
-      fetchUsers();
-
-      Swal.fire({
-        icon: "success",
-        title: "Updated!",
-        text: "User has been updated successfully.",
-        timer: 1500,
-        showConfirmButton: false,
-      });
-    } catch (err) {
-      console.error("Error updating user:", err);
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "Failed to update user. Please try again.",
-      });
-    } finally {
-      setIsUpdating(false);
+      await fetchUsers();
+    } catch (e) {
+      Swal.fire({ icon: "error", title: "Error", text: e.message });
     }
   };
 
-  const handleCreateUser = async () => {
+  const handleUpdate = async () => {
+    if (!selectedUser) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    setSaving(true);
     try {
-      setIsCreating(true);
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        setError("No authentication token found. Please login again.");
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append("full_name", userForm.full_name);
-      formData.append("email", userForm.email);
-      formData.append("phone", userForm.phone);
-      formData.append("position", userForm.position);
-      formData.append("description", userForm.description);
-      formData.append("role", userForm.role);
-      formData.append("password", userForm.password);
-      formData.append("isActive", userForm.isActive);
-      formData.append("whatsapp_link", userForm.whatsapp_link);
-      formData.append("google_link", userForm.google_link);
-      formData.append("twitter_link", userForm.twitter_link);
-      formData.append("facebook_link", userForm.facebook_link);
-
-      if (userForm.profile_picture) {
-        formData.append("profile_image", userForm.profile_picture);
-      }
-
-      const response = await fetch("/api/admin-users", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
+      const res = await fetch(`/api/users/${selectedUser.id}`, {
+        method: "PUT",
+        headers: authJsonHeaders(token),
+        body: JSON.stringify({
+          username: form.username.trim(),
+          email: form.email.trim(),
+          full_name: form.full_name.trim(),
+          phone: form.phone?.trim() || null,
+          address: form.address?.trim() || null,
+          role: form.role,
+        }),
       });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || "Failed to create user");
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Update failed");
       }
-
-      setUserForm({
-        full_name: "",
-        email: "",
-        phone: "",
-        position: "",
-        description: "",
-        role: "admin",
-        password: "",
-        profile_picture: null,
-        profile_picture_preview: "",
-        profile_picture_path: "",
-        isActive: true,
-        whatsapp_link: "",
-        google_link: "",
-        twitter_link: "",
-        facebook_link: "",
-      });
-      setOpenCreateDialog(false);
+      setOpenEdit(false);
       setSelectedUser(null);
-
-      fetchUsers();
-
-      Swal.fire({
-        icon: "success",
-        title: "Success!",
-        text: "User created successfully!",
-        timer: 1500,
-        showConfirmButton: false,
-      });
-    } catch (err) {
-      console.error("Error creating user:", err);
-      Swal.fire({
-        icon: "error",
-        title: "Error!",
-        text: err.message || "Failed to create user. Please try again.",
-      });
+      await fetchUsers();
+      Swal.fire({ icon: "success", title: "Saved", timer: 1400, showConfirmButton: false });
+    } catch (e) {
+      Swal.fire({ icon: "error", title: "Error", text: e.message });
     } finally {
-      setIsCreating(false);
+      setSaving(false);
     }
+  };
+
+  const closeDialogs = () => {
+    setOpenView(false);
+    setOpenEdit(false);
+    setSelectedUser(null);
+    setForm(emptyForm());
   };
 
   return (
     <Box
-      sx={{
-        background: `linear-gradient(135deg, ${palette.lightBg} 0%, #FFFFFF 60%, rgba(232, 224, 209, 0.9) 100%)`,
-        minHeight: "100vh",
-        m: 1.5,
-      }}
+      sx={(theme) => ({
+        ...fullMainBleedSx(theme),
+        /** Pull up into `main`’s default padding so less gap under the fixed top bar. */
+        marginTop: theme.spacing(-2.5),
+        minHeight: "100%",
+        background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 40%)`,
+      })}
     >
-      <Paper
-        elevation={0}
+      {/* Hero header */}
+      <Box
         sx={{
-          borderRadius: 0,
+          background: `linear-gradient(135deg, ${primaryDark} 0%, ${primaryRed} 55%, #EF4444 100%)`,
+          px: { xs: 2, sm: 3 },
+          py: { xs: 1.75, sm: 2.25 },
+          color: "white",
+          position: "relative",
           overflow: "hidden",
-          background: "rgba(255, 255, 255, 0.95)",
-          backdropFilter: "blur(10px)",
-          border: "none",
-          boxShadow: "none",
-          minHeight: "100vh",
+          boxShadow: `0 8px 24px ${primaryRed}33`,
         }}
       >
-        {/* Header Section */}
         <Box
           sx={{
-            background: `linear-gradient(135deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
-            p: 3,
-            color: "#FFFFFF",
-            position: "relative",
-            overflow: "hidden",
+            position: "absolute",
+            top: -40,
+            right: -40,
+            width: 160,
+            height: 160,
+            background: "rgba(255,255,255,0.12)",
+            borderRadius: "50%",
           }}
+        />
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "stretch", sm: "center" }}
+          spacing={2}
+          position="relative"
+          zIndex={1}
         >
-          <Box
-            sx={{
-              position: "absolute",
-              top: -50,
-              right: -50,
-              width: 200,
-              height: 200,
-              background: "rgba(255, 255, 255, 0.08)",
-              borderRadius: "50%",
-              zIndex: 0,
-            }}
-          />
-          <Box
-            sx={{
-              position: "absolute",
-              bottom: -30,
-              left: -30,
-              width: 150,
-              height: 150,
-              background: "rgba(255, 255, 255, 0.06)",
-              borderRadius: "50%",
-              zIndex: 0,
-            }}
-          />
-          <Box
-            display="flex"
-            flexDirection={{ xs: "column", sm: "row" }}
-            justifyContent="space-between"
-            alignItems={{ xs: "flex-start", sm: "center" }}
-            gap={{ xs: 2, sm: 0 }}
-            position="relative"
-            zIndex={1}
-          >
-            <Box>
-              <Typography
-                variant="h4"
-                sx={{
-                  fontWeight: 800,
-                  mb: 1,
-                  textShadow: "0 2px 4px rgba(0,0,0,0.3)",
-                  fontSize: { xs: "1.5rem", sm: "2rem", md: "2.125rem" },
-                }}
-              >
-                Admin Users Management
-              </Typography>
-              <Typography variant="body1" sx={{ opacity: 0.9 }}>
-                Manage admin users and their roles
-              </Typography>
-            </Box>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => {
-                  setSelectedUser(null);
-                  setShowPassword(false);
-                  setUserForm({
-                    full_name: "",
-                    email: "",
-                    phone: "",
-                    position: "",
-                    description: "",
-                    role: "admin",
-                    password: "",
-                    profile_picture: null,
-                    profile_picture_preview: "",
-                    profile_picture_path: "",
-                    isActive: true,
-                    whatsapp_link: "",
-                    google_link: "",
-                    twitter_link: "",
-                    facebook_link: "",
-                  });
-                  setOpenCreateDialog(true);
-                }}
-                sx={{
-                  background: `linear-gradient(45deg, ${palette.primary} 30%, ${palette.primaryDark} 90%)`,
-                  borderRadius: 3,
-                  px: { xs: 2, sm: 4 },
-                  py: 1.5,
-                  fontSize: { xs: "0.875rem", sm: "1rem" },
-                  fontWeight: 600,
-                  textTransform: "none",
-                  boxShadow: "0 8px 25px rgba(184, 92, 56, 0.3)",
-                  width: { xs: "100%", sm: "auto" },
-                  "&:hover": {
-                    background: `linear-gradient(45deg, ${palette.primaryDark} 30%, ${palette.primary} 90%)`,
-                    transform: "translateY(-2px)",
-                    boxShadow: "0 12px 35px rgba(184, 92, 56, 0.35)",
-                  },
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                }}
-              >
-                Create New Admin
-              </Button>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 800, fontSize: { xs: "1.35rem", sm: "2rem" } }}>
+              User management
+            </Typography>
           </Box>
-        </Box>
-
-        {/* Content Section */}
-        <Box
-          sx={{ p: { xs: 1, sm: 2, md: 3 }, minHeight: "calc(100vh - 200px)" }}
-        >
-          {/* Tabs */}
-          <Box mb={3}>
-            <Tabs
-              value={activeTab}
-              onChange={handleTabChange}
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ xs: "stretch", sm: "center" }}>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              hidden
+              onChange={handleImportExcelChange}
+            />
+            <Button
+              variant="outlined"
+              startIcon={importing ? <CircularProgress size={18} color="inherit" /> : <UploadFileIcon />}
+              disabled={importing}
+              onClick={() => importInputRef.current?.click()}
               sx={{
-                "& .MuiTab-root": {
-                  textTransform: "none",
-                  fontWeight: 600,
-                  fontSize: "1rem",
-                  minHeight: 48,
-                  color: palette.accent,
-                  "&.Mui-selected": {
-                    color: palette.primary,
-                    fontWeight: 700,
-                  },
-                },
-                "& .MuiTabs-indicator": {
-                  backgroundColor: palette.primary,
-                  height: 3,
-                  borderRadius: "2px 2px 0 0",
-                },
+                borderColor: "rgba(255,255,255,0.85)",
+                color: "#fff",
+                fontWeight: 700,
+                textTransform: "none",
+                borderRadius: 2,
+                px: 2.5,
+                py: 1.25,
+                "&:hover": { borderColor: "#fff", bgcolor: "rgba(255,255,255,0.12)" },
               }}
             >
-              {roleTabs.map((tab, index) => (
-                <Tab key={index} label={tab.label} />
-              ))}
-            </Tabs>
-          </Box>
+              Import Excel
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownloadTemplate}
+              sx={{
+                borderColor: "rgba(255,255,255,0.85)",
+                color: "#fff",
+                fontWeight: 700,
+                textTransform: "none",
+                borderRadius: 2,
+                px: 2.5,
+                py: 1.25,
+                "&:hover": { borderColor: "#fff", bgcolor: "rgba(255,255,255,0.12)" },
+              }}
+            >
+              Template
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => navigate("/users/create")}
+              sx={{
+                bgcolor: "rgba(255,255,255,0.95)",
+                color: primaryDark,
+                fontWeight: 700,
+                textTransform: "none",
+                borderRadius: 2,
+                px: 3,
+                py: 1.25,
+                boxShadow: "0 4px 14px rgba(0,0,0,0.15)",
+                "&:hover": { bgcolor: "#fff", color: primaryRed },
+              }}
+            >
+              Create user
+            </Button>
+          </Stack>
+        </Stack>
+      </Box>
 
-          {/* Users Table */}
-          <TableContainer
-            sx={{
-              borderRadius: 3,
-              overflowX: "auto",
-              backgroundColor: "rgba(255, 255, 255, 0.9)",
-              border: `1px solid ${palette.border}`,
-              "&::-webkit-scrollbar": {
-                height: 8,
-              },
-              "&::-webkit-scrollbar-track": {
-                backgroundColor: "rgba(184, 92, 56, 0.08)",
-                borderRadius: 4,
-              },
-              "&::-webkit-scrollbar-thumb": {
-                backgroundColor: "rgba(184, 92, 56, 0.35)",
-                borderRadius: 4,
-                "&:hover": {
-                  backgroundColor: "rgba(184, 92, 56, 0.45)",
-                },
-              },
-            }}
-          >
-            <Table sx={{ minWidth: 600 }}>
-              <TableHead>
-                <TableRow
-                  sx={{
-                    background: `linear-gradient(135deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
-                    "& .MuiTableCell-head": {
-                      color: "white",
-                      fontWeight: 700,
-                      fontSize: { xs: "0.8rem", sm: "0.95rem" },
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                      border: "none",
-                      whiteSpace: "nowrap",
-                    },
-                  }}
-                >
-                  <TableCell>No</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Position</TableCell>
-                  <TableCell>Email</TableCell>
-                  <TableCell>Role</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Actions</TableCell>
+      <Box sx={{ px: { xs: 1.5, sm: 2, md: 3 }, py: 2, width: "100%", boxSizing: "border-box" }}>
+        <PaperLikeTabs activeTab={activeTab} onChange={handleTabChange} />
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        <TableContainer
+          sx={{
+            borderRadius: 2,
+            overflow: "auto",
+            border: `1px solid ${primaryLight}`,
+            boxShadow: `0 8px 28px -12px ${primaryRed}33`,
+            bgcolor: "rgba(255,255,255,0.98)",
+          }}
+        >
+          <Table size="medium" sx={{ minWidth: 520 }}>
+            <TableHead>
+              <TableRow
+                sx={{
+                  background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
+                  "& .MuiTableCell-head": {
+                    color: "#fff",
+                    fontWeight: 700,
+                    fontSize: "0.8rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                    borderBottom: "none",
+                  },
+                }}
+              >
+                <TableCell width={56}>No</TableCell>
+                <TableCell>Name</TableCell>
+                <TableCell>Role</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
+                    <CircularProgress sx={{ color: primaryRed }} />
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                        <CircularProgress sx={{ color: palette.primary }} />
-                    </TableCell>
-                  </TableRow>
-                ) : error ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                      <Typography color="error" variant="h6">
-                        {error}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : users.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                      <Typography variant="h6" color="text.secondary">
-                        No users found.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  users.map((user, idx) => (
+              ) : users.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} align="center" sx={{ py: 5, color: textMuted }}>
+                    No users in this tab.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                users.map((row, idx) => {
+                  const rc = roleChipColor(row.role);
+                  const active = row.is_active !== false;
+                  return (
                     <TableRow
-                      key={user.id}
+                      key={row.id}
+                      hover
                       sx={{
-                        "&:nth-of-type(even)": {
-                          backgroundColor: "rgba(184, 92, 56, 0.04)",
-                        },
-                        "&:hover": {
-                          backgroundColor: "rgba(184, 92, 56, 0.12)",
-                          transform: { xs: "none", sm: "scale(1.01)" },
-                        },
-                        transition: "all 0.2s ease",
-                        cursor: "pointer",
-                        "& .MuiTableCell-root": {
-                          fontSize: { xs: "0.75rem", sm: "0.875rem" },
-                          padding: { xs: "8px 4px", sm: "16px" },
-                        },
+                        "&:nth-of-type(even)": { bgcolor: backgroundLight },
+                        "&:hover": { bgcolor: primaryLight },
                       }}
                     >
-                      <TableCell sx={{ fontWeight: 600, color: palette.primary }}>
-                        {page * rowsPerPage + idx + 1}
-                      </TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: primaryDark }}>{page * rowsPerPage + idx + 1}</TableCell>
                       <TableCell>
-                        <Typography
-                          variant="body2"
-                          fontWeight="600"
-                          sx={{ color: "#2c3e50" }}
-                        >
-                          {user.full_name || "N/A"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ color: "#7f8c8d" }}>
-                          {user.position || "N/A"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ color: "#7f8c8d" }}>
-                          {user.email}
-                        </Typography>
+                        <Typography fontWeight={600}>{row.full_name || "—"}</Typography>
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={formatRole(user.role)}
-                          color={getRoleColor(user.role)}
+                          label={formatRole(row.role)}
                           size="small"
-                          variant="outlined"
                           sx={{
-                            textTransform: "capitalize",
+                            bgcolor: rc.bg,
+                            color: rc.color,
                             fontWeight: 600,
-                            borderRadius: 2,
+                            border: "none",
                           }}
                         />
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={user.isActive ? "Active" : "Inactive"}
-                          color={getStatusColor(user.isActive)}
+                          label={active ? "Active" : "Inactive"}
                           size="small"
-                          variant="outlined"
-                          sx={{
-                            textTransform: "capitalize",
-                            fontWeight: 600,
-                            borderRadius: 2,
-                          }}
+                          color={active ? "success" : "default"}
+                          variant={active ? "filled" : "outlined"}
+                          sx={{ fontWeight: 600 }}
                         />
                       </TableCell>
-                      <TableCell>
-                        <Box display="flex" gap={0.5}>
-                          <Tooltip title="View User Details" arrow>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleViewUser(user)}
-                              sx={{
-                                color: palette.accent,
-                                backgroundColor: "rgba(107, 78, 61, 0.12)",
-                                "&:hover": {
-                                  backgroundColor: "rgba(107, 78, 61, 0.2)",
-                                  transform: "scale(1.1)",
-                                },
-                                transition: "all 0.2s ease",
-                                borderRadius: 2,
-                              }}
-                            >
-                              <ViewIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                              <Tooltip title="Edit User" arrow>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleEditUser(user)}
-                                  sx={{
-                                  color: palette.primary,
-                                  backgroundColor: "rgba(184, 92, 56, 0.12)",
-                                    "&:hover": {
-                                    backgroundColor: "rgba(184, 92, 56, 0.2)",
-                                      transform: "scale(1.1)",
-                                    },
-                                    transition: "all 0.2s ease",
-                                    borderRadius: 2,
-                                  }}
-                                >
-                                  <EditIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title="Delete User" arrow>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleDeleteUser(user)}
-                                  sx={{
-                                    color: "#e74c3c",
-                                    backgroundColor: "rgba(231, 76, 60, 0.1)",
-                                    "&:hover": {
-                                      backgroundColor: "rgba(231, 76, 60, 0.2)",
-                                      transform: "scale(1.1)",
-                                    },
-                                    transition: "all 0.2s ease",
-                                    borderRadius: 2,
-                                  }}
-                                >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                        </Box>
+                      <TableCell align="right">
+                        <Tooltip title="View">
+                          <IconButton size="small" onClick={() => handleViewOpen(row)} sx={{ color: primaryDark }}>
+                            <ViewIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Edit">
+                          <IconButton size="small" onClick={() => handleEditOpen(row)} sx={{ color: primaryRed }}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title={active ? "Deactivate" : "Activate"}>
+                          <IconButton size="small" onClick={() => handleToggleActive(row)} sx={{ color: "#EA580C" }}>
+                            <ToggleOnIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete">
+                          <IconButton size="small" onClick={() => handleDelete(row)} sx={{ color: primaryRed }}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
           <TablePagination
             component="div"
             count={totalUsers}
             page={page}
-            onPageChange={handleChangePage}
+            onPageChange={(_, p) => setPage(p)}
             rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
+            onRowsPerPageChange={(e) => {
+              setRowsPerPage(parseInt(e.target.value, 10));
+              setPage(0);
+            }}
             rowsPerPageOptions={[5, 10, 25, 50]}
             sx={{
-              backgroundColor: "rgba(255, 255, 255, 0.9)",
-              borderTop: `1px solid ${palette.border}`,
-              "& .MuiTablePagination-toolbar": {
-                color: palette.accent,
-                fontWeight: 600,
-              },
-              "& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows":
-                {
-                  color: palette.text,
-                  fontWeight: 600,
-                },
+              borderTop: `1px solid ${primaryLight}`,
+              "& .MuiTablePagination-toolbar": { fontWeight: 600 },
             }}
           />
-        </Box>
+        </TableContainer>
+      </Box>
 
-        {/* User Dialog */}
-        <Dialog
-          open={openViewDialog || openEditDialog || openCreateDialog}
-          onClose={() => {
-            setOpenViewDialog(false);
-            setOpenEditDialog(false);
-            setOpenCreateDialog(false);
-            setSelectedUser(null);
-            setShowPassword(false);
-            setUserForm({
-              full_name: "",
-              email: "",
-              phone: "",
-              position: "",
-              description: "",
-              role: "admin",
-              password: "",
-              profile_picture: null,
-              profile_picture_preview: "",
-              profile_picture_path: "",
-              isActive: true,
-              whatsapp_link: "",
-              google_link: "",
-              twitter_link: "",
-              facebook_link: "",
-            });
-          }}
-          maxWidth="sm"
-          fullWidth
+      {/* View */}
+      <Dialog open={openView} onClose={closeDialogs} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+        <DialogTitle
           sx={{
-            "& .MuiDialog-paper": {
-              borderRadius: 4,
-              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.15)",
-              maxHeight: "85vh",
-              background: "rgba(255, 255, 255, 0.97)",
-              backdropFilter: "blur(10px)",
-              border: `1px solid ${palette.border}`,
-              overflow: "hidden",
-            },
-            "& .MuiBackdrop-root": {
-              backgroundColor: "rgba(0, 0, 0, 0.5)",
-            },
+            background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
+            color: "#fff",
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
           }}
         >
-          <DialogTitle
-            sx={{
-              background: `linear-gradient(135deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
-              color: "white",
-              fontWeight: "bold",
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-              p: 3,
-              position: "relative",
-              overflow: "hidden",
-            }}
-          >
-            <Box
-              sx={{
-                position: "absolute",
-                top: -20,
-                right: -20,
-                width: 100,
-                height: 100,
-                background: "rgba(255, 255, 255, 0.1)",
-                borderRadius: "50%",
-                zIndex: 0,
-              }}
-            />
-            <AdminIcon sx={{ position: "relative", zIndex: 1, fontSize: 28 }} />
-            <Box sx={{ position: "relative", zIndex: 1 }}>
-              <Typography
-                variant="h5"
-                sx={{
-                  fontWeight: 800,
-                  textShadow: "0 2px 4px rgba(0,0,0,0.3)",
-                }}
-              >
-                {openViewDialog
-                  ? "User Details"
-                  : openEditDialog
-                  ? "Edit User"
-                  : "Create New Admin"}
+          <PersonIcon />
+          User details
+          <IconButton onClick={closeDialogs} sx={{ ml: "auto", color: "#fff" }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          {selectedUser && (
+            <Stack spacing={2}>
+              <Field icon={<PersonIcon sx={{ color: primaryRed }} />} label="Name" value={selectedUser.full_name} />
+              <Field icon={<BadgeIcon sx={{ color: primaryRed }} />} label="Username" value={selectedUser.username} />
+              <Field icon={<EmailIcon sx={{ color: primaryRed }} />} label="Email" value={selectedUser.email} />
+              <Field icon={<PhoneIcon sx={{ color: primaryRed }} />} label="Phone" value={selectedUser.phone || "—"} />
+              <Field icon={<HomeIcon sx={{ color: primaryRed }} />} label="Address" value={selectedUser.address || "—"} />
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 100 }}>
+                  Role
+                </Typography>
+                <Chip label={formatRole(selectedUser.role)} size="small" sx={{ fontWeight: 700, bgcolor: roleChipColor(selectedUser.role).bg, color: "#fff" }} />
+              </Stack>
+              <Typography variant="body2" color="text.secondary">
+                Status: <strong>{selectedUser.is_active !== false ? "Active" : "Inactive"}</strong>
+                {" · "}
+                Last login:{" "}
+                <strong>
+                  {selectedUser.last_login ? new Date(selectedUser.last_login).toLocaleString() : "Never"}
+                </strong>
               </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
-                {openViewDialog
-                  ? "View user information"
-                  : openEditDialog
-                  ? "Update user details"
-                  : "Add a new admin to the system"}
-              </Typography>
-            </Box>
-          </DialogTitle>
-          <DialogContent
-            sx={{ p: 3, pt: 3, maxHeight: "70vh", overflowY: "auto" }}
-          >
-            {openViewDialog ? (
-              // View User Details
-              <Box>
-                <Box
-                  sx={{
-                  background: `linear-gradient(135deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
-                    borderRadius: 3,
-                    p: 3,
-                    mb: 4,
-                    mt: 2,
-                    position: "relative",
-                    overflow: "hidden",
-                    color: "white",
-                  }}
-                >
-                  <Box
-                    sx={{
-                      position: "absolute",
-                      top: -20,
-                      right: -20,
-                      width: 100,
-                      height: 100,
-                      background: "rgba(255, 255, 255, 0.1)",
-                      borderRadius: "50%",
-                      zIndex: 0,
-                    }}
-                  />
-                  <Box sx={{ position: "relative", zIndex: 1 }}>
-                    <Typography
-                      variant="h4"
-                      sx={{
-                        fontWeight: 800,
-                        mb: 1,
-                        textShadow: "0 2px 4px rgba(0,0,0,0.3)",
-                        background: "linear-gradient(45deg, #fff, #f0f8ff)",
-                        backgroundClip: "text",
-                        WebkitBackgroundClip: "text",
-                        WebkitTextFillColor: "transparent",
-                      }}
-                    >
-                      {selectedUser?.full_name || "N/A"}
-                    </Typography>
-                    <Typography
-                      variant="body1"
-                      sx={{
-                        opacity: 0.9,
-                        lineHeight: 1.6,
-                        fontSize: "1rem",
-                        textShadow: "0 1px 2px rgba(0,0,0,0.3)",
-                      }}
-                    >
-                      {selectedUser?.email}
-                    </Typography>
-                  </Box>
-                </Box>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={closeDialogs} sx={{ color: primaryDark, fontWeight: 600 }}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-                {/* Profile Picture Display */}
-                {selectedUser?.profile_image && (
-                  <Box sx={{ textAlign: "center", mb: 3 }}>
-                    <Typography
-                      variant="h6"
-                      sx={{ mb: 2, color: "#2c3e50", fontWeight: 600 }}
-                    >
-                      Profile Picture
-                    </Typography>
-                    <Box
-                      sx={{
-                        p: 2,
-                            backgroundColor: "rgba(184, 92, 56, 0.1)",
-                        borderRadius: 2,
-                            border: `2px solid ${palette.border}`,
-                        cursor: "pointer",
-                        transition: "transform 0.2s ease-in-out",
-                        display: "inline-block",
-                        "&:hover": {
-                          transform: "scale(1.02)",
-                        },
-                      }}
-                      onClick={() => {
-                        const fullImageUrl = buildImageUrl(
-                          selectedUser.profile_image
-                        );
-                        window.open(fullImageUrl, "_blank");
-                      }}
-                    >
-                      <Box
-                        component="img"
-                        src={buildImageUrl(selectedUser.profile_image)}
-                        alt="Profile Picture"
-                        sx={{
-                          width: 150,
-                          height: 150,
-                          objectFit: "cover",
-                          borderRadius: "50%",
-                          border: `4px solid ${palette.primary}`,
-                          boxShadow: "0 8px 25px rgba(184, 92, 56, 0.28)",
-                        }}
-                        onError={(e) => {
-                          e.target.style.display = "none";
-                          e.target.nextSibling.style.display = "block";
-                        }}
-                      />
-                      <Box
-                        textAlign="center"
-                        sx={{
-                          display: "none",
-                          width: 150,
-                          height: 150,
-                          flexDirection: "column",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: "rgba(184, 92, 56, 0.12)",
-                          borderRadius: "50%",
-                          border: `4px solid ${palette.primary}`,
-                        }}
-                      >
-                        <PersonIcon
-                          sx={{
-                            fontSize: 48,
-                            color: palette.primary,
-                            mb: 1,
-                          }}
-                        />
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            color: palette.primary,
-                            display: "block",
-                            wordBreak: "break-word",
-                            textAlign: "center",
-                          }}
-                        >
-                          Profile Picture
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Box>
-                )}
-
-                <Stack spacing={2} sx={{ mb: 3 }}>
-                  <Card
-                    sx={{
-                      background: "white",
-                      borderRadius: 2,
-                      p: 2,
-                      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
-                      transition: "all 0.3s ease",
-                      "&:hover": {
-                        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                        transform: "translateY(-2px)",
-                      },
-                    }}
-                  >
-                    <Box display="flex" alignItems="center" gap={2}>
-                      <PersonIcon sx={{ fontSize: 24, color: palette.primary }} />
-                      <Box>
-                        <Typography variant="caption" sx={{ color: "#7f8c8d" }}>
-                          ROLE
-                        </Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 600, color: "#2c3e50" }}>
-                          {formatRole(selectedUser?.role)}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Card>
-                  <Card
-                    sx={{
-                      background: "white",
-                      borderRadius: 2,
-                      p: 2,
-                      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
-                      transition: "all 0.3s ease",
-                      "&:hover": {
-                        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                        transform: "translateY(-2px)",
-                      },
-                    }}
-                  >
-                    <Box display="flex" alignItems="center" gap={2}>
-                      <PhoneIcon sx={{ fontSize: 24, color: palette.primary }} />
-                      <Box>
-                        <Typography variant="caption" sx={{ color: "#7f8c8d" }}>
-                          PHONE
-                        </Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 600, color: "#2c3e50" }}>
-                          {selectedUser?.phone || "N/A"}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Card>
-                  <Card
-                    sx={{
-                      background: "white",
-                      borderRadius: 2,
-                      p: 2,
-                      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
-                      transition: "all 0.3s ease",
-                      "&:hover": {
-                        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                        transform: "translateY(-2px)",
-                      },
-                    }}
-                  >
-                    <Box display="flex" alignItems="center" gap={2}>
-                      <CheckCircle sx={{ fontSize: 24, color: palette.primary }} />
-                      <Box>
-                        <Typography variant="caption" sx={{ color: "#7f8c8d" }}>
-                          STATUS
-                        </Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 600, color: "#2c3e50" }}>
-                          {selectedUser?.isActive ? "Active" : "Inactive"}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Card>
-                  <Card
-                    sx={{
-                      background: "white",
-                      borderRadius: 2,
-                      p: 2,
-                      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
-                      transition: "all 0.3s ease",
-                      "&:hover": {
-                        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                        transform: "translateY(-2px)",
-                      },
-                    }}
-                  >
-                    <Box display="flex" alignItems="center" gap={2}>
-                      <Schedule sx={{ fontSize: 24, color: palette.primary }} />
-                      <Box>
-                        <Typography variant="caption" sx={{ color: "#7f8c8d" }}>
-                          LAST LOGIN
-                        </Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 600, color: "#2c3e50" }}>
-                          {selectedUser?.lastLogin
-                            ? new Date(
-                                selectedUser.lastLogin
-                              ).toLocaleDateString()
-                            : "Never"}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Card>
-                </Stack>
-
-                {/* Additional Info Section */}
-                <Box sx={{ mb: 3 }}>
-                  <Typography
-                    variant="h6"
-                    sx={{ fontWeight: 600, mb: 2, color: "#2c3e50" }}
-                  >
-                    Additional Information
-                  </Typography>
-                  <Stack spacing={2}>
-                    <Card
-                      sx={{
-                        background: "white",
-                        borderRadius: 2,
-                        p: 2,
-                        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
-                        transition: "all 0.3s ease",
-                        "&:hover": {
-                          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                          transform: "translateY(-2px)",
-                        },
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                        sx={{ color: "#7f8c8d", mb: 0.5 }}
-                      >
-                        <strong>Position:</strong>{" "}
-                        {selectedUser?.position || "N/A"}
-                      </Typography>
-                    </Card>
-                    <Card
-                      sx={{
-                        background: "white",
-                        borderRadius: 2,
-                        p: 2,
-                        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
-                        transition: "all 0.3s ease",
-                        "&:hover": {
-                          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                          transform: "translateY(-2px)",
-                        },
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                        sx={{ color: "#7f8c8d", mb: 0.5 }}
-                      >
-                        <strong>Description:</strong>{" "}
-                        {selectedUser?.description || "N/A"}
-                      </Typography>
-                    </Card>
-                    <Card
-                      sx={{
-                        background: "white",
-                        borderRadius: 2,
-                        p: 2,
-                        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
-                        transition: "all 0.3s ease",
-                        "&:hover": {
-                          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                          transform: "translateY(-2px)",
-                        },
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                        sx={{ color: "#7f8c8d", mb: 0.5 }}
-                      >
-                        <strong>Created:</strong>{" "}
-                        {selectedUser?.createdAt
-                          ? new Date(
-                              selectedUser.createdAt
-                            ).toLocaleDateString()
-                          : "N/A"}
-                      </Typography>
-                    </Card>
-                    <Card
-                      sx={{
-                        background: "white",
-                        borderRadius: 2,
-                        p: 2,
-                        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
-                        transition: "all 0.3s ease",
-                        "&:hover": {
-                          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                          transform: "translateY(-2px)",
-                        },
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                        sx={{ color: "#7f8c8d", mb: 0.5 }}
-                      >
-                        <strong>Last Updated:</strong>{" "}
-                        {selectedUser?.updatedAt
-                          ? new Date(
-                              selectedUser.updatedAt
-                            ).toLocaleDateString()
-                          : "N/A"}
-                      </Typography>
-                    </Card>
-                  </Stack>
-                </Box>
-
-                {/* Social Media Links Section */}
-                {(selectedUser?.whatsapp_link || selectedUser?.google_link || selectedUser?.twitter_link || selectedUser?.facebook_link) && (
-                  <Box sx={{ mb: 3 }}>
-                    <Typography
-                      variant="h6"
-                      sx={{ fontWeight: 600, mb: 2, color: "#2c3e50" }}
-                    >
-                      Social Media Links
-                    </Typography>
-                    <Stack spacing={2}>
-                      {selectedUser?.whatsapp_link && (
-                        <Card
-                          sx={{
-                            background: "white",
-                            borderRadius: 2,
-                            p: 2,
-                            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
-                            transition: "all 0.3s ease",
-                            "&:hover": {
-                              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                              transform: "translateY(-2px)",
-                            },
-                          }}
-                        >
-                          <Typography
-                            variant="body2"
-                            sx={{ color: "#7f8c8d", mb: 0.5 }}
-                          >
-                            <strong>WhatsApp:</strong>{" "}
-                            <a href={selectedUser.whatsapp_link} target="_blank" rel="noopener noreferrer" style={{ color: "#25D366" }}>
-                              {selectedUser.whatsapp_link}
-                            </a>
-                          </Typography>
-                        </Card>
-                      )}
-                      {selectedUser?.google_link && (
-                        <Card
-                          sx={{
-                            background: "white",
-                            borderRadius: 2,
-                            p: 2,
-                            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
-                            transition: "all 0.3s ease",
-                            "&:hover": {
-                              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                              transform: "translateY(-2px)",
-                            },
-                          }}
-                        >
-                          <Typography
-                            variant="body2"
-                            sx={{ color: "#7f8c8d", mb: 0.5 }}
-                          >
-                            <strong>Google:</strong>{" "}
-                            <a href={selectedUser.google_link} target="_blank" rel="noopener noreferrer" style={{ color: "#4285F4" }}>
-                              {selectedUser.google_link}
-                            </a>
-                          </Typography>
-                        </Card>
-                      )}
-                      {selectedUser?.twitter_link && (
-                        <Card
-                          sx={{
-                            background: "white",
-                            borderRadius: 2,
-                            p: 2,
-                            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
-                            transition: "all 0.3s ease",
-                            "&:hover": {
-                              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                              transform: "translateY(-2px)",
-                            },
-                          }}
-                        >
-                          <Typography
-                            variant="body2"
-                            sx={{ color: "#7f8c8d", mb: 0.5 }}
-                          >
-                            <strong>Twitter:</strong>{" "}
-                            <a href={selectedUser.twitter_link} target="_blank" rel="noopener noreferrer" style={{ color: "#1DA1F2" }}>
-                              {selectedUser.twitter_link}
-                            </a>
-                          </Typography>
-                        </Card>
-                      )}
-                      {selectedUser?.facebook_link && (
-                        <Card
-                          sx={{
-                            background: "white",
-                            borderRadius: 2,
-                            p: 2,
-                            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
-                            transition: "all 0.3s ease",
-                            "&:hover": {
-                              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                              transform: "translateY(-2px)",
-                            },
-                          }}
-                        >
-                          <Typography
-                            variant="body2"
-                            sx={{ color: "#7f8c8d", mb: 0.5 }}
-                          >
-                            <strong>Facebook:</strong>{" "}
-                            <a href={selectedUser.facebook_link} target="_blank" rel="noopener noreferrer" style={{ color: "#1877F2" }}>
-                              {selectedUser.facebook_link}
-                            </a>
-                          </Typography>
-                        </Card>
-                      )}
-                    </Stack>
-                  </Box>
-                )}
-              </Box>
-            ) : (
-              // Create/Edit User Form
-              <Box
-                component="form"
-                noValidate
-                sx={{ maxHeight: "45vh", overflowY: "auto", pb: 2 }}
-              >
-                <Stack spacing={1.5} sx={{ mt: 1 }}>
-                      <TextField
-                        fullWidth
-                        label="Full Name"
-                    value={userForm.full_name}
-                        onChange={(e) =>
-                      setUserForm({ ...userForm, full_name: e.target.value })
-                        }
-                        required
-                        variant="outlined"
-                        size="small"
-                      />
-                      <TextField
-                        fullWidth
-                        label="Email"
-                        type="email"
-                        value={userForm.email}
-                        onChange={(e) =>
-                          setUserForm({ ...userForm, email: e.target.value })
-                        }
-                        required
-                        variant="outlined"
-                        size="small"
-                      />
-                      <TextField
-                        fullWidth
-                        label="Phone"
-                        value={userForm.phone}
-                        onChange={(e) =>
-                          setUserForm({ ...userForm, phone: e.target.value })
-                        }
-                        variant="outlined"
-                        size="small"
-                      />
-                      <TextField
-                        fullWidth
-                    label="Position"
-                    value={userForm.position}
-                        onChange={(e) =>
-                      setUserForm({ ...userForm, position: e.target.value })
-                        }
-                        variant="outlined"
-                        size="small"
-                      />
-                      <TextField
-                        fullWidth
-                        label="Description"
-                        value={userForm.description}
-                        onChange={(e) =>
-                          setUserForm({ ...userForm, description: e.target.value })
-                        }
-                        variant="outlined"
-                        size="small"
-                        multiline
-                        rows={3}
-                      />
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
-                      Profile Picture
-                    </Typography>
-                    <input
-                      accept="image/*"
-                      style={{ display: "none" }}
-                      id="profile-picture-upload"
-                      type="file"
-                      onChange={handleProfilePictureChange}
-                    />
-                    <label htmlFor="profile-picture-upload">
-                      <Button
-                        variant="outlined"
-                        component="span"
-                        startIcon={<PersonIcon />}
-                        sx={{
-                          mb: 2,
-                          borderColor: palette.primary,
-                          color: palette.primary,
-                          "&:hover": {
-                          borderColor: palette.primaryDark,
-                            backgroundColor: "rgba(184, 92, 56, 0.1)",
-                          },
-                        }}
-                      >
-                        {userForm.profile_picture_preview
-                          ? "Change Profile Picture"
-                          : "Choose Profile Picture"}
-                      </Button>
-                    </label>
-                    {userForm.profile_picture_preview && (
-                      <Box sx={{ mt: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1 }}>
-                          Preview:
-                        </Typography>
-                        <Box
-                          component="img"
-                          src={userForm.profile_picture_preview}
-                          alt="Profile preview"
-                          sx={{
-                            width: 100,
-                            height: 100,
-                            objectFit: "cover",
-                            borderRadius: 2,
-                            border: "2px solid #e0e0e0",
-                          }}
-                        />
-                      </Box>
-                    )}
-                  </Box>
-                    <FormControl fullWidth variant="outlined" size="small">
-                      <InputLabel>Role</InputLabel>
-                      <Select
-                        value={userForm.role}
-                        onChange={(e) =>
-                          setUserForm({ ...userForm, role: e.target.value })
-                        }
-                        label="Role"
-                      >
-                      <MenuItem value="super-admin">Super Admin</MenuItem>
-                      <MenuItem value="admin">Admin</MenuItem>
-                      <MenuItem value="regular user">Regular User</MenuItem>
-                      </Select>
-                    </FormControl>
-                  {openCreateDialog && (
-                    <TextField
-                      fullWidth
-                      label="Password"
-                      type={showPassword ? "text" : "password"}
-                      value={userForm.password}
-                      onChange={(e) =>
-                        setUserForm({ ...userForm, password: e.target.value })
-                      }
-                      required
-                      variant="outlined"
-                      size="small"
-                      InputProps={{
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <IconButton
-                              onClick={() => setShowPassword(!showPassword)}
-                              edge="end"
-                              size="small"
-                            >
-                              {showPassword ? (
-                                <VisibilityOff />
-                              ) : (
-                                <Visibility />
-                              )}
-                            </IconButton>
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-                  )}
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={userForm.isActive}
-                        onChange={(e) =>
-                          setUserForm({
-                            ...userForm,
-                            isActive: e.target.checked,
-                          })
-                        }
-                        size="small"
-                      />
-                    }
-                    label="Active User"
-                  />
-                  <Typography variant="body2" sx={{ mt: 2, mb: 1, fontWeight: 600, color: "#2c3e50" }}>
-                    Social Media Links (Optional)
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    label="WhatsApp Link"
-                    value={userForm.whatsapp_link}
-                    onChange={(e) =>
-                      setUserForm({ ...userForm, whatsapp_link: e.target.value })
-                    }
-                    variant="outlined"
-                    size="small"
-                    placeholder="https://wa.me/..."
-                  />
-                  <TextField
-                    fullWidth
-                    label="Google Link"
-                    value={userForm.google_link}
-                    onChange={(e) =>
-                      setUserForm({ ...userForm, google_link: e.target.value })
-                    }
-                    variant="outlined"
-                    size="small"
-                    placeholder="https://google.com/..."
-                  />
-                  <TextField
-                    fullWidth
-                    label="Twitter Link"
-                    value={userForm.twitter_link}
-                    onChange={(e) =>
-                      setUserForm({ ...userForm, twitter_link: e.target.value })
-                    }
-                    variant="outlined"
-                    size="small"
-                    placeholder="https://twitter.com/..."
-                  />
-                  <TextField
-                    fullWidth
-                    label="Facebook Link"
-                    value={userForm.facebook_link}
-                    onChange={(e) =>
-                      setUserForm({ ...userForm, facebook_link: e.target.value })
-                    }
-                    variant="outlined"
-                    size="small"
-                    placeholder="https://facebook.com/..."
-                    sx={{ mb: 1.5 }}
-                  />
-                </Stack>
-              </Box>
-            )}
-          </DialogContent>
-          <DialogActions
-            sx={{ p: 3, gap: 2, backgroundColor: "rgba(184, 92, 56, 0.05)" }}
-          >
-            <Button
-              onClick={() => {
-                setOpenViewDialog(false);
-                setOpenEditDialog(false);
-                setOpenCreateDialog(false);
-                setSelectedUser(null);
-                setShowPassword(false);
-                setUserForm({
-                  full_name: "",
-                  email: "",
-                  phone: "",
-                  position: "",
-                  description: "",
-                  role: "admin",
-                  password: "",
-                  profile_picture: null,
-                  profile_picture_preview: "",
-                  profile_picture_path: "",
-                  isActive: true,
-                  whatsapp_link: "",
-                  google_link: "",
-                  twitter_link: "",
-                  facebook_link: "",
-                });
-              }}
-              variant="outlined"
-              sx={{
-                borderColor: palette.primary,
-                color: palette.primary,
-                fontWeight: 600,
-                borderRadius: 2,
-                px: 3,
-                py: 1,
-                "&:hover": {
-                  borderColor: palette.primaryDark,
-                  backgroundColor: "rgba(184, 92, 56, 0.08)",
-                },
-              }}
-            >
-              {openViewDialog ? "Close" : "Cancel"}
-            </Button>
-            {(openEditDialog || openCreateDialog) && (
-              <Button
-                onClick={openEditDialog ? handleUpdateUser : handleCreateUser}
-                variant="contained"
-                startIcon={
-                  isCreating || isUpdating ? (
-                    <CircularProgress size={20} color="inherit" />
-                  ) : (
-                    <AddIcon />
-                  )
-                }
-                sx={{
-                  background:
-                    `linear-gradient(135deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
-                  borderRadius: 2,
-                  px: 4,
-                  py: 1,
-                  fontWeight: 600,
-                  textTransform: "none",
-                  boxShadow: "0 4px 15px rgba(184, 92, 56, 0.3)",
-                  "&:hover": {
-                    background:
-                      `linear-gradient(135deg, ${palette.primaryDark} 0%, ${palette.primary} 100%)`,
-                    transform: "translateY(-1px)",
-                    boxShadow: "0 6px 20px rgba(184, 92, 56, 0.35)",
-                  },
-                  "&:disabled": {
-                    background: "rgba(184, 92, 56, 0.25)",
-                    color: "rgba(255, 255, 255, 0.6)",
-                  },
-                  transition: "all 0.3s ease",
-                }}
-                disabled={
-                  !userForm.full_name ||
-                      !userForm.email ||
-                      (openCreateDialog && !userForm.password) ||
-                      isCreating ||
-                      isUpdating
-                }
-              >
-                {isCreating
-                  ? "Creating..."
-                  : isUpdating
-                  ? "Updating..."
-                  : openEditDialog
-                  ? "Update User"
-                  : "Create Admin"}
-              </Button>
-            )}
-          </DialogActions>
-        </Dialog>
-      </Paper>
+      {/* Edit */}
+      <Dialog open={openEdit} onClose={closeDialogs} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+        <DialogTitle sx={{ background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`, color: "#fff", fontWeight: 800 }}>
+          Edit user
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField label="Username" fullWidth required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+            <TextField label="Email" type="email" fullWidth required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <TextField label="Full name" fullWidth required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
+            <TextField label="Phone" fullWidth value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <TextField label="Address" fullWidth multiline minRows={2} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+            <FormControl fullWidth>
+              <InputLabel id="role-edit">Role</InputLabel>
+              <Select labelId="role-edit" label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                {ALL_ROLES.map((r) => (
+                  <MenuItem key={r} value={r}>
+                    {formatRole(r)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary">
+              Password changes use Settings or a dedicated reset flow; staff can use PUT /password on the API if needed.
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={closeDialogs}>Cancel</Button>
+          <Button variant="contained" onClick={handleUpdate} disabled={saving} sx={{ bgcolor: primaryRed, fontWeight: 700, "&:hover": { bgcolor: primaryDark } }}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
-};
+}
 
-export default UsersTable;
+function PaperLikeTabs({ activeTab, onChange }) {
+  return (
+    <Box sx={{ mb: 2, borderBottom: 1, borderColor: primaryLight, overflowX: "auto" }}>
+      <Tabs
+        value={activeTab}
+        onChange={onChange}
+        variant="scrollable"
+        scrollButtons="auto"
+        sx={{
+          minHeight: 52,
+          "& .MuiTab-root": {
+            textTransform: "none",
+            fontWeight: 600,
+            fontSize: "0.95rem",
+            color: textMuted,
+            minHeight: 52,
+            transition: "color 0.2s ease",
+          },
+          "& .MuiTab-root.Mui-selected": {
+            color: `${primaryRed} !important`,
+            fontWeight: 800,
+            fontSize: "1rem",
+          },
+          "& .MuiTabs-indicator": { bgcolor: primaryRed, height: 3, borderRadius: "2px 2px 0 0" },
+        }}
+      >
+        {ROLE_TABS.map((t, i) => (
+          <Tab key={t.label} label={t.label} id={`user-tab-${i}`} />
+        ))}
+      </Tabs>
+    </Box>
+  );
+}
+
+function Field({ icon, label, value }) {
+  return (
+    <Stack direction="row" spacing={1.5} alignItems="flex-start">
+      {icon}
+      <Box>
+        <Typography variant="caption" color="text.secondary">
+          {label}
+        </Typography>
+        <Typography variant="body1" fontWeight={600}>
+          {value || "—"}
+        </Typography>
+      </Box>
+    </Stack>
+  );
+}

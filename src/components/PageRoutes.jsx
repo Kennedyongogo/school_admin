@@ -17,6 +17,12 @@ import Review from "./Review/Review";
 import CharityMap from "../CharityMap";
 import Documents from "./Documents/Documents";
 import UsersTable from "./Users/UsersTable";
+import UsersCreate from "./Users/UsersCreate";
+import CurriculumTable from "./Curriculum/CurriculumTable";
+import CurriculumCreate from "./Curriculum/CurriculumCreate";
+import ElimuPlusSchoolProfile from "./SchoolProfile/ElimuPlusSchoolProfile";
+import ElimuPlusSchoolProfileForm from "./SchoolProfile/ElimuPlusSchoolProfileForm";
+import ElimuPlusStudentCreate from "./SchoolProfile/ElimuPlusStudentCreate";
 import Analytics from "./Analytics/Analytics";
 import Audit from "./Audit/Audit";
 import Projects from "./Projects/Projects";
@@ -128,7 +134,14 @@ function PageRoutes() {
             <Route path="documents" element={<Documents />} />
             <Route path="audit" element={<Audit />} />
             <Route path="analytics" element={<Analytics />} />
+            <Route path="elimu-plus/create" element={<ElimuPlusSchoolProfileForm mode="create" />} />
+            <Route path="elimu-plus/edit" element={<ElimuPlusSchoolProfileForm mode="edit" />} />
+            <Route path="elimu-plus/students/create" element={<ElimuPlusStudentCreate />} />
+            <Route path="elimu-plus" element={<ElimuPlusSchoolProfile />} />
+            <Route path="users/create" element={<UsersCreate />} />
             <Route path="users" element={<UsersTable />} />
+            <Route path="curriculum/create" element={<CurriculumCreate />} />
+            <Route path="curriculum" element={<CurriculumTable />} />
             <Route path="marketplace" element={<Marketplace />} />
             <Route path="marketplace/training-events/create" element={<TrainingEventCreate />} />
             <Route path="marketplace/training-events/:id" element={<TrainingEventView />} />
