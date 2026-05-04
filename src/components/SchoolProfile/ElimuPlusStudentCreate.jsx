@@ -71,9 +71,8 @@ const initialForm = () => ({
   admission_number: "",
   date_of_birth: "",
   gender: "male",
-  current_class: "",
-  section: "",
-  roll_number: "",
+  curriculum_id: "",
+  curriculum_class_id: "",
   enrollment_date: "",
   graduation_year: "",
   blood_group: "",
@@ -81,14 +80,14 @@ const initialForm = () => ({
   emergency_contact_name: "",
   emergency_contact_phone: "",
   is_alumni: false,
-  class_teacher_id: "",
 });
 
 export default function ElimuPlusStudentCreate() {
   const navigate = useNavigate();
   const [form, setForm] = useState(initialForm);
   const [eligibleUsers, setEligibleUsers] = useState([]);
-  const [teachers, setTeachers] = useState([]);
+  const [curricula, setCurricula] = useState([]);
+  const [allClasses, setAllClasses] = useState([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -117,9 +116,10 @@ export default function ElimuPlusStudentCreate() {
     setPageLoading(true);
     setError(null);
     try {
-      const [eligibleRes, teacherRows] = await Promise.all([
+      const [eligibleRes, cRows, classRows] = await Promise.all([
         fetch("/api/students/users-without-profile", { headers: authHeaders(token) }),
-        fetchAllPages("/api/teachers", token),
+        fetchAllPages("/api/curricula", token),
+        fetchAllPages("/api/curricula/all-classes", token),
       ]);
       const eligibleJson = await eligibleRes.json().catch(() => ({}));
       if (eligibleRes.ok && eligibleJson.success && Array.isArray(eligibleJson.data)) {
@@ -127,11 +127,13 @@ export default function ElimuPlusStudentCreate() {
       } else {
         setEligibleUsers([]);
       }
-      setTeachers(Array.isArray(teacherRows) ? teacherRows : []);
+      setCurricula(Array.isArray(cRows) ? cRows : []);
+      setAllClasses(Array.isArray(classRows) ? classRows : []);
     } catch (e) {
       setError(e.message || "Could not load form data.");
       setEligibleUsers([]);
-      setTeachers([]);
+      setCurricula([]);
+      setAllClasses([]);
     } finally {
       setPageLoading(false);
     }
@@ -153,8 +155,8 @@ export default function ElimuPlusStudentCreate() {
       setError("Select a student user account that does not yet have a profile.");
       return;
     }
-    if (!form.admission_number?.trim() || !form.date_of_birth || !form.current_class?.trim()) {
-      setError("Admission number, date of birth, and current class are required.");
+    if (!form.admission_number?.trim() || !form.date_of_birth || !form.curriculum_id || !form.curriculum_class_id) {
+      setError("Admission number, date of birth, curriculum, and class are required.");
       return;
     }
 
@@ -170,9 +172,8 @@ export default function ElimuPlusStudentCreate() {
       admission_number: form.admission_number.trim(),
       date_of_birth: form.date_of_birth,
       gender: form.gender,
-      current_class: form.current_class.trim(),
-      section: form.section?.trim() || null,
-      roll_number: form.roll_number?.trim() || null,
+      curriculum_id: form.curriculum_id,
+      curriculum_class_id: form.curriculum_class_id,
       enrollment_date: form.enrollment_date?.trim() || null,
       graduation_year,
       blood_group: form.blood_group?.trim() || null,
@@ -180,7 +181,6 @@ export default function ElimuPlusStudentCreate() {
       emergency_contact_name: form.emergency_contact_name?.trim() || null,
       emergency_contact_phone: form.emergency_contact_phone?.trim() || null,
       is_alumni: !!form.is_alumni,
-      class_teacher_id: form.class_teacher_id ? form.class_teacher_id : null,
     };
 
     setSaving(true);
@@ -192,9 +192,8 @@ export default function ElimuPlusStudentCreate() {
         fd.append("admission_number", body.admission_number);
         fd.append("date_of_birth", body.date_of_birth);
         fd.append("gender", body.gender);
-        fd.append("current_class", body.current_class);
-        fd.append("section", body.section ?? "");
-        fd.append("roll_number", body.roll_number ?? "");
+        fd.append("curriculum_id", body.curriculum_id);
+        fd.append("curriculum_class_id", body.curriculum_class_id);
         fd.append("enrollment_date", body.enrollment_date ?? "");
         fd.append("graduation_year", graduation_year === null ? "" : String(graduation_year));
         fd.append("blood_group", body.blood_group ?? "");
@@ -202,7 +201,6 @@ export default function ElimuPlusStudentCreate() {
         fd.append("emergency_contact_name", body.emergency_contact_name ?? "");
         fd.append("emergency_contact_phone", body.emergency_contact_phone ?? "");
         fd.append("is_alumni", body.is_alumni ? "true" : "false");
-        fd.append("class_teacher_id", body.class_teacher_id ?? "");
         fd.append("student_profile_picture", profilePhoto);
         res = await fetch("/api/students", {
           method: "POST",
@@ -384,15 +382,48 @@ export default function ElimuPlusStudentCreate() {
                     <MenuItem value="other">Other</MenuItem>
                   </Select>
                 </FormControl>
-                <TextField
-                  label="Current class"
-                  required
-                  fullWidth
-                  value={form.current_class}
-                  onChange={(e) => setForm({ ...form, current_class: e.target.value })}
-                />
-                <TextField label="Section" fullWidth value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value })} />
-                <TextField label="Roll number" fullWidth value={form.roll_number} onChange={(e) => setForm({ ...form, roll_number: e.target.value })} />
+                <FormControl fullWidth required variant="outlined">
+                  <InputLabel id="stu-create-curr">Curriculum</InputLabel>
+                  <Select
+                    labelId="stu-create-curr"
+                    label="Curriculum"
+                    value={form.curriculum_id === "" ? "" : form.curriculum_id}
+                    onChange={(e) => setForm({ ...form, curriculum_id: e.target.value, curriculum_class_id: "" })}
+                  >
+                    <MenuItem value="">
+                      <em>Select…</em>
+                    </MenuItem>
+                    {curricula.map((c) => (
+                      <MenuItem key={c.id} value={c.id}>
+                        {c.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth required variant="outlined" disabled={!form.curriculum_id}>
+                  <InputLabel id="stu-create-cc">Class</InputLabel>
+                  <Select
+                    labelId="stu-create-cc"
+                    label="Class"
+                    value={form.curriculum_class_id === "" ? "" : form.curriculum_class_id}
+                    onChange={(e) => setForm({ ...form, curriculum_class_id: e.target.value })}
+                  >
+                    <MenuItem value="">
+                      <em>Select…</em>
+                    </MenuItem>
+                    {allClasses
+                      .filter((cl) => cl.curriculum_id === form.curriculum_id)
+                      .map((cl) => (
+                        <MenuItem key={cl.id} value={cl.id}>
+                          {cl.name}
+                          {cl.code ? ` (${cl.code})` : ""}
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: -1 }}>
+                  Homeroom teacher is set automatically from the teacher assigned as class teacher for this class.
+                </Typography>
                 <TextField
                   label="Enrollment date"
                   type="date"
@@ -410,24 +441,6 @@ export default function ElimuPlusStudentCreate() {
                   onChange={(e) => setForm({ ...form, graduation_year: e.target.value })}
                 />
                 <TextField label="Blood group" fullWidth value={form.blood_group} onChange={(e) => setForm({ ...form, blood_group: e.target.value })} />
-                <FormControl fullWidth variant="outlined">
-                  <InputLabel id="teacher-label">Class teacher</InputLabel>
-                  <Select
-                    labelId="teacher-label"
-                    label="Class teacher"
-                    value={form.class_teacher_id === "" ? "" : form.class_teacher_id}
-                    onChange={(e) => setForm({ ...form, class_teacher_id: e.target.value })}
-                  >
-                    <MenuItem value="">
-                      <em>None</em>
-                    </MenuItem>
-                    {teachers.map((t) => (
-                      <MenuItem key={t.id} value={t.id}>
-                        {t.user?.full_name || t.user?.username || t.id}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
                 <TextField
                   label="Medical conditions"
                   fullWidth

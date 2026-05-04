@@ -6,6 +6,7 @@ import {
   Event,
   School,
   MenuBook,
+  VideocamOutlined,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import { styled, useTheme } from "@mui/material/styles";
@@ -112,6 +113,8 @@ const Navbar = (props) => {
     location.pathname === path ||
     (path === "/elimu-plus" && location.pathname.startsWith("/elimu-plus")) ||
     (path === "/curriculum" && location.pathname.startsWith("/curriculum")) ||
+    (path === "/timetable" && location.pathname.startsWith("/timetable")) ||
+    (path === "/elimu-plus-online" && location.pathname.startsWith("/elimu-plus-online")) ||
     (path === "/settings" && location.pathname.startsWith("/settings"));
 
   const logout = () => {
@@ -126,6 +129,7 @@ const Navbar = (props) => {
   const adminItems = [
     { text: "Curriculum", icon: <MenuBook />, path: "/curriculum" },
     { text: "Timetable", icon: <Event />, path: "/timetable" },
+    { text: "Online", icon: <VideocamOutlined />, path: "/elimu-plus-online" },
     { text: "Users", icon: <PeopleAlt />, path: "/users" },
     { text: "Elimu Plus", icon: <School />, path: "/elimu-plus" },
     { text: "Settings", icon: <Settings />, path: "/settings" },

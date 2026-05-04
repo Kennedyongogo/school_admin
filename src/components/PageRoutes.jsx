@@ -45,6 +45,12 @@ import ConsultationView from "./Consultations/ConsultationView";
 import Submissions from "./Submissions/Submissions";
 import Marketplace from "../Pages/Marketplace";
 import Timetable from "../Pages/Timetable";
+import TimetableDayPage from "../Pages/TimetableDayPage";
+import TimetableCreatePage from "../Pages/TimetableCreatePage";
+import TimetableManagePage from "../Pages/TimetableManagePage";
+import ElimuPlusOnlineHub from "../Pages/ElimuPlusOnlineHub";
+import OnlineScheduledLessonsPage from "../Pages/OnlineScheduledLessonsPage";
+import OnlineScheduledExamsPage from "../Pages/OnlineScheduledExamsPage";
 import TrainingEventCreate from "./TrainingOpportunities/TrainingEvents/TrainingEventCreate";
 import TrainingEventEdit from "./TrainingOpportunities/TrainingEvents/TrainingEventEdit";
 import TrainingEventView from "./TrainingOpportunities/TrainingEvents/TrainingEventView";
@@ -147,7 +153,16 @@ function PageRoutes() {
             <Route path="users" element={<UsersTable />} />
             <Route path="curriculum/create" element={<CurriculumCreate />} />
             <Route path="curriculum" element={<CurriculumTable />} />
+            <Route path="timetable/create" element={<TimetableCreatePage />} />
+            <Route path="timetable/day/:isoDate" element={<TimetableDayPage />} />
+            <Route
+              path="timetable/curricula/:curriculumId/classes/:classId/timetables/:timetableId"
+              element={<TimetableManagePage />}
+            />
             <Route path="timetable" element={<Timetable />} />
+            <Route path="elimu-plus-online/lessons" element={<OnlineScheduledLessonsPage />} />
+            <Route path="elimu-plus-online/exams" element={<OnlineScheduledExamsPage />} />
+            <Route path="elimu-plus-online" element={<ElimuPlusOnlineHub />} />
             <Route path="marketplace" element={<Marketplace />} />
             <Route path="marketplace/training-events/create" element={<TrainingEventCreate />} />
             <Route path="marketplace/training-events/:id" element={<TrainingEventView />} />

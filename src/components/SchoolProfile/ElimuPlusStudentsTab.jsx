@@ -28,8 +28,9 @@ import {
   Grid,
   Avatar,
   Stack,
+  Divider,
 } from "@mui/material";
-import { Edit as EditIcon, Close as CloseIcon } from "@mui/icons-material";
+import { Edit as EditIcon, Close as CloseIcon, Visibility as ViewIcon, DeleteOutline as DeleteIcon } from "@mui/icons-material";
 import Swal from "sweetalert2";
 
 const accent = "#DC2626";
@@ -72,17 +73,27 @@ async function fetchAllPages(path, token) {
   return out;
 }
 
+function formatClassDisplay(cc) {
+  if (!cc) return "—";
+  return cc.code ? `${cc.name} (${cc.code})` : cc.name;
+}
+
 function rowToForm(row) {
   const u = row.user || {};
   const enr = row.enrollment_date ? String(row.enrollment_date).slice(0, 10) : "";
+  const curriculumId = row.curriculum_id ?? row.curriculum_class?.curriculum_id ?? "";
+  const homeroom =
+    row.class_teacher?.user?.full_name ||
+    row.class_teacher?.user?.username ||
+    row.class_teacher?.user?.email ||
+    "";
   return {
     studentId: row.id,
     admission_number: row.admission_number ?? "",
     date_of_birth: row.date_of_birth ? String(row.date_of_birth).slice(0, 10) : "",
     gender: row.gender || "male",
-    current_class: row.current_class ?? "",
-    section: row.section ?? "",
-    roll_number: row.roll_number ?? "",
+    curriculum_id: curriculumId,
+    curriculum_class_id: row.curriculum_class_id ?? "",
     enrollment_date: enr,
     graduation_year: row.graduation_year != null ? String(row.graduation_year) : "",
     blood_group: row.blood_group ?? "",
@@ -90,7 +101,7 @@ function rowToForm(row) {
     emergency_contact_name: row.emergency_contact_name ?? "",
     emergency_contact_phone: row.emergency_contact_phone ?? "",
     is_alumni: !!row.is_alumni,
-    class_teacher_id: row.class_teacher_id ?? "",
+    class_teacher_label: homeroom,
     user_full_name: u.full_name ?? "",
     user_email: u.email ?? "",
     user_username: u.username ?? "",
@@ -103,7 +114,8 @@ function rowToForm(row) {
 
 export default function ElimuPlusStudentsTab({ active }) {
   const [rows, setRows] = useState([]);
-  const [teachers, setTeachers] = useState([]);
+  const [curricula, setCurricula] = useState([]);
+  const [allClasses, setAllClasses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -115,15 +127,22 @@ export default function ElimuPlusStudentsTab({ active }) {
   const [totalCount, setTotalCount] = useState(0);
   const [profilePhotoFile, setProfilePhotoFile] = useState(null);
   const [profilePhotoPreview, setProfilePhotoPreview] = useState(null);
+  const [viewRow, setViewRow] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
-  const fetchTeachers = useCallback(async () => {
+  const fetchCurriculumMeta = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
     try {
-      const list = await fetchAllPages("/api/teachers", token);
-      setTeachers(Array.isArray(list) ? list : []);
+      const [cRows, classRows] = await Promise.all([
+        fetchAllPages("/api/curricula", token),
+        fetchAllPages("/api/curricula/all-classes", token),
+      ]);
+      setCurricula(Array.isArray(cRows) ? cRows : []);
+      setAllClasses(Array.isArray(classRows) ? classRows : []);
     } catch {
-      /* optional for class teacher dropdown */
+      setCurricula([]);
+      setAllClasses([]);
     }
   }, []);
 
@@ -155,8 +174,8 @@ export default function ElimuPlusStudentsTab({ active }) {
   useEffect(() => {
     if (!active) return;
     fetchStudents();
-    fetchTeachers();
-  }, [active, fetchStudents, fetchTeachers]);
+    fetchCurriculumMeta();
+  }, [active, fetchStudents, fetchCurriculumMeta]);
 
   useEffect(() => {
     if (!profilePhotoFile) {
@@ -175,6 +194,49 @@ export default function ElimuPlusStudentsTab({ active }) {
     setDialogOpen(true);
   };
 
+  const handleDeleteStudent = async (row) => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      await Swal.fire({ icon: "error", title: "Session expired", text: "Please sign in again." });
+      return;
+    }
+    const name = row.user?.full_name || row.user?.username || "this student";
+    const confirm = await Swal.fire({
+      icon: "warning",
+      title: "Remove student profile?",
+      html: `This removes the <strong>student profile</strong> for <strong>${name}</strong>. The user account stays and can be linked to a new profile later. Section enrollments for this profile are removed.`,
+      showCancelButton: true,
+      confirmButtonColor: accent,
+      confirmButtonText: "Yes, remove profile",
+      cancelButtonText: "Cancel",
+    });
+    if (!confirm.isConfirmed) return;
+
+    setDeletingId(row.id);
+    try {
+      const res = await fetch(`/api/students/${row.id}`, {
+        method: "DELETE",
+        headers: authHeaders(token),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Could not remove profile (${res.status})`);
+      }
+      await fetchStudents();
+      await Swal.fire({
+        icon: "success",
+        title: "Profile removed",
+        text: data.message || "Student profile was removed.",
+        timer: 2200,
+        showConfirmButton: false,
+      });
+    } catch (e) {
+      await Swal.fire({ icon: "error", title: "Could not remove profile", text: e.message || "Request failed." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const handleSave = async () => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -185,8 +247,8 @@ export default function ElimuPlusStudentsTab({ active }) {
       setDialogError("Missing student.");
       return;
     }
-    if (!form.admission_number?.trim() || !form.date_of_birth || !form.current_class?.trim()) {
-      setDialogError("Admission number, date of birth, and current class are required.");
+    if (!form.admission_number?.trim() || !form.date_of_birth || !form.curriculum_id || !form.curriculum_class_id) {
+      setDialogError("Admission number, date of birth, curriculum, and class are required.");
       return;
     }
     if (!form.user_full_name?.trim()) {
@@ -194,24 +256,33 @@ export default function ElimuPlusStudentsTab({ active }) {
       return;
     }
 
-    setSaving(true);
-    setDialogError(null);
-
     const gy = form.graduation_year?.toString().trim();
     const graduation_year = gy === "" ? null : Number.parseInt(gy, 10);
     if (graduation_year !== null && Number.isNaN(graduation_year)) {
       setDialogError("Graduation year must be a number.");
-      setSaving(false);
       return;
     }
+
+    const confirmSave = await Swal.fire({
+      icon: "question",
+      title: "Save changes?",
+      text: "Update this student’s profile with the values you entered.",
+      showCancelButton: true,
+      confirmButtonColor: accent,
+      confirmButtonText: "Save",
+      cancelButtonText: "Cancel",
+    });
+    if (!confirmSave.isConfirmed) return;
+
+    setSaving(true);
+    setDialogError(null);
 
     const studentPayload = {
       admission_number: form.admission_number.trim(),
       date_of_birth: form.date_of_birth,
       gender: form.gender,
-      current_class: form.current_class.trim(),
-      section: form.section?.trim() || null,
-      roll_number: form.roll_number?.trim() || null,
+      curriculum_id: form.curriculum_id,
+      curriculum_class_id: form.curriculum_class_id,
       enrollment_date: form.enrollment_date?.trim() || null,
       graduation_year,
       blood_group: form.blood_group?.trim() || null,
@@ -219,7 +290,6 @@ export default function ElimuPlusStudentsTab({ active }) {
       emergency_contact_name: form.emergency_contact_name?.trim() || null,
       emergency_contact_phone: form.emergency_contact_phone?.trim() || null,
       is_alumni: !!form.is_alumni,
-      class_teacher_id: form.class_teacher_id ? form.class_teacher_id : null,
     };
 
     try {
@@ -235,9 +305,8 @@ export default function ElimuPlusStudentsTab({ active }) {
       fd.append("admission_number", studentPayload.admission_number);
       fd.append("date_of_birth", studentPayload.date_of_birth);
       fd.append("gender", studentPayload.gender);
-      fd.append("current_class", studentPayload.current_class);
-      fd.append("section", studentPayload.section ?? "");
-      fd.append("roll_number", studentPayload.roll_number ?? "");
+      fd.append("curriculum_id", studentPayload.curriculum_id);
+      fd.append("curriculum_class_id", studentPayload.curriculum_class_id);
       fd.append("enrollment_date", studentPayload.enrollment_date ?? "");
       fd.append("graduation_year", graduation_year === null ? "" : String(graduation_year));
       fd.append("blood_group", studentPayload.blood_group ?? "");
@@ -245,7 +314,6 @@ export default function ElimuPlusStudentsTab({ active }) {
       fd.append("emergency_contact_name", studentPayload.emergency_contact_name ?? "");
       fd.append("emergency_contact_phone", studentPayload.emergency_contact_phone ?? "");
       fd.append("is_alumni", studentPayload.is_alumni ? "true" : "false");
-      fd.append("class_teacher_id", studentPayload.class_teacher_id ?? "");
       fd.append("user", JSON.stringify(userObj));
       if (profilePhotoFile) fd.append("student_profile_picture", profilePhotoFile);
       else fd.append("profile_picture", form.student_profile_picture_url ?? "");
@@ -295,9 +363,10 @@ export default function ElimuPlusStudentsTab({ active }) {
             border: `1px solid ${accentLight}`,
             boxShadow: `0 8px 28px -12px ${accent}33`,
             bgcolor: "rgba(255,255,255,0.98)",
+            overflowX: "auto",
           }}
         >
-          <Table size="medium">
+          <Table size="medium" sx={{ minWidth: 720 }}>
             <TableHead>
               <TableRow
                 sx={{
@@ -305,45 +374,70 @@ export default function ElimuPlusStudentsTab({ active }) {
                   "& .MuiTableCell-head": { color: "#fff", fontWeight: 700, borderBottom: "none" },
                 }}
               >
-                <TableCell width={52}>Photo</TableCell>
+                <TableCell width={48} align="center">
+                  No.
+                </TableCell>
+                <TableCell width={56}>Photo</TableCell>
                 <TableCell>Student</TableCell>
                 <TableCell>Admission #</TableCell>
-                <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>Class</TableCell>
-                <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>Section</TableCell>
-                <TableCell align="right" width={72}>
-                  Edit
+                <TableCell>Curriculum</TableCell>
+                <TableCell>Class</TableCell>
+                <TableCell align="right" width={132}>
+                  Actions
                 </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={7}>
                     <Typography color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
                       No students found.
                     </Typography>
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((r) => {
+                rows.map((r, idx) => {
                   const name = r.user?.full_name || r.user?.username || "—";
                   const photoSrc = profilePhotoUrl(r.profile_picture);
+                  const rowNo = page * rowsPerPage + idx + 1;
                   return (
-                    <TableRow key={r.id} hover sx={{ cursor: "pointer" }} onClick={() => openEdit(r)}>
+                    <TableRow key={r.id} hover>
+                      <TableCell align="center" sx={{ color: "text.secondary", fontWeight: 600 }}>
+                        {rowNo}
+                      </TableCell>
                       <TableCell>
                         <Avatar src={photoSrc || undefined} sx={{ width: 36, height: 36, bgcolor: `${accent}22`, color: accentDark, fontWeight: 700 }}>
                           {!photoSrc ? name.charAt(0).toUpperCase() : null}
                         </Avatar>
                       </TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>{name}</TableCell>
-                      <TableCell>{r.admission_number}</TableCell>
-                      <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>{r.current_class}</TableCell>
-                      <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>{r.section || "—"}</TableCell>
-                      <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                        <Tooltip title="Edit details">
+                      <TableCell>{r.admission_number ?? "—"}</TableCell>
+                      <TableCell>{r.curriculum?.name || "—"}</TableCell>
+                      <TableCell>{formatClassDisplay(r.curriculum_class)}</TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="View">
+                          <IconButton size="small" aria-label="View student" onClick={() => setViewRow(r)} sx={{ color: accentDark }}>
+                            <ViewIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Edit">
                           <IconButton size="small" aria-label="Edit student" onClick={() => openEdit(r)} sx={{ color: accent }}>
                             <EditIcon fontSize="small" />
                           </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Remove profile (keeps user account)">
+                          <span>
+                            <IconButton
+                              size="small"
+                              aria-label="Remove student profile"
+                              disabled={deletingId === r.id}
+                              onClick={() => handleDeleteStudent(r)}
+                              sx={{ color: "error.main" }}
+                            >
+                              {deletingId === r.id ? <CircularProgress size={18} color="inherit" /> : <DeleteIcon fontSize="small" />}
+                            </IconButton>
+                          </span>
                         </Tooltip>
                       </TableCell>
                     </TableRow>
@@ -371,6 +465,83 @@ export default function ElimuPlusStudentsTab({ active }) {
           />
         </TableContainer>
       )}
+
+      <Dialog open={!!viewRow} onClose={() => setViewRow(null)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
+          Student details
+          <IconButton aria-label="Close" onClick={() => setViewRow(null)} sx={{ position: "absolute", right: 8, top: 8 }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          {viewRow ? (
+            <Stack spacing={2}>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Avatar
+                  src={profilePhotoUrl(viewRow.profile_picture) || undefined}
+                  sx={{ width: 64, height: 64, bgcolor: `${accent}22`, color: accentDark, fontWeight: 700 }}
+                >
+                  {!profilePhotoUrl(viewRow.profile_picture) ? (viewRow.user?.full_name || "?").charAt(0).toUpperCase() : null}
+                </Avatar>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                    {viewRow.user?.full_name || viewRow.user?.username || "—"}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {viewRow.user?.email || "—"}
+                  </Typography>
+                </Box>
+              </Stack>
+              <Divider />
+              <Stack spacing={0.5}>
+                <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                  Admission number
+                </Typography>
+                <Typography>{viewRow.admission_number ?? "—"}</Typography>
+              </Stack>
+              <Stack spacing={0.5}>
+                <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                  Curriculum
+                </Typography>
+                <Typography>{viewRow.curriculum?.name || "—"}</Typography>
+              </Stack>
+              <Stack spacing={0.5}>
+                <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                  Class
+                </Typography>
+                <Typography>{formatClassDisplay(viewRow.curriculum_class)}</Typography>
+              </Stack>
+              <Stack spacing={0.5}>
+                <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                  Homeroom teacher
+                </Typography>
+                <Typography>
+                  {viewRow.class_teacher?.user?.full_name ||
+                    viewRow.class_teacher?.user?.username ||
+                    viewRow.class_teacher?.user?.email ||
+                    "—"}
+                </Typography>
+              </Stack>
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setViewRow(null)}>Close</Button>
+          <Button
+            variant="contained"
+            sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark }, fontWeight: 700 }}
+            onClick={() => {
+              if (viewRow) {
+                const row = viewRow;
+                setViewRow(null);
+                openEdit(row);
+              }
+            }}
+          >
+            Edit
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={dialogOpen} onClose={() => !saving && setDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
@@ -457,13 +628,60 @@ export default function ElimuPlusStudentsTab({ active }) {
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField label="Current class" required fullWidth value={form.current_class} onChange={(e) => setForm({ ...form, current_class: e.target.value })} />
+              <FormControl fullWidth required>
+                <InputLabel id="stu-curr">Curriculum</InputLabel>
+                <Select
+                  labelId="stu-curr"
+                  label="Curriculum"
+                  value={form.curriculum_id === "" ? "" : form.curriculum_id}
+                  onChange={(e) => setForm({ ...form, curriculum_id: e.target.value, curriculum_class_id: "" })}
+                >
+                  <MenuItem value="">
+                    <em>Select…</em>
+                  </MenuItem>
+                  {curricula.map((c) => (
+                    <MenuItem key={c.id} value={c.id}>
+                      {c.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField label="Section" fullWidth value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value })} />
+              <FormControl fullWidth required disabled={!form.curriculum_id}>
+                <InputLabel id="stu-cc">Class</InputLabel>
+                <Select
+                  labelId="stu-cc"
+                  label="Class"
+                  value={form.curriculum_class_id === "" ? "" : form.curriculum_class_id}
+                  onChange={(e) => setForm({ ...form, curriculum_class_id: e.target.value })}
+                >
+                  <MenuItem value="">
+                    <em>Select…</em>
+                  </MenuItem>
+                  {allClasses
+                    .filter((cl) => cl.curriculum_id === form.curriculum_id)
+                    .map((cl) => (
+                      <MenuItem key={cl.id} value={cl.id}>
+                        {cl.name}
+                        {cl.code ? ` (${cl.code})` : ""}
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField label="Roll number" fullWidth value={form.roll_number} onChange={(e) => setForm({ ...form, roll_number: e.target.value })} />
+            <Grid item xs={12}>
+              <Typography variant="body2" color="text.secondary">
+                Homeroom teacher is assigned automatically from the teacher marked as class teacher for this curriculum class.
+                {form.class_teacher_label ? (
+                  <>
+                    {" "}
+                    Current: <strong>{form.class_teacher_label}</strong>
+                  </>
+                ) : (
+                  " None configured for this class yet."
+                )}
+              </Typography>
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField label="Enrollment date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={form.enrollment_date} onChange={(e) => setForm({ ...form, enrollment_date: e.target.value })} />
@@ -473,21 +691,6 @@ export default function ElimuPlusStudentsTab({ active }) {
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField label="Blood group" fullWidth value={form.blood_group} onChange={(e) => setForm({ ...form, blood_group: e.target.value })} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel id="stu-teacher">Class teacher</InputLabel>
-                <Select labelId="stu-teacher" label="Class teacher" value={form.class_teacher_id === "" ? "" : form.class_teacher_id} onChange={(e) => setForm({ ...form, class_teacher_id: e.target.value })}>
-                  <MenuItem value="">
-                    <em>None</em>
-                  </MenuItem>
-                  {teachers.map((t) => (
-                    <MenuItem key={t.id} value={t.id}>
-                      {t.user?.full_name || t.user?.username || t.id}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
             </Grid>
             <Grid item xs={12}>
               <TextField label="Medical conditions" fullWidth multiline minRows={2} value={form.medical_conditions} onChange={(e) => setForm({ ...form, medical_conditions: e.target.value })} />

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   IconButton,
@@ -76,6 +77,7 @@ const selectSx = {
 };
 
 export default function Timetable() {
+  const navigate = useNavigate();
   const [viewDate, setViewDate] = useState(() => new Date());
 
   const { daysInGrid, title } = useMemo(() => {
@@ -321,9 +323,14 @@ export default function Timetable() {
               const row = Math.floor(i / 7);
               const isLastRow = row === Math.floor((daysInGrid.length - 1) / 7);
               const gridRow = 2 + row;
+              const iso = format(day, "yyyy-MM-dd");
               return (
                 <Box
-                  key={day.toISOString()}
+                  key={iso}
+                  component="button"
+                  type="button"
+                  onClick={() => navigate(`/timetable/day/${iso}`)}
+                  aria-label={`Open timetable for ${iso}`}
                   sx={{
                     gridRow: gridRow,
                     gridColumn: (i % 7) + 1,
@@ -333,6 +340,9 @@ export default function Timetable() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    border: "none",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
                     borderRight: i % 7 < 6 ? `1px solid ${primaryLight}` : "none",
                     borderBottom: isLastRow ? "none" : `1px solid ${primaryLight}`,
                     bgcolor: today ? primaryLight : "#fff",
@@ -340,6 +350,13 @@ export default function Timetable() {
                     fontWeight: today ? 800 : inMonth ? 600 : 400,
                     boxShadow: today ? `inset 0 0 0 2px ${primaryRed}` : "none",
                     overflow: "hidden",
+                    transition: "background-color 0.15s ease, transform 0.12s ease",
+                    "&:hover": {
+                      bgcolor: today ? primaryLight : "rgba(220, 38, 38, 0.06)",
+                    },
+                    "&:active": {
+                      transform: "scale(0.98)",
+                    },
                   }}
                 >
                   <Typography
