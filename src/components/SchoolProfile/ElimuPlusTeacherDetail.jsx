@@ -77,7 +77,7 @@ function teacherCardsGridSx(theme, extra = {}) {
     width: "100%",
     maxWidth: "100%",
     boxSizing: "border-box",
-    px: { xs: 1, sm: 2 },
+    px: { xs: 0.5, sm: 1 },
     ...extra,
     [theme.breakpoints.down("md")]: {
       gridTemplateColumns: "minmax(0, 1fr)",
