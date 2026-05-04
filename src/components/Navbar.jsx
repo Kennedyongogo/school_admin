@@ -1,48 +1,13 @@
-import React, { cloneElement, Fragment, useEffect, useState } from "react";
+import React, { cloneElement, useEffect, useState } from "react";
 import {
   Logout,
-  ExpandLess,
-  ExpandMore,
   PeopleAlt,
-  Map,
-  Dashboard,
-  CreditCard,
-  MapOutlined,
-  StarRateSharp,
-  Search,
-  DataArray,
-  DataObject,
-  Help,
-  DataUsage,
-  AccountCircle,
-  Description,
-  AccountBalance,
-  LocationOn,
-  Warning,
   Settings,
-  QuestionAnswer,
-  Schedule,
-  Business,
-  Build,
-  Folder,
-  History,
-  Assessment,
-  RateReview,
-  Favorite,
-  Article,
   Event,
-  Image,
-  ContactMail,
-  RequestQuote,
-  EventAvailable,
-  Campaign,
-  Assignment,
-  Storefront,
   School,
   MenuBook,
 } from "@mui/icons-material";
-import { Money } from "@phosphor-icons/react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { styled, useTheme } from "@mui/material/styles";
 import MuiDrawer from "@mui/material/Drawer";
 import MuiAppBar from "@mui/material/AppBar";
@@ -58,9 +23,6 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import { Box } from "@mui/material";
 import Header from "./Header/Header";
-import { Gear } from "@phosphor-icons/react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBuilding } from "@fortawesome/free-solid-svg-icons";
 
 const drawerWidth = 300;
 
@@ -141,26 +103,16 @@ const Navbar = (props) => {
   const [open, setOpen] = useState(() => {
     return window.innerWidth >= theme.breakpoints.values.md;
   });
-  const [openSections, setOpenSections] = useState({
-    Resources: false,
-    System: false,
-  });
   const [menuItems, setMenuItems] = useState([]);
 
   const handleDrawerOpen = () => setOpen(true);
   const handleDrawerClose = () => setOpen(false);
 
-  const handleToggle = (section) => {
-    setOpenSections((prevState) => ({
-      ...prevState,
-      [section]: !prevState[section],
-    }));
-  };
-
   const isNavPathSelected = (path) =>
     location.pathname === path ||
     (path === "/elimu-plus" && location.pathname.startsWith("/elimu-plus")) ||
-    (path === "/curriculum" && location.pathname.startsWith("/curriculum"));
+    (path === "/curriculum" && location.pathname.startsWith("/curriculum")) ||
+    (path === "/settings" && location.pathname.startsWith("/settings"));
 
   const logout = () => {
     localStorage.clear();
@@ -172,90 +124,11 @@ const Navbar = (props) => {
   };
 
   const adminItems = [
-    { text: "Dashboard", icon: <Dashboard />, path: "/analytics" },
+    { text: "Curriculum", icon: <MenuBook />, path: "/curriculum" },
+    { text: "Timetable", icon: <Event />, path: "/timetable" },
+    { text: "Users", icon: <PeopleAlt />, path: "/users" },
     { text: "Elimu Plus", icon: <School />, path: "/elimu-plus" },
-    {
-      text: "Blogs",
-      icon: <Article />,
-      path: "/blogs",
-    },
-    {
-      text: "Projects",
-      icon: <Business />,
-      path: "/projects",
-    },
-    {
-      text: "Services",
-      icon: <Build />,
-      path: "/services",
-    },
-    {
-      text: "Forms",
-      icon: <Description />,
-      path: "/forms",
-    },
-    {
-      text: "Users",
-      icon: <PeopleAlt />,
-      path: "/users",
-    },
-    {
-      text: "Curriculum",
-      icon: <MenuBook />,
-      path: "/curriculum",
-    },
-    {
-      text: "Marketplace",
-      icon: <Storefront />,
-      path: "/marketplace",
-    },
-        {
-          text: "Resources",
-          icon: <Folder />,
-          subItems: [
-            {
-              text: "Submissions",
-              icon: <Assignment />,
-              path: "/submissions",
-            },
-            {
-              text: "Documents",
-              icon: <Folder />,
-              path: "/documents",
-            },
-            {
-              text: "MK Map",
-              icon: <Map />,
-              path: "/map",
-            },
-            {
-              text: "Reviews",
-              icon: <RateReview />,
-              path: "/reviews",
-            },
-            {
-              text: "FAQs",
-              icon: <QuestionAnswer />,
-              path: "/faqs",
-            },
-          ],
-        },
-    {
-      text: "System",
-      icon: <Settings />,
-      subItems: [
-        {
-          text: "Audit Trail",
-          icon: <History />,
-          path: "/audit",
-        },
-        {
-          text: "Settings",
-          icon: <Settings />,
-          path: "/settings",
-        },
-      ],
-    },
+    { text: "Settings", icon: <Settings />, path: "/settings" },
   ];
 
   useEffect(() => {
@@ -309,111 +182,30 @@ const Navbar = (props) => {
         <Divider />
         <List>
           {menuItems.map((item) => (
-            <Fragment key={item.text}>
-              {item.subItems ? (
-                <>
-                  <ListItem
-                    button
-                    onClick={() => handleToggle(item.text)}
-                    sx={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      pr: 1,
-                    }}
-                  >
-                    <Box
-                      sx={{ display: "flex", alignItems: "center", flex: 1 }}
-                    >
-                      <ListItemIcon>{item.icon}</ListItemIcon>
-                      <ListItemText
-                        sx={{
-                          fontSize: "small",
-                          color:
-                            location.pathname === item.path
-                              ? "primary"
-                              : "textSecondary",
-                          fontWeight:
-                            location.pathname === item.path ? "bold" : "normal",
-                        }}
-                        primary={item.text}
-                      />
-                    </Box>
-                    <Box sx={{ ml: "auto" }}>
-                      {openSections[item.text] ? (
-                        <ExpandLess />
-                      ) : (
-                        <ExpandMore />
-                      )}
-                    </Box>
-                  </ListItem>
-                  {openSections[item.text] && (
-                    <List component="div" disablePadding>
-                      {item.subItems.map((subItem) => (
-                        <ListItem
-                          key={subItem.text}
-                          button
-                          onClick={() => navigate(subItem.path)}
-                          selected={location.pathname === subItem.path}
-                          sx={{
-                            fontSize: "x-small",
-                            pl: 4, // Indent subitems
-                            typography: "body2", // Reduce font size
-                            fontStyle: "italic", // Italicize text
-                            cursor: "pointer",
-                            bgcolor:
-                              location.pathname === subItem.path
-                                ? "action.selected"
-                                : "transparent", // Highlight selected subitem
-                          }}
-                        >
-                          <ListItemIcon>{subItem.icon}</ListItemIcon>
-                          <ListItemText
-                            primary={subItem.text}
-                            sx={{
-                              fontSize: "x-small",
-                              color:
-                                location.pathname === item.path
-                                  ? "primary"
-                                  : "textSecondary",
-                              fontWeight:
-                                location.pathname === item.path
-                                  ? "bold"
-                                  : "normal", // Highlight text for selected item
-                            }}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  )}
-                </>
-              ) : (
-                <ListItem
-                  key={item.text}
-                  button
-                  onClick={() => navigate(item.path)}
-                  selected={isNavPathSelected(item.path)}
-                  sx={{
-                    cursor: "pointer",
-                    bgcolor: isNavPathSelected(item.path) ? "action.selected" : "transparent",
-                  }}
-                >
-                  <ListItemIcon>
-                    {cloneElement(item.icon, {
-                      color: isNavPathSelected(item.path) ? "primary" : "textSecondary",
-                    })}
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={item.text}
-                    sx={{
-                      cursor: "pointer",
-                      color: isNavPathSelected(item.path) ? "primary" : "textSecondary",
-                      fontWeight: isNavPathSelected(item.path) ? "bold" : "normal",
-                    }}
-                  />
-                </ListItem>
-              )}
-            </Fragment>
+            <ListItem
+              key={item.text}
+              button
+              onClick={() => navigate(item.path)}
+              selected={isNavPathSelected(item.path)}
+              sx={{
+                cursor: "pointer",
+                bgcolor: isNavPathSelected(item.path) ? "action.selected" : "transparent",
+              }}
+            >
+              <ListItemIcon>
+                {cloneElement(item.icon, {
+                  color: isNavPathSelected(item.path) ? "primary" : "textSecondary",
+                })}
+              </ListItemIcon>
+              <ListItemText
+                primary={item.text}
+                sx={{
+                  cursor: "pointer",
+                  color: isNavPathSelected(item.path) ? "primary" : "textSecondary",
+                  fontWeight: isNavPathSelected(item.path) ? "bold" : "normal",
+                }}
+              />
+            </ListItem>
           ))}
         </List>
         <Divider />

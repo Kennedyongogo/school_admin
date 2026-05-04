@@ -11,6 +11,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   IconButton,
   Tooltip,
   Dialog,
@@ -25,6 +26,8 @@ import {
   FormControlLabel,
   Checkbox,
   Grid,
+  Avatar,
+  Stack,
 } from "@mui/material";
 import { Edit as EditIcon, Close as CloseIcon } from "@mui/icons-material";
 import Swal from "sweetalert2";
@@ -38,6 +41,36 @@ const authHeaders = (token) => ({
   Accept: "application/json",
   Authorization: `Bearer ${token}`,
 });
+
+const authMultipartHeaders = (token) => ({
+  Accept: "application/json",
+  Authorization: `Bearer ${token}`,
+});
+
+function profilePhotoUrl(stored) {
+  if (!stored || typeof stored !== "string") return null;
+  const t = stored.trim();
+  if (!t) return null;
+  if (/^https?:\/\//i.test(t)) return t;
+  return t.startsWith("/") ? t : `/${t}`;
+}
+
+async function fetchAllPages(path, token) {
+  const out = [];
+  let pageNum = 1;
+  let totalPages = 1;
+  do {
+    const sep = path.includes("?") ? "&" : "?";
+    const res = await fetch(`${path}${sep}page=${pageNum}&limit=100`, { headers: authHeaders(token) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success || !Array.isArray(data.data)) break;
+    out.push(...data.data);
+    totalPages = data.pagination?.totalPages ?? 1;
+    pageNum += 1;
+    if (pageNum > 50) break;
+  } while (pageNum <= totalPages);
+  return out;
+}
 
 function rowToForm(row) {
   const u = row.user || {};
@@ -64,6 +97,7 @@ function rowToForm(row) {
     user_phone: u.phone ?? "",
     user_address: u.address ?? "",
     user_profile_image: u.profile_image ?? "",
+    student_profile_picture_url: row.profile_picture ?? "",
   };
 }
 
@@ -76,14 +110,18 @@ export default function ElimuPlusStudentsTab({ active }) {
   const [form, setForm] = useState(() => rowToForm({ user: {}, enrollment_date: null }));
   const [saving, setSaving] = useState(false);
   const [dialogError, setDialogError] = useState(null);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [profilePhotoFile, setProfilePhotoFile] = useState(null);
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState(null);
 
   const fetchTeachers = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
     try {
-      const res = await fetch("/api/teachers", { headers: authHeaders(token) });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success && Array.isArray(data.data)) setTeachers(data.data);
+      const list = await fetchAllPages("/api/teachers", token);
+      setTeachers(Array.isArray(list) ? list : []);
     } catch {
       /* optional for class teacher dropdown */
     }
@@ -98,19 +136,21 @@ export default function ElimuPlusStudentsTab({ active }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/students", { headers: authHeaders(token) });
+      const res = await fetch(`/api/students?page=${page + 1}&limit=${rowsPerPage}`, { headers: authHeaders(token) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         throw new Error(data.message || `Could not load students (${res.status})`);
       }
       setRows(Array.isArray(data.data) ? data.data : []);
+      setTotalCount(typeof data.pagination?.total === "number" ? data.pagination.total : 0);
     } catch (e) {
       setError(e.message || "Failed to load students.");
       setRows([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, rowsPerPage]);
 
   useEffect(() => {
     if (!active) return;
@@ -118,8 +158,19 @@ export default function ElimuPlusStudentsTab({ active }) {
     fetchTeachers();
   }, [active, fetchStudents, fetchTeachers]);
 
+  useEffect(() => {
+    if (!profilePhotoFile) {
+      setProfilePhotoPreview(null);
+      return undefined;
+    }
+    const url = URL.createObjectURL(profilePhotoFile);
+    setProfilePhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [profilePhotoFile]);
+
   const openEdit = (row) => {
     setForm(rowToForm(row));
+    setProfilePhotoFile(null);
     setDialogError(null);
     setDialogOpen(true);
   };
@@ -172,21 +223,37 @@ export default function ElimuPlusStudentsTab({ active }) {
     };
 
     try {
-      const body = {
-        ...studentPayload,
-        user: {
-          full_name: form.user_full_name.trim(),
-          email: form.user_email?.trim() || undefined,
-          username: form.user_username?.trim() || undefined,
-          phone: form.user_phone?.trim() || null,
-          address: form.user_address?.trim() || null,
-          profile_image: form.user_profile_image?.trim() || null,
-        },
+      const userObj = {
+        full_name: form.user_full_name.trim(),
+        email: form.user_email?.trim() || undefined,
+        username: form.user_username?.trim() || undefined,
+        phone: form.user_phone?.trim() || null,
+        address: form.user_address?.trim() || null,
+        profile_image: form.user_profile_image?.trim() || null,
       };
+      const fd = new FormData();
+      fd.append("admission_number", studentPayload.admission_number);
+      fd.append("date_of_birth", studentPayload.date_of_birth);
+      fd.append("gender", studentPayload.gender);
+      fd.append("current_class", studentPayload.current_class);
+      fd.append("section", studentPayload.section ?? "");
+      fd.append("roll_number", studentPayload.roll_number ?? "");
+      fd.append("enrollment_date", studentPayload.enrollment_date ?? "");
+      fd.append("graduation_year", graduation_year === null ? "" : String(graduation_year));
+      fd.append("blood_group", studentPayload.blood_group ?? "");
+      fd.append("medical_conditions", studentPayload.medical_conditions ?? "");
+      fd.append("emergency_contact_name", studentPayload.emergency_contact_name ?? "");
+      fd.append("emergency_contact_phone", studentPayload.emergency_contact_phone ?? "");
+      fd.append("is_alumni", studentPayload.is_alumni ? "true" : "false");
+      fd.append("class_teacher_id", studentPayload.class_teacher_id ?? "");
+      fd.append("user", JSON.stringify(userObj));
+      if (profilePhotoFile) fd.append("student_profile_picture", profilePhotoFile);
+      else fd.append("profile_picture", form.student_profile_picture_url ?? "");
+
       const res = await fetch(`/api/students/${form.studentId}`, {
         method: "PUT",
-        headers: authHeaders(token),
-        body: JSON.stringify(body),
+        headers: authMultipartHeaders(token),
+        body: fd,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
@@ -238,6 +305,7 @@ export default function ElimuPlusStudentsTab({ active }) {
                   "& .MuiTableCell-head": { color: "#fff", fontWeight: 700, borderBottom: "none" },
                 }}
               >
+                <TableCell width={52}>Photo</TableCell>
                 <TableCell>Student</TableCell>
                 <TableCell>Admission #</TableCell>
                 <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>Class</TableCell>
@@ -250,7 +318,7 @@ export default function ElimuPlusStudentsTab({ active }) {
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5}>
+                  <TableCell colSpan={6}>
                     <Typography color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
                       No students found.
                     </Typography>
@@ -259,8 +327,14 @@ export default function ElimuPlusStudentsTab({ active }) {
               ) : (
                 rows.map((r) => {
                   const name = r.user?.full_name || r.user?.username || "—";
+                  const photoSrc = profilePhotoUrl(r.profile_picture);
                   return (
                     <TableRow key={r.id} hover sx={{ cursor: "pointer" }} onClick={() => openEdit(r)}>
+                      <TableCell>
+                        <Avatar src={photoSrc || undefined} sx={{ width: 36, height: 36, bgcolor: `${accent}22`, color: accentDark, fontWeight: 700 }}>
+                          {!photoSrc ? name.charAt(0).toUpperCase() : null}
+                        </Avatar>
+                      </TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>{name}</TableCell>
                       <TableCell>{r.admission_number}</TableCell>
                       <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>{r.current_class}</TableCell>
@@ -278,6 +352,23 @@ export default function ElimuPlusStudentsTab({ active }) {
               )}
             </TableBody>
           </Table>
+          <TablePagination
+            component="div"
+            rowsPerPageOptions={[5, 10, 25, 50]}
+            count={totalCount}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={(_, newPage) => setPage(newPage)}
+            onRowsPerPageChange={(e) => {
+              setRowsPerPage(parseInt(e.target.value, 10));
+              setPage(0);
+            }}
+            labelRowsPerPage="Rows per page"
+            sx={{
+              borderTop: `1px solid ${accentLight}`,
+              "& .MuiTablePagination-toolbar": { flexWrap: "wrap", gap: 1 },
+            }}
+          />
         </TableContainer>
       )}
 
@@ -294,6 +385,27 @@ export default function ElimuPlusStudentsTab({ active }) {
               {dialogError}
             </Alert>
           )}
+          <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, color: accentDark }}>
+            Student profile photo
+          </Typography>
+          <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap">
+            <Avatar
+              src={profilePhotoPreview || profilePhotoUrl(form.student_profile_picture_url) || undefined}
+              sx={{ width: 72, height: 72, bgcolor: `${accent}22`, color: accentDark, fontWeight: 700 }}
+            >
+              {!profilePhotoPreview && !form.student_profile_picture_url ? "?" : null}
+            </Avatar>
+            <Button variant="outlined" component="label" sx={{ borderColor: accent, color: accentDark, fontWeight: 700 }}>
+              Choose photo
+              <input type="file" accept="image/*" hidden onChange={(e) => setProfilePhotoFile(e.target.files?.[0] || null)} />
+            </Button>
+            {(profilePhotoFile || form.student_profile_picture_url) && (
+              <Button size="small" onClick={() => { setProfilePhotoFile(null); setForm({ ...form, student_profile_picture_url: "" }); }}>
+                Clear photo
+              </Button>
+            )}
+          </Stack>
+
           <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, color: accentDark }}>
             Account (user)
           </Typography>

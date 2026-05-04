@@ -19,6 +19,7 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   PersonAdd as PersonAddIcon,
+  Person as PersonIcon,
   Email as EmailIcon,
   Phone as PhoneIcon,
   LocationOn as LocationIcon,
@@ -28,6 +29,7 @@ import {
   School as SchoolIcon,
 } from "@mui/icons-material";
 import ElimuPlusDepartmentsTab from "./ElimuPlusDepartmentsTab";
+import ElimuPlusTeachersTab from "./ElimuPlusTeachersTab";
 import ElimuPlusStudentsTab from "./ElimuPlusStudentsTab";
 
 const authHeaders = (token) => ({
@@ -168,7 +170,7 @@ export default function ElimuPlusSchoolProfile() {
 
   useEffect(() => {
     const t = location.state?.tab;
-    if (typeof t === "number" && t >= 0 && t <= 2) {
+    if (typeof t === "number" && t >= 0 && t <= 3) {
       setTab(t);
     }
   }, [location.state]);
@@ -180,7 +182,7 @@ export default function ElimuPlusSchoolProfile() {
     maxWidth: "none",
     marginLeft: theme.spacing(-3),
     marginRight: theme.spacing(-3),
-    marginTop: theme.spacing(-1),
+    marginTop: theme.spacing(-2.5),
     boxSizing: "border-box",
   });
 
@@ -207,6 +209,13 @@ export default function ElimuPlusSchoolProfile() {
       );
     }
     if (tab === 2) {
+      return (
+        <Button variant="contained" startIcon={<PersonIcon />} onClick={() => navigate("/elimu-plus/teachers/create")} sx={headerButtonSx}>
+          Create teacher profile
+        </Button>
+      );
+    }
+    if (tab === 3) {
       return (
         <Button
           variant="contained"
@@ -235,7 +244,7 @@ export default function ElimuPlusSchoolProfile() {
         sx={{
           background: `linear-gradient(135deg, ${accentDark} 0%, ${accent} 45%, #F97316 100%)`,
           px: { xs: 2, sm: 3 },
-          pt: { xs: 2, sm: 2.5 },
+          pt: { xs: 1.75, sm: 2.25 },
           pb: 0,
           color: "#fff",
           position: "relative",
@@ -285,6 +294,7 @@ export default function ElimuPlusSchoolProfile() {
           >
             <Tab label="School" disableRipple />
             <Tab label="Department" disableRipple />
+            <Tab label="Teachers" disableRipple />
             <Tab label="Students" disableRipple />
           </Tabs>
         </Stack>
@@ -418,7 +428,8 @@ export default function ElimuPlusSchoolProfile() {
         )}
 
         <ElimuPlusDepartmentsTab ref={deptPanelRef} active={tab === 1} />
-        <ElimuPlusStudentsTab active={tab === 2} />
+        <ElimuPlusTeachersTab active={tab === 2} />
+        <ElimuPlusStudentsTab active={tab === 3} />
       </Box>
     </Box>
   );

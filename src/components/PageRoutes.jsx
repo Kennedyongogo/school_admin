@@ -23,6 +23,8 @@ import CurriculumCreate from "./Curriculum/CurriculumCreate";
 import ElimuPlusSchoolProfile from "./SchoolProfile/ElimuPlusSchoolProfile";
 import ElimuPlusSchoolProfileForm from "./SchoolProfile/ElimuPlusSchoolProfileForm";
 import ElimuPlusStudentCreate from "./SchoolProfile/ElimuPlusStudentCreate";
+import ElimuPlusTeacherCreate from "./SchoolProfile/ElimuPlusTeacherCreate";
+import ElimuPlusTeacherDetail from "./SchoolProfile/ElimuPlusTeacherDetail";
 import Analytics from "./Analytics/Analytics";
 import Audit from "./Audit/Audit";
 import Projects from "./Projects/Projects";
@@ -42,6 +44,7 @@ import QuoteView from "./Quotations/QuoteView";
 import ConsultationView from "./Consultations/ConsultationView";
 import Submissions from "./Submissions/Submissions";
 import Marketplace from "../Pages/Marketplace";
+import Timetable from "../Pages/Timetable";
 import TrainingEventCreate from "./TrainingOpportunities/TrainingEvents/TrainingEventCreate";
 import TrainingEventEdit from "./TrainingOpportunities/TrainingEvents/TrainingEventEdit";
 import TrainingEventView from "./TrainingOpportunities/TrainingEvents/TrainingEventView";
@@ -136,12 +139,15 @@ function PageRoutes() {
             <Route path="analytics" element={<Analytics />} />
             <Route path="elimu-plus/create" element={<ElimuPlusSchoolProfileForm mode="create" />} />
             <Route path="elimu-plus/edit" element={<ElimuPlusSchoolProfileForm mode="edit" />} />
+            <Route path="elimu-plus/teachers/create" element={<ElimuPlusTeacherCreate />} />
+            <Route path="elimu-plus/teachers/:teacherId" element={<ElimuPlusTeacherDetail />} />
             <Route path="elimu-plus/students/create" element={<ElimuPlusStudentCreate />} />
             <Route path="elimu-plus" element={<ElimuPlusSchoolProfile />} />
             <Route path="users/create" element={<UsersCreate />} />
             <Route path="users" element={<UsersTable />} />
             <Route path="curriculum/create" element={<CurriculumCreate />} />
             <Route path="curriculum" element={<CurriculumTable />} />
+            <Route path="timetable" element={<Timetable />} />
             <Route path="marketplace" element={<Marketplace />} />
             <Route path="marketplace/training-events/create" element={<TrainingEventCreate />} />
             <Route path="marketplace/training-events/:id" element={<TrainingEventView />} />

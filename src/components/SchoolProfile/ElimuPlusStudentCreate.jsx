@@ -18,6 +18,7 @@ import {
   CardContent,
   FormControlLabel,
   Checkbox,
+  Avatar,
 } from "@mui/material";
 import { ArrowBack as ArrowBackIcon, PersonAdd as PersonAddIcon } from "@mui/icons-material";
 import Swal from "sweetalert2";
@@ -32,6 +33,28 @@ const authHeaders = (token) => ({
   Accept: "application/json",
   Authorization: `Bearer ${token}`,
 });
+
+const authMultipartHeaders = (token) => ({
+  Accept: "application/json",
+  Authorization: `Bearer ${token}`,
+});
+
+async function fetchAllPages(path, token) {
+  const out = [];
+  let page = 1;
+  let totalPages = 1;
+  do {
+    const sep = path.includes("?") ? "&" : "?";
+    const res = await fetch(`${path}${sep}page=${page}&limit=100`, { headers: authHeaders(token) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success || !Array.isArray(data.data)) break;
+    out.push(...data.data);
+    totalPages = data.pagination?.totalPages ?? 1;
+    page += 1;
+    if (page > 50) break;
+  } while (page <= totalPages);
+  return out;
+}
 
 const fullMainBleedSx = (theme) => ({
   width: `calc(100% + ${theme.spacing(6)})`,
@@ -69,8 +92,20 @@ export default function ElimuPlusStudentCreate() {
   const [pageLoading, setPageLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [profilePhoto, setProfilePhoto] = useState(null);
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState(null);
 
-  const goBack = () => navigate("/elimu-plus", { state: { tab: 2 } });
+  const goBack = () => navigate("/elimu-plus", { state: { tab: 3 } });
+
+  useEffect(() => {
+    if (!profilePhoto) {
+      setProfilePhotoPreview(null);
+      return undefined;
+    }
+    const url = URL.createObjectURL(profilePhoto);
+    setProfilePhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [profilePhoto]);
 
   const loadData = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -82,22 +117,17 @@ export default function ElimuPlusStudentCreate() {
     setPageLoading(true);
     setError(null);
     try {
-      const [eligibleRes, teachersRes] = await Promise.all([
+      const [eligibleRes, teacherRows] = await Promise.all([
         fetch("/api/students/users-without-profile", { headers: authHeaders(token) }),
-        fetch("/api/teachers", { headers: authHeaders(token) }),
+        fetchAllPages("/api/teachers", token),
       ]);
       const eligibleJson = await eligibleRes.json().catch(() => ({}));
-      const teachersJson = await teachersRes.json().catch(() => ({}));
       if (eligibleRes.ok && eligibleJson.success && Array.isArray(eligibleJson.data)) {
         setEligibleUsers(eligibleJson.data);
       } else {
         setEligibleUsers([]);
       }
-      if (teachersRes.ok && teachersJson.success && Array.isArray(teachersJson.data)) {
-        setTeachers(teachersJson.data);
-      } else {
-        setTeachers([]);
-      }
+      setTeachers(Array.isArray(teacherRows) ? teacherRows : []);
     } catch (e) {
       setError(e.message || "Could not load form data.");
       setEligibleUsers([]);
@@ -155,11 +185,37 @@ export default function ElimuPlusStudentCreate() {
 
     setSaving(true);
     try {
-      const res = await fetch("/api/students", {
-        method: "POST",
-        headers: authHeaders(token),
-        body: JSON.stringify(body),
-      });
+      let res;
+      if (profilePhoto) {
+        const fd = new FormData();
+        fd.append("user_id", form.link_user_id);
+        fd.append("admission_number", body.admission_number);
+        fd.append("date_of_birth", body.date_of_birth);
+        fd.append("gender", body.gender);
+        fd.append("current_class", body.current_class);
+        fd.append("section", body.section ?? "");
+        fd.append("roll_number", body.roll_number ?? "");
+        fd.append("enrollment_date", body.enrollment_date ?? "");
+        fd.append("graduation_year", graduation_year === null ? "" : String(graduation_year));
+        fd.append("blood_group", body.blood_group ?? "");
+        fd.append("medical_conditions", body.medical_conditions ?? "");
+        fd.append("emergency_contact_name", body.emergency_contact_name ?? "");
+        fd.append("emergency_contact_phone", body.emergency_contact_phone ?? "");
+        fd.append("is_alumni", body.is_alumni ? "true" : "false");
+        fd.append("class_teacher_id", body.class_teacher_id ?? "");
+        fd.append("student_profile_picture", profilePhoto);
+        res = await fetch("/api/students", {
+          method: "POST",
+          headers: authMultipartHeaders(token),
+          body: fd,
+        });
+      } else {
+        res = await fetch("/api/students", {
+          method: "POST",
+          headers: authHeaders(token),
+          body: JSON.stringify(body),
+        });
+      }
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         throw new Error(data.message || "Could not create student.");
@@ -171,7 +227,7 @@ export default function ElimuPlusStudentCreate() {
         timer: 1800,
         showConfirmButton: false,
       });
-      navigate("/elimu-plus", { replace: true, state: { tab: 2 } });
+      navigate("/elimu-plus", { replace: true, state: { tab: 3 } });
     } catch (err) {
       setError(err.message || "Create failed.");
     } finally {
@@ -185,6 +241,7 @@ export default function ElimuPlusStudentCreate() {
       onSubmit={handleSubmit}
       sx={(theme) => ({
         ...fullMainBleedSx(theme),
+        marginTop: theme.spacing(-2.5),
         minHeight: "100%",
         background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
       })}
@@ -193,7 +250,7 @@ export default function ElimuPlusStudentCreate() {
         sx={{
           background: `linear-gradient(135deg, ${accentDark} 0%, ${accent} 55%, #EF4444 100%)`,
           px: { xs: 1.5, sm: 2 },
-          py: { xs: 2, sm: 2.5 },
+          py: { xs: 1.5, sm: 2 },
           color: "white",
           boxShadow: `0 8px 24px ${accent}33`,
         }}
@@ -250,6 +307,24 @@ export default function ElimuPlusStudentCreate() {
             <CardContent sx={{ px: { xs: 2, sm: 3 }, py: 3 }}>
               <Stack spacing={2.5} sx={{ width: "100%", maxWidth: "100%" }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: accentDark, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                  Profile photo (student record)
+                </Typography>
+                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                  <Avatar src={profilePhotoPreview || undefined} sx={{ width: 72, height: 72, bgcolor: `${accent}22`, color: accentDark, fontWeight: 700 }}>
+                    {!profilePhotoPreview ? <PersonAddIcon /> : null}
+                  </Avatar>
+                  <Button variant="outlined" component="label" sx={{ borderColor: accent, color: accentDark, fontWeight: 700 }}>
+                    Choose photo
+                    <input type="file" accept="image/*" hidden onChange={(e) => setProfilePhoto(e.target.files?.[0] || null)} />
+                  </Button>
+                  {profilePhoto && (
+                    <Button size="small" type="button" onClick={() => setProfilePhoto(null)}>
+                      Remove
+                    </Button>
+                  )}
+                </Stack>
+
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: accentDark, letterSpacing: "0.04em", textTransform: "uppercase", pt: 1 }}>
                   Student user
                 </Typography>
                 <FormControl fullWidth required variant="outlined">

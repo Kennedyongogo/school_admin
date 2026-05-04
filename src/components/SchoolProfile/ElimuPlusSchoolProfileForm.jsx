@@ -263,6 +263,7 @@ export default function ElimuPlusSchoolProfileForm({ mode }) {
       onSubmit={handleSubmit}
       sx={(theme) => ({
         ...fullMainBleedSx(theme),
+        marginTop: theme.spacing(-2.5),
         minHeight: "100%",
         background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
       })}
@@ -271,7 +272,7 @@ export default function ElimuPlusSchoolProfileForm({ mode }) {
         sx={{
           background: `linear-gradient(135deg, ${primaryDark} 0%, ${primaryRed} 55%, #EF4444 100%)`,
           px: { xs: 1.5, sm: 2 },
-          py: { xs: 2, sm: 2.5 },
+          py: { xs: 1.5, sm: 2 },
           color: "white",
           boxShadow: `0 8px 24px ${primaryRed}33`,
         }}
