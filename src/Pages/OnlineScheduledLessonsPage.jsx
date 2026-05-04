@@ -16,6 +16,7 @@ import {
   SessionsGrid,
   SessionGridItem,
 } from "../components/OnlineHub/OnlineSessionCards";
+import OnlineLessonLiveDialog from "../components/OnlineHub/OnlineLessonLiveDialog";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
@@ -43,6 +44,14 @@ export default function OnlineScheduledLessonsPage() {
   const todayIso = format(new Date(), "yyyy-MM-dd");
   const [lessons, setLessons] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [liveDlg, setLiveDlg] = useState({
+    open: false,
+    lessonId: null,
+    subtitle: "",
+    lessonDate: "",
+    curriculumClassId: null,
+    curriculumClassLabel: "",
+  });
 
   const load = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -72,9 +81,18 @@ export default function OnlineScheduledLessonsPage() {
   }, [load]);
 
   const handleInitiate = (row) => {
-    const d = row?.lesson_date;
-    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) navigate(`/timetable/day/${d}`);
-    else navigate("/timetable");
+    const sub = row?.curriculum_subject?.name ? `${row.curriculum_subject.name}` : "Online lesson";
+    const datePart = row?.lesson_date && /^\d{4}-\d{2}-\d{2}$/.test(row.lesson_date) ? row.lesson_date : "";
+    const cc = row?.timetable?.curriculum_class;
+    const ccLabel = cc ? `${cc.name || ""}${cc.code ? ` (${cc.code})` : ""}`.trim() : "";
+    setLiveDlg({
+      open: true,
+      lessonId: row?.id ?? null,
+      subtitle: datePart ? `${sub} · ${datePart}` : sub,
+      lessonDate: datePart,
+      curriculumClassId: cc?.id ?? null,
+      curriculumClassLabel: ccLabel,
+    });
   };
 
   return (
@@ -109,7 +127,8 @@ export default function OnlineScheduledLessonsPage() {
               Online lessons
             </Typography>
             <Typography variant="body2" sx={{ opacity: 0.92, mt: 0.5 }}>
-              Timetable slots marked <strong>Online</strong>. Use Initiate to open that day’s lesson view.
+              Timetable slots marked <strong>Online</strong>. <strong>Initiate</strong> creates or reuses meeting links;
+              use <strong>Day timetable</strong> in the dialog for attendance on that date.
             </Typography>
           </Box>
         </Stack>
@@ -136,6 +155,27 @@ export default function OnlineScheduledLessonsPage() {
           </SessionsGrid>
         )}
       </Box>
+
+      <OnlineLessonLiveDialog
+        open={liveDlg.open}
+        onClose={() =>
+          setLiveDlg({
+            open: false,
+            lessonId: null,
+            subtitle: "",
+            lessonDate: "",
+            curriculumClassId: null,
+            curriculumClassLabel: "",
+          })
+        }
+        lessonId={liveDlg.lessonId}
+        subtitle={liveDlg.subtitle}
+        curriculumClassId={liveDlg.curriculumClassId}
+        curriculumClassLabel={liveDlg.curriculumClassLabel}
+        lessonDateIso={liveDlg.lessonDate}
+        onGoToDayTimetable={(d) => navigate(`/timetable/day/${d}`)}
+        onLinksReady={load}
+      />
     </Box>
   );
 }

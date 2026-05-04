@@ -51,6 +51,7 @@ import dayjs from "dayjs";
 import { format, isValid, parseISO } from "date-fns";
 import Swal from "sweetalert2";
 import { showTeacherOverlapSweetAlert } from "../utils/timetableOverlapAlert";
+import OnlineLessonLiveDialog from "../components/OnlineHub/OnlineLessonLiveDialog";
 
 const primaryRed = "#DC2626";
 const primaryDark = "#B91C1C";
@@ -203,6 +204,13 @@ export default function TimetableDayPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editDialogError, setEditDialogError] = useState(null);
   const [deleteDoing, setDeleteDoing] = useState(false);
+  const [onlineLiveDlg, setOnlineLiveDlg] = useState({
+    open: false,
+    lessonId: null,
+    subtitle: "",
+    curriculumClassId: null,
+    curriculumClassLabel: "",
+  });
 
   const [editForm, setEditForm] = useState({
     lesson_date: "",
@@ -693,6 +701,30 @@ export default function TimetableDayPage() {
                                         </IconButton>
                                       </span>
                                     </Tooltip>
+                                    {onlineLesson ? (
+                                      <Tooltip title="Meeting links (host / join)">
+                                        <span>
+                                          <IconButton
+                                            size="small"
+                                            aria-label="Open online meeting links"
+                                            onClick={() => {
+                                              const cc = row.timetable?.curriculum_class;
+                                              const ccLabel = cc ? `${cc.name || ""}${cc.code ? ` (${cc.code})` : ""}`.trim() : "";
+                                              setOnlineLiveDlg({
+                                                open: true,
+                                                lessonId: row.id,
+                                                subtitle: `${row.curriculum_subject?.name || "Lesson"} · ${row.lesson_date || isoDate || ""}`,
+                                                curriculumClassId: cc?.id ?? null,
+                                                curriculumClassLabel: ccLabel,
+                                              });
+                                            }}
+                                            sx={{ color: primaryDark }}
+                                          >
+                                            <VideocamOutlinedIcon fontSize="small" />
+                                          </IconButton>
+                                        </span>
+                                      </Tooltip>
+                                    ) : null}
                                     <Tooltip title="Edit">
                                       <span>
                                         <IconButton
@@ -1079,6 +1111,24 @@ export default function TimetableDayPage() {
           </DialogActions>
         </Dialog>
       </Box>
+      <OnlineLessonLiveDialog
+        open={onlineLiveDlg.open}
+        onClose={() =>
+          setOnlineLiveDlg({
+            open: false,
+            lessonId: null,
+            subtitle: "",
+            curriculumClassId: null,
+            curriculumClassLabel: "",
+          })
+        }
+        lessonId={onlineLiveDlg.lessonId}
+        subtitle={onlineLiveDlg.subtitle}
+        curriculumClassId={onlineLiveDlg.curriculumClassId}
+        curriculumClassLabel={onlineLiveDlg.curriculumClassLabel}
+        lessonDateIso={isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate) ? isoDate : ""}
+        onLinksReady={loadLessons}
+      />
     </LocalizationProvider>
   );
 }

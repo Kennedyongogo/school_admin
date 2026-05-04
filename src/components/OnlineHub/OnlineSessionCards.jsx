@@ -39,6 +39,7 @@ export function teacherLabel(t) {
 }
 
 export function LessonOnlineCard({ row, onInitiate }) {
+  const liveReady = !!(row.live_sessions?.[0]?.join_url && String(row.live_sessions[0].join_url).trim());
   const cc = row.timetable?.curriculum_class;
   const cur = cc?.curriculum;
   const term = row.timetable?.curriculum_class_level;
@@ -72,17 +73,22 @@ export function LessonOnlineCard({ row, onInitiate }) {
     >
       <CardContent sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 1.25, pb: 1, width: "100%", boxSizing: "border-box" }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ width: "100%", minWidth: 0 }}>
-          <Chip
-            size="small"
-            icon={<VideocamOutlined sx={{ fontSize: "16px !important", color: lessonStone }} />}
-            label="Online class"
-            sx={{
-              fontWeight: 800,
-              bgcolor: "rgba(237,226,209,0.85)",
-              color: "#5c4a38",
-              border: "1px solid rgba(139,115,85,0.35)",
-            }}
-          />
+          <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" sx={{ minWidth: 0 }}>
+            <Chip
+              size="small"
+              icon={<VideocamOutlined sx={{ fontSize: "16px !important", color: lessonStone }} />}
+              label="Online class"
+              sx={{
+                fontWeight: 800,
+                bgcolor: "rgba(237,226,209,0.85)",
+                color: "#5c4a38",
+                border: "1px solid rgba(139,115,85,0.35)",
+              }}
+            />
+            {liveReady ? (
+              <Chip size="small" label="Links ready" color="success" variant="outlined" sx={{ fontWeight: 700 }} />
+            ) : null}
+          </Stack>
           <AccessTimeRounded sx={{ fontSize: 20, color: lessonStone }} />
         </Stack>
         <Typography variant="subtitle1" sx={{ fontWeight: 900, color: "#111827", lineHeight: 1.25 }}>
