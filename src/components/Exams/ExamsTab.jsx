@@ -24,7 +24,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon, Visibility as VisibilityIcon } from "@mui/icons-material";
+import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon, PlayCircleOutline as PlayCircleOutlineIcon, Visibility as VisibilityIcon } from "@mui/icons-material";
 import Swal from "sweetalert2";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -305,6 +305,8 @@ export default function ExamsTab() {
   const [templatePagesForExam, setTemplatePagesForExam] = useState([{ id: "page-1", elements: [] }]);
   const [saving, setSaving] = useState(false);
   const [viewRow, setViewRow] = useState(null);
+  const [simulateRow, setSimulateRow] = useState(null);
+  const [simulateAnswers, setSimulateAnswers] = useState({});
   const questionCanvasRef = useRef(null);
   const questionDragRef = useRef(null);
   const questionResizeRef = useRef(null);
@@ -410,6 +412,34 @@ export default function ExamsTab() {
   };
 
   const previewPages = useMemo(() => buildPreviewPages(viewRow), [viewRow, schoolProfile]);
+  const simulatePages = useMemo(() => buildPreviewPages(simulateRow), [simulateRow, schoolProfile]);
+
+  const parseQuestionOptions = (q) => {
+    if (Array.isArray(q?.options)) return q.options.map((o) => String(o || "").trim()).filter(Boolean);
+    if (typeof q?.options === "string") return q.options.split(",").map((o) => o.trim()).filter(Boolean);
+    if (typeof q?.options_text === "string") return q.options_text.split(",").map((o) => o.trim()).filter(Boolean);
+    return [];
+  };
+
+  const openStudentPreview = (row) => {
+    setSimulateRow(row);
+    const initialAnswers = {};
+    (Array.isArray(row?.questions) ? row.questions : []).forEach((q, idx) => {
+      const qKey = String(q.id || q.key || idx + 1);
+      if (q.question_type === "diagram_label") {
+        const hotspots = Array.isArray(q?.options?.hotspots) ? q.options.hotspots : [];
+        initialAnswers[qKey] = hotspots.reduce((acc, hs, hsIdx) => {
+          acc[String(hs.id || hsIdx + 1)] = "";
+          return acc;
+        }, {});
+      } else if (q.question_type === "multi_select") {
+        initialAnswers[qKey] = [];
+      } else {
+        initialAnswers[qKey] = "";
+      }
+    });
+    setSimulateAnswers(initialAnswers);
+  };
 
   const load = async () => {
     const token = localStorage.getItem("token");
@@ -1741,6 +1771,9 @@ ${imageParts}--${boundary}--`;
                       <IconButton size="small" onClick={() => setViewRow(r)}>
                         <VisibilityIcon fontSize="small" />
                       </IconButton>
+                      <IconButton size="small" title="Student preview test" onClick={() => openStudentPreview(r)}>
+                        <PlayCircleOutlineIcon fontSize="small" />
+                      </IconButton>
                       <IconButton size="small" onClick={() => startEditExam(r)}>
                         <EditIcon fontSize="small" />
                       </IconButton>
@@ -1896,6 +1929,116 @@ ${imageParts}--${boundary}--`;
           <Button onClick={() => void downloadExamWord()}>Download Word</Button>
           <Button onClick={() => void downloadExamPdf()}>Download PDF</Button>
           <Button onClick={() => setViewRow(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!simulateRow} onClose={() => setSimulateRow(null)} maxWidth="lg" fullWidth>
+        <DialogTitle>Student real-time preview - {simulateRow?.title || simulateRow?.name || ""}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2}>
+            {simulatePages.map((page) => (
+              <Box key={`simulate-page-${page.pageNo}`} sx={{ border: "1px solid #e5e7eb", borderRadius: 2, p: 2, bgcolor: "#fff" }}>
+                <Typography sx={{ fontWeight: 700, mb: 1 }}>Page {page.pageNo}</Typography>
+                <Stack spacing={1.25}>
+                  {page.questions
+                    .slice()
+                    .sort((a, b) => Number(a.page_y || 0) - Number(b.page_y || 0))
+                    .map((q, idx) => {
+                      const qKey = String(q.id || q.key || `${page.pageNo}-${idx + 1}`);
+                      const choiceOptions = parseQuestionOptions(q);
+                      return (
+                        <Box key={`simulate-q-${qKey}`} sx={{ border: "1px solid #f3f4f6", borderRadius: 1.5, p: 1.25 }}>
+                          <Typography sx={{ fontWeight: 700, mb: 0.75 }}>
+                            {q.order_number || idx + 1}. {q.question_text || "Question"} ({Number(q.marks) || 0} marks) {q.required ? "(Required)" : ""}
+                          </Typography>
+                          {q.question_type === "short_text" ? (
+                            <TextField
+                              fullWidth
+                              size="small"
+                              placeholder="Student writes short answer here"
+                              value={String(simulateAnswers[qKey] || "")}
+                              onChange={(e) => setSimulateAnswers((prev) => ({ ...prev, [qKey]: e.target.value }))}
+                            />
+                          ) : null}
+                          {q.question_type === "true_false" ? (
+                            <Select
+                              fullWidth
+                              size="small"
+                              value={String(simulateAnswers[qKey] || "")}
+                              onChange={(e) => setSimulateAnswers((prev) => ({ ...prev, [qKey]: e.target.value }))}
+                            >
+                              <MenuItem value="">Select answer</MenuItem>
+                              <MenuItem value="True">True</MenuItem>
+                              <MenuItem value="False">False</MenuItem>
+                            </Select>
+                          ) : null}
+                          {["multiple_choice", "multi_select"].includes(q.question_type) ? (
+                            <Select
+                              fullWidth
+                              size="small"
+                              multiple={q.question_type === "multi_select"}
+                              value={simulateAnswers[qKey] ?? (q.question_type === "multi_select" ? [] : "")}
+                              onChange={(e) => setSimulateAnswers((prev) => ({ ...prev, [qKey]: e.target.value }))}
+                            >
+                              {choiceOptions.map((opt) => (
+                                <MenuItem key={`${qKey}-${opt}`} value={opt}>
+                                  {opt}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          ) : null}
+                          {q.question_type === "diagram_label" ? (
+                            <Stack spacing={1}>
+                              {q.diagram_data ? (
+                                <Box component="img" src={q.diagram_data} alt="Diagram" sx={{ width: "100%", maxHeight: 220, objectFit: "contain", border: "1px solid #e5e7eb", borderRadius: 1 }} />
+                              ) : null}
+                              {(Array.isArray(q?.options?.hotspots) ? q.options.hotspots : []).map((hs, hsIdx) => {
+                                const hsKey = String(hs.id || hsIdx + 1);
+                                return (
+                                  <TextField
+                                    key={`${qKey}-hs-${hsKey}`}
+                                    fullWidth
+                                    size="small"
+                                    label={hs.prompt || `Label ${hsIdx + 1}`}
+                                    placeholder="Student enters label"
+                                    value={String(simulateAnswers[qKey]?.[hsKey] || "")}
+                                    onChange={(e) =>
+                                      setSimulateAnswers((prev) => ({
+                                        ...prev,
+                                        [qKey]: { ...(prev[qKey] || {}), [hsKey]: e.target.value },
+                                      }))
+                                    }
+                                  />
+                                );
+                              })}
+                            </Stack>
+                          ) : null}
+                        </Box>
+                      );
+                    })}
+                </Stack>
+              </Box>
+            ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              const attempted = Object.values(simulateAnswers || {}).filter((v) => {
+                if (Array.isArray(v)) return v.length > 0;
+                if (v && typeof v === "object") return Object.values(v).some((x) => String(x || "").trim());
+                return String(v || "").trim().length > 0;
+              }).length;
+              void Swal.fire({
+                icon: "info",
+                title: "Preview attempt summary",
+                text: `Attempted ${attempted} question(s) in student preview mode.`,
+              });
+            }}
+          >
+            Check attempt
+          </Button>
+          <Button onClick={() => setSimulateRow(null)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Stack>
