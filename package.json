@@ -73,7 +73,7 @@
     "zod": "^3.25.56"
   },
   "scripts": {
-    "start": "vite --host",
+    "start": "vite --host --port 3005",
     "build": "vite build",
     "serve": "vite preview",
     "test": "vitest",

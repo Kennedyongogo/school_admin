@@ -27,6 +27,11 @@ import {
   CalendarMonth as CalendarIcon,
   OpenInNew as OpenInNewIcon,
   School as SchoolIcon,
+  Facebook as FacebookIcon,
+  X as XIcon,
+  Instagram as InstagramIcon,
+  LinkedIn as LinkedInIcon,
+  YouTube as YouTubeIcon,
 } from "@mui/icons-material";
 import ElimuPlusDepartmentsTab from "./ElimuPlusDepartmentsTab";
 import ElimuPlusTeachersTab from "./ElimuPlusTeachersTab";
@@ -79,11 +84,11 @@ function DetailRow({ icon, label, value, href }) {
     );
 
   return (
-    <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ py: 1 }}>
+    <Stack direction="row" spacing={1.1} alignItems="flex-start" sx={{ py: 0.4 }}>
       <Box
         sx={{
-          width: 40,
-          height: 40,
+          width: 34,
+          height: 34,
           borderRadius: 2,
           bgcolor: `${accent}14`,
           display: "flex",
@@ -96,12 +101,43 @@ function DetailRow({ icon, label, value, href }) {
         {icon}
       </Box>
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="caption" sx={{ color: muted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+        <Typography variant="caption" sx={{ color: muted, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>
           {label}
         </Typography>
         {content}
       </Box>
     </Stack>
+  );
+}
+
+function normalizeExternalUrl(raw) {
+  const v = String(raw || "").trim();
+  if (!v) return "";
+  return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+}
+
+function SocialLinkChip({ icon, label, value }) {
+  const href = normalizeExternalUrl(value);
+  if (!href) return null;
+  return (
+    <Chip
+      icon={icon}
+      component="a"
+      clickable
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      label={label}
+      variant="outlined"
+      sx={{
+        borderColor: `${accent}44`,
+        color: accentDark,
+        fontWeight: 700,
+        textDecoration: "none",
+        "& .MuiChip-icon": { color: accentDark },
+        "&:hover": { bgcolor: `${accent}12`, borderColor: accent },
+      }}
+    />
   );
 }
 
@@ -176,13 +212,23 @@ export default function ElimuPlusSchoolProfile() {
   }, [location.state]);
 
   const logoSrc = useMemo(() => resolveAssetUrl(profile?.logo_url), [profile]);
+  const socialLinks = useMemo(
+    () => [
+      { key: "facebook", label: "Facebook", value: profile?.facebook_url, icon: <FacebookIcon /> },
+      { key: "x", label: "X", value: profile?.twitter_url, icon: <XIcon /> },
+      { key: "instagram", label: "Instagram", value: profile?.instagram_url, icon: <InstagramIcon /> },
+      { key: "linkedin", label: "LinkedIn", value: profile?.linkedin_url, icon: <LinkedInIcon /> },
+      { key: "youtube", label: "YouTube", value: profile?.youtube_url, icon: <YouTubeIcon /> },
+    ].filter((s) => String(s.value || "").trim() !== ""),
+    [profile]
+  );
 
   const fullBleed = (theme) => ({
     width: `calc(100% + ${theme.spacing(6)})`,
     maxWidth: "none",
     marginLeft: theme.spacing(-3),
     marginRight: theme.spacing(-3),
-    marginTop: theme.spacing(-2.5),
+    marginTop: theme.spacing(-2.75),
     boxSizing: "border-box",
   });
 
@@ -239,12 +285,12 @@ export default function ElimuPlusSchoolProfile() {
   }
 
   return (
-    <Box sx={(theme) => ({ ...fullBleed(theme), pb: 4 })}>
+    <Box sx={(theme) => ({ ...fullBleed(theme), pb: 2 })}>
       <Box
         sx={{
           background: `linear-gradient(135deg, ${accentDark} 0%, ${accent} 45%, #F97316 100%)`,
           px: { xs: 2, sm: 3 },
-          pt: { xs: 1.75, sm: 2.25 },
+          pt: { xs: 1.25, sm: 1.6 },
           pb: 0,
           color: "#fff",
           position: "relative",
@@ -261,9 +307,9 @@ export default function ElimuPlusSchoolProfile() {
             backgroundSize: "24px 24px",
           }}
         />
-        <Stack spacing={1.5} position="relative" zIndex={1}>
+        <Stack spacing={1} position="relative" zIndex={1}>
           <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "flex-start" }} spacing={2}>
-            <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: "-0.02em", pt: { sm: 0.25 } }}>
+            <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: "-0.02em", fontSize: { xs: "1.2rem", sm: "1.45rem" }, pt: { sm: 0.1 } }}>
               Elimu Plus
             </Typography>
             <Box sx={{ alignSelf: { xs: "stretch", sm: "flex-start" } }}>{renderHeaderActions()}</Box>
@@ -279,13 +325,13 @@ export default function ElimuPlusSchoolProfile() {
               sx: { bgcolor: "#fff", height: 3, borderRadius: "3px 3px 0 0" },
             }}
             sx={{
-              minHeight: 44,
+              minHeight: 38,
               "& .MuiTab-root": {
                 color: "rgba(255,255,255,0.72)",
                 fontWeight: 700,
                 textTransform: "none",
-                fontSize: "0.95rem",
-                minHeight: 44,
+                fontSize: "0.88rem",
+                minHeight: 38,
               },
               "& .Mui-selected": {
                 color: "#fff !important",
@@ -300,7 +346,7 @@ export default function ElimuPlusSchoolProfile() {
         </Stack>
       </Box>
 
-      <Box sx={{ px: { xs: 2, sm: 3 }, pt: 3 }}>
+      <Box sx={{ px: { xs: 2, sm: 3 }, pt: 1.75 }}>
         {error && (
           <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
             {error}
@@ -323,77 +369,84 @@ export default function ElimuPlusSchoolProfile() {
                 sx={{
                   flex: { xs: "none", md: "0 0 340px" },
                   background: `linear-gradient(165deg, ${accentDark} 0%, ${accent} 55%, #FB923C 100%)`,
-                  p: { xs: 3, md: 4 },
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
                   position: "relative",
-                  minHeight: { xs: 240, md: "auto" },
+                  minHeight: { xs: 210, md: "auto" },
+                  overflow: "hidden",
                 }}
               >
+                {logoSrc ? (
+                  <Box
+                    component="img"
+                    src={logoSrc}
+                    alt={profile?.name || "School logo"}
+                    sx={{
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                    }}
+                  />
+                ) : (
+                  <Box
+                    sx={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <SchoolIcon sx={{ fontSize: 84, color: "rgba(255,255,255,0.8)" }} />
+                  </Box>
+                )}
                 <Box
                   sx={{
                     position: "absolute",
                     inset: 0,
-                    background: "radial-gradient(circle at 30% 20%, rgba(255,255,255,0.25) 0%, transparent 45%)",
+                    background:
+                      "linear-gradient(to top left, rgba(17,24,39,0.55) 5%, rgba(17,24,39,0.22) 35%, rgba(17,24,39,0.08) 60%, rgba(17,24,39,0) 100%)",
                     pointerEvents: "none",
                   }}
                 />
                 <Box
                   sx={{
-                    width: { xs: 140, md: 168 },
-                    height: { xs: 140, md: 168 },
-                    borderRadius: 4,
-                    bgcolor: "rgba(255,255,255,0.97)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
-                    border: "4px solid rgba(255,255,255,0.35)",
-                    overflow: "hidden",
-                    position: "relative",
-                    zIndex: 1,
+                    position: "absolute",
+                    right: 10,
+                    bottom: 10,
+                    zIndex: 2,
+                    px: 1.2,
+                    py: 0.55,
+                    borderRadius: 1.5,
+                    bgcolor: "rgba(17,24,39,0.5)",
+                    backdropFilter: "blur(4px)",
+                    border: "1px solid rgba(255,255,255,0.24)",
                   }}
                 >
-                  {logoSrc ? (
-                    <Box component="img" src={logoSrc} alt={profile?.name || "School logo"} sx={{ width: "88%", height: "88%", objectFit: "contain" }} />
-                  ) : (
-                    <SchoolIcon sx={{ fontSize: 72, color: accent }} />
-                  )}
+                  <Typography sx={{ color: "#fff", fontWeight: 800, letterSpacing: "0.02em", fontSize: "0.85rem" }}>
+                    Elimu Plus
+                  </Typography>
                 </Box>
-                {profile?.short_name && (
-                  <Chip
-                    label={profile.short_name}
-                    sx={{
-                      mt: 2,
-                      bgcolor: "rgba(255,255,255,0.22)",
-                      color: "#fff",
-                      fontWeight: 700,
-                      backdropFilter: "blur(8px)",
-                    }}
-                  />
-                )}
               </Box>
 
-              <CardContent sx={{ flex: 1, py: { xs: 3, md: 4 }, px: { xs: 2.5, sm: 4 } }}>
-                <Typography variant="h5" sx={{ fontWeight: 800, color: ink, letterSpacing: "-0.02em" }}>
+              <CardContent sx={{ flex: 1, py: { xs: 2, md: 2.4 }, px: { xs: 2, sm: 2.6 } }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: ink, letterSpacing: "-0.02em", fontSize: { xs: "1.25rem", sm: "1.45rem" } }}>
                   {profile.name}
                 </Typography>
                 {profile.tagline && (
-                  <Typography sx={{ mt: 1, color: muted, fontSize: "1.05rem", fontWeight: 500, fontStyle: "italic" }}>
+                  <Typography sx={{ mt: 0.6, color: muted, fontSize: "0.95rem", fontWeight: 500, fontStyle: "italic" }}>
                     {profile.tagline}
                   </Typography>
                 )}
                 {profile.description && (
-                  <Typography sx={{ mt: 2, color: ink, lineHeight: 1.7, opacity: 0.85 }}>
+                  <Typography sx={{ mt: 1.1, color: ink, lineHeight: 1.45, opacity: 0.85, fontSize: "0.93rem" }}>
                     {profile.description}
                   </Typography>
                 )}
 
-                <Divider sx={{ my: 3, borderColor: `${accent}22` }} />
+                <Divider sx={{ my: 1.6, borderColor: `${accent}22` }} />
 
-                <Grid container spacing={2}>
+                <Grid container spacing={0.8}>
                   <Grid item xs={12} sm={6}>
                     <DetailRow icon={<EmailIcon fontSize="small" />} label="Email" value={profile.email} href={profile.email ? `mailto:${profile.email}` : undefined} />
                   </Grid>
@@ -420,6 +473,39 @@ export default function ElimuPlusSchoolProfile() {
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <DetailRow icon={<CalendarIcon fontSize="small" />} label="Founded" value={profile.founded_year != null ? String(profile.founded_year) : ""} />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Stack direction="row" spacing={1.1} alignItems="flex-start" sx={{ pt: 0.2 }}>
+                      <Box
+                        sx={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 2,
+                          bgcolor: `${accent}14`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: accentDark,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <LanguageIcon fontSize="small" />
+                      </Box>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="caption" sx={{ color: muted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                          Social links
+                        </Typography>
+                        {socialLinks.length === 0 ? (
+                          <Typography sx={{ color: ink, fontWeight: 600, fontSize: "0.95rem" }}>—</Typography>
+                        ) : (
+                          <Stack direction="row" flexWrap="wrap" gap={0.6} sx={{ mt: 0.45 }}>
+                            {socialLinks.map((s) => (
+                              <SocialLinkChip key={s.key} icon={s.icon} label={s.label} value={s.value} />
+                            ))}
+                          </Stack>
+                        )}
+                      </Box>
+                    </Stack>
                   </Grid>
                 </Grid>
               </CardContent>

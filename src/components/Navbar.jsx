@@ -7,6 +7,10 @@ import {
   School,
   MenuBook,
   VideocamOutlined,
+  Dashboard,
+  Badge,
+  AccountBalance,
+  Quiz,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import { styled, useTheme } from "@mui/material/styles";
@@ -111,6 +115,10 @@ const Navbar = (props) => {
 
   const isNavPathSelected = (path) =>
     location.pathname === path ||
+    (path === "/dashboard" && location.pathname.startsWith("/dashboard")) ||
+    (path === "/hr" && location.pathname.startsWith("/hr")) ||
+    (path === "/accounting" && location.pathname.startsWith("/accounting")) ||
+    (path === "/exam" && location.pathname.startsWith("/exam")) ||
     (path === "/elimu-plus" && location.pathname.startsWith("/elimu-plus")) ||
     (path === "/curriculum" && location.pathname.startsWith("/curriculum")) ||
     (path === "/timetable" && location.pathname.startsWith("/timetable")) ||
@@ -127,6 +135,10 @@ const Navbar = (props) => {
   };
 
   const adminItems = [
+    { text: "Dashboard", icon: <Dashboard />, path: "/dashboard" },
+    { text: "HR", icon: <Badge />, path: "/hr" },
+    { text: "Accounting", icon: <AccountBalance />, path: "/accounting" },
+    { text: "Exam", icon: <Quiz />, path: "/exam" },
     { text: "Curriculum", icon: <MenuBook />, path: "/curriculum" },
     { text: "Timetable", icon: <Event />, path: "/timetable" },
     { text: "Online", icon: <VideocamOutlined />, path: "/elimu-plus-online" },

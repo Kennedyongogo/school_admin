@@ -20,6 +20,7 @@ import UsersTable from "./Users/UsersTable";
 import UsersCreate from "./Users/UsersCreate";
 import CurriculumTable from "./Curriculum/CurriculumTable";
 import CurriculumCreate from "./Curriculum/CurriculumCreate";
+import CurriculumFeeStructureCreate from "./Curriculum/CurriculumFeeStructureCreate";
 import ElimuPlusSchoolProfile from "./SchoolProfile/ElimuPlusSchoolProfile";
 import ElimuPlusSchoolProfileForm from "./SchoolProfile/ElimuPlusSchoolProfileForm";
 import ElimuPlusStudentCreate from "./SchoolProfile/ElimuPlusStudentCreate";
@@ -51,6 +52,8 @@ import TimetableManagePage from "../Pages/TimetableManagePage";
 import ElimuPlusOnlineHub from "../Pages/ElimuPlusOnlineHub";
 import OnlineScheduledLessonsPage from "../Pages/OnlineScheduledLessonsPage";
 import OnlineScheduledExamsPage from "../Pages/OnlineScheduledExamsPage";
+import ExamManagementPage from "../Pages/ExamManagementPage";
+import AccountingDashboardPage from "../Pages/AccountingDashboardPage";
 import TrainingEventCreate from "./TrainingOpportunities/TrainingEvents/TrainingEventCreate";
 import TrainingEventEdit from "./TrainingOpportunities/TrainingEvents/TrainingEventEdit";
 import TrainingEventView from "./TrainingOpportunities/TrainingEvents/TrainingEventView";
@@ -106,6 +109,11 @@ function PageRoutes() {
         ) : (
           <Routes>
             <Route path="home" element={<Navigate to="/analytics" replace />} />
+            <Route path="dashboard" element={<Navigate to="/analytics" replace />} />
+            <Route path="hr" element={<Navigate to="/users" replace />} />
+            <Route path="accounting" element={<AccountingDashboardPage />} />
+            <Route path="accounting/fee-structures/create" element={<CurriculumFeeStructureCreate />} />
+            <Route path="exam" element={<ExamManagementPage />} />
             <Route path="blogs" element={<Blogs />} />
             <Route path="blogs/create" element={<BlogCreate />} />
             <Route path="blogs/:id" element={<BlogView />} />
