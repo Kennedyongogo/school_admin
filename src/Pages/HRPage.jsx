@@ -216,18 +216,19 @@ export default function HRPage() {
 
       <Box sx={{ px: { xs: 2, sm: 3 }, pb: 4, pt: { xs: 1.25, sm: 1.5 } }}>
         <Paper elevation={0} sx={{ border: "1px solid #fecaca", borderRadius: 2, mb: 2 }}>
-          <Tabs
-            value={tab}
-            onChange={(_, v) => setTab(v)}
-            sx={{
-              px: 1,
-              "& .MuiTab-root": { textTransform: "none", fontWeight: 700 },
-              "& .MuiTabs-indicator": { bgcolor: accent },
-            }}
-          >
-            <Tab label="Attendance" />
-            <Tab label="Leave & Payroll (coming soon)" />
-          </Tabs>
+            <Tabs
+              value={tab}
+              onChange={(_, v) => setTab(v)}
+              sx={{
+                px: 1,
+                "& .MuiTab-root": { textTransform: "none", fontWeight: 700 },
+                "& .MuiTabs-indicator": { bgcolor: accent },
+              }}
+            >
+              <Tab label="Attendance" />
+              <Tab label="Parent & Student" />
+              <Tab label="Leave & Payroll (coming soon)" />
+            </Tabs>
         </Paper>
 
         {tab === 0 ? (
@@ -417,6 +418,8 @@ export default function HRPage() {
               </>
             )}
           </Stack>
+        ) : tab === 1 ? (
+          <Alert severity="info">Parent & Student relationships and management features can be added here.</Alert>
         ) : (
           <Alert severity="info">Leave, payroll, and HR policies tabs can be added next.</Alert>
         )}
