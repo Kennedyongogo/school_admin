@@ -544,8 +544,16 @@ export default function ExamsTab() {
   const [rows, setRows] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [schoolProfile, setSchoolProfile] = useState(null);
+  const [curriculums, setCurriculums] = useState([]);
+  const [curriculumClasses, setCurriculumClasses] = useState([]);
+  const [curriculumSubjects, setCurriculumSubjects] = useState([]);
+  const [curriculumClassLevels, setCurriculumClassLevels] = useState([]);
   const [mode, setMode] = useState("list");
   const [name, setName] = useState("");
+  const [curriculumId, setCurriculumId] = useState("");
+  const [curriculumClassId, setCurriculumClassId] = useState("");
+  const [curriculumSubjectId, setCurriculumSubjectId] = useState("");
+  const [curriculumClassLevelId, setCurriculumClassLevelId] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [duration, setDuration] = useState(60);
   const [instructionLines, setInstructionLines] = useState([""]);
@@ -777,21 +785,33 @@ export default function ExamsTab() {
     setLoading(true);
     setError("");
     try {
-      const [examRes, tplRes, profileRes] = await Promise.all([
+      const [examRes, tplRes, profileRes, currRes, classRes, subjRes, semRes] = await Promise.all([
         fetch("/api/exams?page=1&limit=200", { headers: authHeaders(token) }),
         fetch("/api/exam-templates?page=1&limit=200", { headers: authHeaders(token) }),
         fetch("/api/school-profile/admin", { headers: authHeaders(token) }),
+        fetch("/api/curricula", { headers: authHeaders(token) }),
+        fetch("/api/curricula/all-classes", { headers: authHeaders(token) }),
+        fetch("/api/curricula/all-subjects", { headers: authHeaders(token) }),
+        fetch("/api/curricula/all-class-levels", { headers: authHeaders(token) }),
       ]);
-      const [examJson, tplJson, profileJson] = await Promise.all([
+      const [examJson, tplJson, profileJson, currJson, classJson, subjJson, semJson] = await Promise.all([
         examRes.json().catch(() => ({})),
         tplRes.json().catch(() => ({})),
         profileRes.json().catch(() => ({})),
+        currRes.json().catch(() => ({})),
+        classRes.json().catch(() => ({})),
+        subjRes.json().catch(() => ({})),
+        semRes.json().catch(() => ({})),
       ]);
       if (!examRes.ok || !examJson.success) throw new Error(examJson.message || "Could not load exams");
       if (!tplRes.ok || !tplJson.success) throw new Error(tplJson.message || "Could not load templates");
       setRows(Array.isArray(examJson.data) ? examJson.data : []);
       setTemplates(Array.isArray(tplJson.data) ? tplJson.data : []);
       setSchoolProfile(profileRes.ok && profileJson.success ? profileJson.data || null : null);
+      setCurriculums(Array.isArray(currJson.data) ? currJson.data : []);
+      setCurriculumClasses(Array.isArray(classJson.data) ? classJson.data : []);
+      setCurriculumSubjects(Array.isArray(subjJson.data) ? subjJson.data : []);
+      setCurriculumClassLevels(Array.isArray(semJson.data) ? semJson.data : []);
     } catch (e) {
       setRows([]);
       setError(e.message || "Failed loading exams.");
@@ -912,6 +932,10 @@ export default function ExamsTab() {
     setEditingId(null);
     setName("");
     setTemplateId("");
+    setCurriculumId("");
+    setCurriculumClassId("");
+    setCurriculumSubjectId("");
+    setCurriculumClassLevelId("");
     setDuration(60);
     setInstructionLines([""]);
     setTotalMarks(0);
@@ -941,6 +965,10 @@ export default function ExamsTab() {
     setMode("create");
     setName(row.title || "");
     setTemplateId(row.template_id || row.template?.id || "");
+    setCurriculumId(row.curriculum_id || "");
+    setCurriculumClassId(row.curriculum_class_id || "");
+    setCurriculumSubjectId(row.curriculum_subject_id || "");
+    setCurriculumClassLevelId(row.curriculum_class_level_id || "");
     setDuration(Number(row.duration_minutes) || 60);
     setInstructionLines(parseInstructionLines(row.instructions));
     setTotalMarks(Number(row.total_marks) || 0);
@@ -1221,6 +1249,10 @@ export default function ExamsTab() {
         body: JSON.stringify({
           title,
           template_id: templateId,
+          curriculum_id: curriculumId || null,
+          curriculum_class_id: curriculumClassId || null,
+          curriculum_subject_id: curriculumSubjectId || null,
+          curriculum_class_level_id: curriculumClassLevelId || null,
           duration_minutes: Number(duration),
           total_marks: Number(totalMarks) || 0,
           passing_marks: Number(passingMarks) || 0,
@@ -1649,16 +1681,56 @@ ${imageParts}--${boundary}--`;
           <CardContent>
             <Stack spacing={1.5}>
               <TextField label="Exam name" value={name} onChange={(e) => setName(e.target.value)} />
-              <Select fullWidth displayEmpty value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
-                <MenuItem value="">
-                  <em>Select template</em>
-                </MenuItem>
-                {templates.map((t) => (
-                  <MenuItem key={t.id} value={t.id}>
-                    {t.name}
-                  </MenuItem>
-                ))}
-              </Select>
+               <Select fullWidth displayEmpty value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
+                 <MenuItem value="">
+                   <em>Select template</em>
+                 </MenuItem>
+                 {templates.map((t) => (
+                   <MenuItem key={t.id} value={t.id}>
+                     {t.name}
+                   </MenuItem>
+                 ))}
+               </Select>
+               <Select fullWidth displayEmpty value={curriculumId} onChange={(e) => { setCurriculumId(e.target.value); setCurriculumClassId(""); setCurriculumSubjectId(""); setCurriculumClassLevelId(""); }}>
+                 <MenuItem value="">
+                   <em>Select curriculum</em>
+                 </MenuItem>
+                 {curriculums.map((c) => (
+                   <MenuItem key={c.id} value={c.id}>
+                     {c.name}
+                   </MenuItem>
+                 ))}
+               </Select>
+               <Select fullWidth displayEmpty value={curriculumClassId} onChange={(e) => { setCurriculumClassId(e.target.value); setCurriculumSubjectId(""); setCurriculumClassLevelId(""); }}>
+                 <MenuItem value="">
+                   <em>Select class</em>
+                 </MenuItem>
+                 {curriculumClasses.filter(c => !curriculumId || c.curriculum_id === curriculumId).map((c) => (
+                   <MenuItem key={c.id} value={c.id}>
+                     {c.name} ({c.code})
+                   </MenuItem>
+                 ))}
+               </Select>
+               <Select fullWidth displayEmpty value={curriculumSubjectId} onChange={(e) => setCurriculumSubjectId(e.target.value)}>
+                 <MenuItem value="">
+                   <em>Select subject</em>
+                 </MenuItem>
+                 {curriculumSubjects.filter(s => !curriculumClassId || s.curriculum_class_id === curriculumClassId).map((s) => (
+                   <MenuItem key={s.id} value={s.id}>
+                     {s.name}
+                   </MenuItem>
+                 ))}
+               </Select>
+               <Select fullWidth displayEmpty value={curriculumClassLevelId} onChange={(e) => setCurriculumClassLevelId(e.target.value)}>
+                 <MenuItem value="">
+                   <em>Select class level</em>
+                 </MenuItem>
+                 {curriculumClassLevels.filter(l => !curriculumClassId || l.curriculum_class_id === curriculumClassId).map((s) => (
+                   <MenuItem key={s.id} value={s.id}>
+                     {s.name}
+                   </MenuItem>
+                 ))}
+               </Select>
               <TextField fullWidth label="Duration (minutes)" type="number" value={duration} onChange={(e) => setDuration(e.target.value)} />
               <Stack spacing={1}>
                 <Typography sx={{ fontWeight: 700 }}>Instructions</Typography>

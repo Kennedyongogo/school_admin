@@ -26,6 +26,7 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ListItem from "@mui/material/ListItem";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
+import Tooltip from "@mui/material/Tooltip";
 import { Box } from "@mui/material";
 import Header from "./Header/Header";
 
@@ -58,7 +59,7 @@ const DrawerHeader = styled("div")(({ theme }) => ({
   justifyContent: "space-between",
   padding: theme.spacing(1, 0, 1, 1),
   backgroundColor: "#fff",
-  color: "#B85C38",
+  color: "#D32F2F",
   ...theme.mixins.toolbar,
 }));
 
@@ -66,8 +67,8 @@ const AppBar = styled(MuiAppBar, {
   shouldForwardProp: (prop) => prop !== "open",
 })(({ theme, open }) => ({
   zIndex: theme.zIndex.drawer + 1,
-  background: "linear-gradient(135deg, #6B4E3D 0%, #B85C38 100%)",
-  boxShadow: "0 4px 20px rgba(107, 78, 61, 0.3)",
+  background: "linear-gradient(135deg, #D32F2F 0%, #B71C1C 100%)",
+  boxShadow: "0 4px 20px rgba(211, 47, 47, 0.3)",
   transition: theme.transitions.create(["width", "margin"], {
     easing: theme.transitions.easing.sharp,
     duration: theme.transitions.duration.leavingScreen,
@@ -198,40 +199,43 @@ const Navbar = (props) => {
         <Divider />
         <List>
           {menuItems.map((item) => (
-            <ListItem
-              key={item.text}
-              button
-              onClick={() => navigate(item.path)}
-              selected={isNavPathSelected(item.path)}
-              sx={{
-                cursor: "pointer",
-                bgcolor: isNavPathSelected(item.path) ? "action.selected" : "transparent",
-              }}
-            >
-              <ListItemIcon>
-                {cloneElement(item.icon, {
-                  color: isNavPathSelected(item.path) ? "primary" : "textSecondary",
-                })}
-              </ListItemIcon>
-              <ListItemText
-                primary={item.text}
+            <Tooltip key={item.text} title={item.text} placement="right" disableHoverListener={open}>
+              <ListItem
+                button
+                onClick={() => navigate(item.path)}
+                selected={isNavPathSelected(item.path)}
                 sx={{
                   cursor: "pointer",
-                  color: isNavPathSelected(item.path) ? "primary" : "textSecondary",
-                  fontWeight: isNavPathSelected(item.path) ? "bold" : "normal",
+                  bgcolor: isNavPathSelected(item.path) ? "action.selected" : "transparent",
                 }}
-              />
-            </ListItem>
+              >
+                <ListItemIcon>
+                  {cloneElement(item.icon, {
+                    color: isNavPathSelected(item.path) ? "primary" : "textSecondary",
+                  })}
+                </ListItemIcon>
+                <ListItemText
+                  primary={item.text}
+                  sx={{
+                    cursor: "pointer",
+                    color: isNavPathSelected(item.path) ? "primary" : "textSecondary",
+                    fontWeight: isNavPathSelected(item.path) ? "bold" : "normal",
+                  }}
+                />
+              </ListItem>
+            </Tooltip>
           ))}
         </List>
         <Divider />
         <List>
-          <ListItem button onClick={logout} sx={{ cursor: "pointer" }}>
-            <ListItemIcon>
-              <Logout />
-            </ListItemIcon>
-            <ListItemText primary="Logout" />
-          </ListItem>
+          <Tooltip title="Logout" placement="right" disableHoverListener={open}>
+            <ListItem button onClick={logout} sx={{ cursor: "pointer" }}>
+              <ListItemIcon>
+                <Logout />
+              </ListItemIcon>
+              <ListItemText primary="Logout" />
+            </ListItem>
+          </Tooltip>
         </List>
       </Drawer>
     </Box>

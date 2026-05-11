@@ -323,7 +323,7 @@ export default function ExamSubmissionsPage() {
                         if (s.marking?.grade) {
                           return (
                             <Typography variant="body2" color="text.secondary">
-                              Total: {total} / {examInfo?.total_marks} ({percentage}% · Grade: {s.marking.grade}{s.marking.grade_remarks ? ` (${s.marking.grade_remarks})` : ""})
+                              Total: {total} / {examInfo?.total_marks} ({percentage}% · Grade: {s.marking.grade_letter}{s.marking.grade_remarks ? ` (${s.marking.grade_remarks})` : ""}{s.marking.points ? ` - ${s.marking.points} points` : ""})
                             </Typography>
                           );
                         }

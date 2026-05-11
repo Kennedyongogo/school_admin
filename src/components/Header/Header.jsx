@@ -70,17 +70,49 @@ export default function Header(props) {
 
   useEffect(() => {
     setLoading(true);
-    // Load user from localStorage instead of API call
-    const savedUser = localStorage.getItem("user");
     const token = localStorage.getItem("token");
 
-    if (savedUser && token) {
-      const userData = JSON.parse(savedUser);
-      setCurrentUser(userData);
-      props.setUser(userData);
-      setLoading(false);
+    if (token) {
+      // Fetch current user data from API
+      fetch("/api/users/me", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+      })
+        .then((response) => {
+          if (response.ok) {
+            return response.json();
+          } else {
+            throw new Error("Failed to fetch user");
+          }
+        })
+        .then((response) => {
+          const userData = response.data;
+          console.log("User data from /api/users/me:", userData);
+          setCurrentUser(userData);
+          props.setUser(userData);
+          localStorage.setItem("user", JSON.stringify(userData)); // Update localStorage
+          setLoading(false);
+        })
+        .catch((error) => {
+          console.error("Error fetching user:", error);
+          console.log("Fetch failed, falling back to localStorage");
+          // Fallback to localStorage
+          const savedUser = localStorage.getItem("user");
+          if (savedUser) {
+            const userData = JSON.parse(savedUser);
+            console.log("User data from localStorage:", userData);
+            setCurrentUser(userData);
+            props.setUser(userData);
+          } else {
+            window.location.href = "/";
+          }
+          setLoading(false);
+        });
     } else {
-      // Redirect to login if no user or token
       window.location.href = "/";
     }
   }, []);

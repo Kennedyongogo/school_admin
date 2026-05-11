@@ -37,7 +37,7 @@ export default function UserAccount({ open, onClose, currentUser }) {
     >
       <DialogTitle
         sx={{
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          background: "linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%)",
           color: "white",
           fontWeight: "bold",
           display: "flex",
@@ -56,7 +56,7 @@ export default function UserAccount({ open, onClose, currentUser }) {
             right: -20,
             width: 100,
             height: 100,
-            background: "rgba(255, 255, 255, 0.1)",
+            background: "rgba(255, 255, 255, 0.15)",
             borderRadius: "50%",
             zIndex: 0,
           }}
@@ -68,7 +68,7 @@ export default function UserAccount({ open, onClose, currentUser }) {
             left: -15,
             width: 80,
             height: 80,
-            background: "rgba(255, 255, 255, 0.05)",
+            background: "rgba(255, 255, 255, 0.1)",
             borderRadius: "50%",
             zIndex: 0,
           }}

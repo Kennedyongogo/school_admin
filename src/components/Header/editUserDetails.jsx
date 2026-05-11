@@ -50,7 +50,7 @@ export default function EditUserDetails({
       updateBody(d);
       setIsError("");
 
-      fetch(`/api/admin-users/${currentUser.id}`, {
+      fetch(`/api/users/${currentUser.id}`, {
         method: "PUT",
         credentials: "include",
         headers: {
