@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Box,
   Button,
   Card,
   CardContent,
+  Checkbox,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -13,6 +15,8 @@ import {
   FormControlLabel,
   IconButton,
   MenuItem,
+  Radio,
+  RadioGroup,
   Select,
   Stack,
   Switch,
@@ -24,7 +28,18 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon, PlayCircleOutline as PlayCircleOutlineIcon, Visibility as VisibilityIcon } from "@mui/icons-material";
+import {
+  Add as AddIcon,
+  ArrowBack as ArrowBackIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+  PlayCircleOutline as PlayCircleOutlineIcon,
+  UploadFile as UploadFileIcon,
+  Visibility as VisibilityIcon,
+  PublishedWithChanges as PublishedWithChangesIcon,
+  FactCheck as FactCheckIcon,
+  ContentCopy as ContentCopyIcon,
+} from "@mui/icons-material";
 import Swal from "sweetalert2";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -82,13 +97,56 @@ const defaultExamLayout = () => ({
   total_marks: { x: 230, y: 160, w: 180, h: 24 },
 });
 
-function DiagramDrawInput({ value, onSave, onArrowPlaced }) {
+function DiagramDrawInput({ value, hotspots = [], onSave, onArrowPlaced }) {
   const canvasRef = useRef(null);
   const drawingRef = useRef(false);
+  const textItemsRef = useRef([]);
+  const textBaseImageRef = useRef(null);
+  const textDragRef = useRef(null);
+  const arrowItemsRef = useRef([]);
+  const arrowBaseImageRef = useRef(null);
   const [brushSize, setBrushSize] = useState(2);
-  const [tool, setTool] = useState("pen"); // pen | eraser | arrow | line
+  const [tool, setTool] = useState("pen"); // pen | eraser | arrow | line | text
   const [lineStyle, setLineStyle] = useState("solid"); // solid | dashed | dotted
+  const [textInput, setTextInput] = useState("");
+  const [textSize, setTextSize] = useState(18);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [generatingAi, setGeneratingAi] = useState(false);
   const arrowStartRef = useRef(null);
+
+  const drawTextItems = (ctx) => {
+    textItemsRef.current.forEach((item) => {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#111827";
+      ctx.font = `${Math.max(10, Number(item.size) || 12)}px Arial`;
+      ctx.textBaseline = "top";
+      ctx.fillText(item.text, item.x, item.y);
+    });
+  };
+
+  const redrawWithTextItems = (ctx) => {
+    if (textBaseImageRef.current) {
+      ctx.putImageData(textBaseImageRef.current, 0, 0);
+    } else {
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    }
+    drawTextItems(ctx);
+    drawHotspotPromptLabels(ctx);
+  };
+
+  const pickTextItemAt = (ctx, x, y) => {
+    for (let i = textItemsRef.current.length - 1; i >= 0; i -= 1) {
+      const item = textItemsRef.current[i];
+      ctx.font = `${Math.max(10, Number(item.size) || 12)}px Arial`;
+      const width = ctx.measureText(item.text).width;
+      const height = Math.max(10, Number(item.size) || 12);
+      if (x >= item.x && x <= item.x + width && y >= item.y && y <= item.y + height) {
+        return { index: i, item };
+      }
+    }
+    return null;
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -102,7 +160,26 @@ function DiagramDrawInput({ value, onSave, onArrowPlaced }) {
       };
       img.src = value;
     }
+    arrowItemsRef.current = [];
+    arrowBaseImageRef.current = null;
+    textItemsRef.current = [];
+    textBaseImageRef.current = null;
+    textDragRef.current = null;
   }, [value]);
+
+  useEffect(() => {
+    if (!Array.isArray(hotspots)) return;
+    const hotspotIds = new Set(hotspots.map((h) => String(h?.id || "")));
+    const filtered = arrowItemsRef.current.filter((item) => hotspotIds.has(String(item.hotspotId || "")));
+    if (filtered.length !== arrowItemsRef.current.length) {
+      arrowItemsRef.current = filtered;
+    }
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (!arrowBaseImageRef.current && !arrowItemsRef.current.length && !textItemsRef.current.length) return;
+    const ctx = canvas.getContext("2d");
+    redrawWithArrowItems(ctx);
+  }, [hotspots]);
 
   const getPos = (event, canvas) => {
     const rect = canvas.getBoundingClientRect();
@@ -117,6 +194,25 @@ function DiagramDrawInput({ value, onSave, onArrowPlaced }) {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     const { x, y } = getPos(event, canvas);
+    if (tool === "text") {
+      if (!textBaseImageRef.current) {
+        textBaseImageRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      }
+      const hit = pickTextItemAt(ctx, x, y);
+      if (hit) {
+        textDragRef.current = { index: hit.index, dx: x - hit.item.x, dy: y - hit.item.y };
+        drawingRef.current = true;
+        return;
+      }
+      const content = String(textInput || "").trim();
+      if (!content) return;
+      const item = { text: content, x, y, size: Math.max(10, Number(textSize) || 12) };
+      textItemsRef.current = [...textItemsRef.current, item];
+      textDragRef.current = { index: textItemsRef.current.length - 1, dx: 0, dy: 0 };
+      drawingRef.current = true;
+      redrawWithTextItems(ctx);
+      return;
+    }
     drawingRef.current = true;
     if (tool === "arrow" || tool === "line") {
       arrowStartRef.current = { x, y };
@@ -127,11 +223,20 @@ function DiagramDrawInput({ value, onSave, onArrowPlaced }) {
   };
 
   const moveDraw = (event) => {
-    if (!drawingRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     const { x, y } = getPos(event, canvas);
+    if (!drawingRef.current) return;
+    if (tool === "text" && textDragRef.current) {
+      const drag = textDragRef.current;
+      const idx = drag.index;
+      const nextX = Math.max(0, Math.min(canvas.width - 5, x - drag.dx));
+      const nextY = Math.max(0, Math.min(canvas.height - 5, y - drag.dy));
+      textItemsRef.current = textItemsRef.current.map((item, i) => (i === idx ? { ...item, x: nextX, y: nextY } : item));
+      redrawWithTextItems(ctx);
+      return;
+    }
     if (!["pen", "eraser"].includes(tool)) return;
     ctx.lineWidth = brushSize;
     ctx.lineCap = "round";
@@ -158,6 +263,52 @@ function DiagramDrawInput({ value, onSave, onArrowPlaced }) {
     ctx.fill();
   };
 
+  const drawHotspotPromptLabels = (ctx) => {
+    if (!Array.isArray(hotspots) || hotspots.length === 0) return;
+    hotspots.forEach((hs, idx) => {
+      const label = String(hs?.prompt || "").trim();
+      if (!label) return;
+      const xPct = Number.isFinite(Number(hs?.x)) ? Number(hs.x) : 50;
+      const yPct = Number.isFinite(Number(hs?.y)) ? Number(hs.y) : 50;
+      const x = (xPct / 100) * ctx.canvas.width;
+      const y = (yPct / 100) * ctx.canvas.height;
+      const caption = `${idx + 1}. ${label}`;
+      ctx.save();
+      ctx.font = "12px Arial";
+      const textW = ctx.measureText(caption).width;
+      const boxX = Math.max(4, Math.min(ctx.canvas.width - textW - 14, x + 8));
+      const boxY = Math.max(4, Math.min(ctx.canvas.height - 18, y + 6));
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.fillRect(boxX - 4, boxY - 2, textW + 8, 16);
+      ctx.fillStyle = "#111827";
+      ctx.fillText(caption, boxX, boxY + 10);
+      ctx.restore();
+    });
+  };
+
+  const drawArrowItems = (ctx) => {
+    arrowItemsRef.current.forEach((item) => {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.lineWidth = Math.max(1, Number(item.brushSize) || 2);
+      ctx.strokeStyle = "#111827";
+      ctx.fillStyle = "#111827";
+      if (item.lineStyle === "dashed") ctx.setLineDash([10, 6]);
+      else if (item.lineStyle === "dotted") ctx.setLineDash([2, 6]);
+      else ctx.setLineDash([]);
+      drawArrow(ctx, item.startX, item.startY, item.endX, item.endY, Math.max(8, (Number(item.brushSize) || 2) * 3));
+      ctx.setLineDash([]);
+    });
+  };
+
+  const redrawWithArrowItems = (ctx) => {
+    if (arrowBaseImageRef.current) ctx.putImageData(arrowBaseImageRef.current, 0, 0);
+    else ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    drawArrowItems(ctx);
+    // Keep text overlays visible when arrows are redrawn.
+    drawTextItems(ctx);
+    drawHotspotPromptLabels(ctx);
+  };
+
   const drawStraightLine = (ctx, x1, y1, x2, y2) => {
     ctx.beginPath();
     ctx.moveTo(x1, y1);
@@ -179,11 +330,27 @@ function DiagramDrawInput({ value, onSave, onArrowPlaced }) {
       else if (lineStyle === "dotted") ctx.setLineDash([2, 6]);
       else ctx.setLineDash([]);
       if (tool === "arrow") {
-        drawArrow(ctx, start.x, start.y, x, y, Math.max(8, brushSize * 3));
+        if (!arrowBaseImageRef.current) {
+          arrowBaseImageRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        }
+        const hotspotId = `hs-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+        arrowItemsRef.current = [
+          ...arrowItemsRef.current,
+          {
+            hotspotId,
+            startX: start.x,
+            startY: start.y,
+            endX: x,
+            endY: y,
+            brushSize,
+            lineStyle,
+          },
+        ];
+        redrawWithArrowItems(ctx);
         if (typeof onArrowPlaced === "function") {
           const xPct = Number(((x / canvas.width) * 100).toFixed(2));
           const yPct = Number(((y / canvas.height) * 100).toFixed(2));
-          onArrowPlaced({ x: xPct, y: yPct });
+          onArrowPlaced({ id: hotspotId, x: xPct, y: yPct });
         }
       }
       if (tool === "line") drawStraightLine(ctx, start.x, start.y, x, y);
@@ -191,6 +358,7 @@ function DiagramDrawInput({ value, onSave, onArrowPlaced }) {
     }
     drawingRef.current = false;
     arrowStartRef.current = null;
+    textDragRef.current = null;
   };
 
   const clearCanvas = () => {
@@ -198,6 +366,11 @@ function DiagramDrawInput({ value, onSave, onArrowPlaced }) {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    arrowItemsRef.current = [];
+    arrowBaseImageRef.current = null;
+    textItemsRef.current = [];
+    textBaseImageRef.current = null;
+    textDragRef.current = null;
   };
 
   const saveCanvas = () => {
@@ -213,6 +386,59 @@ function DiagramDrawInput({ value, onSave, onArrowPlaced }) {
     onSave(out.toDataURL("image/png"));
   };
 
+  const generateDiagramWithAi = async () => {
+    const prompt = String(aiPrompt || "").trim();
+    if (!prompt) {
+      await Swal.fire({ icon: "error", title: "Prompt required", text: "Write a prompt before generating." });
+      return;
+    }
+    const token = localStorage.getItem("token");
+    if (!token) {
+      await Swal.fire({ icon: "error", title: "Session expired", text: "Please sign in again." });
+      return;
+    }
+
+    setGeneratingAi(true);
+    try {
+      const res = await fetch("/api/exams/ai/diagram", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success || !data?.data?.dataUrl) {
+        const modelsTried = Array.isArray(data?.modelsTried) && data.modelsTried.length ? ` Models tried: ${data.modelsTried.join(", ")}` : "";
+        throw new Error(`${data?.message || "Could not generate image."}${modelsTried}`);
+      }
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = data.data.dataUrl;
+      });
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+      const drawW = Math.max(1, Math.round(img.width * scale));
+      const drawH = Math.max(1, Math.round(img.height * scale));
+      const drawX = Math.round((canvas.width - drawW) / 2);
+      const drawY = Math.round((canvas.height - drawH) / 2);
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+    } catch (e) {
+      await Swal.fire({ icon: "error", title: "Generate failed", text: e.message || "Could not generate diagram." });
+    } finally {
+      setGeneratingAi(false);
+    }
+  };
+
   return (
     <Stack spacing={1}>
       <Typography variant="body2" sx={{ fontWeight: 700 }}>
@@ -221,7 +447,7 @@ function DiagramDrawInput({ value, onSave, onArrowPlaced }) {
       <Box
         sx={{
           width: "100%",
-          maxWidth: 640,
+          position: "relative",
           border: "1px solid #d1d5db",
           borderRadius: 1,
           backgroundColor: "#fff",
@@ -234,8 +460,8 @@ function DiagramDrawInput({ value, onSave, onArrowPlaced }) {
         <Box
           component="canvas"
           ref={canvasRef}
-          width={640}
-          height={360}
+          width={1200}
+          height={520}
           onMouseDown={startDraw}
           onMouseMove={moveDraw}
           onMouseUp={endDraw}
@@ -250,11 +476,23 @@ function DiagramDrawInput({ value, onSave, onArrowPlaced }) {
         />
       </Box>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap" }}>
+        <TextField
+          size="small"
+          label="Generate diagram prompt"
+          placeholder="e.g. Labelled human heart diagram for grade 8"
+          value={aiPrompt}
+          onChange={(e) => setAiPrompt(e.target.value)}
+          sx={{ minWidth: 280, flex: 1 }}
+        />
+        <Button size="small" variant="contained" onClick={() => void generateDiagramWithAi()} disabled={generatingAi}>
+          {generatingAi ? "Generating..." : "Generate image"}
+        </Button>
         <Select size="small" value={tool} onChange={(e) => setTool(e.target.value)} sx={{ minWidth: 110 }}>
           <MenuItem value="pen">Pen</MenuItem>
           <MenuItem value="eraser">Eraser</MenuItem>
           <MenuItem value="arrow">Arrow</MenuItem>
           <MenuItem value="line">Straight line</MenuItem>
+          <MenuItem value="text">Text</MenuItem>
         </Select>
         <Select size="small" value={lineStyle} onChange={(e) => setLineStyle(e.target.value)} sx={{ minWidth: 110 }}>
           <MenuItem value="solid">Solid</MenuItem>
@@ -269,6 +507,25 @@ function DiagramDrawInput({ value, onSave, onArrowPlaced }) {
           onChange={(e) => setBrushSize(Math.max(1, Math.min(12, Number(e.target.value) || 1)))}
           sx={{ width: 90 }}
         />
+        {tool === "text" ? (
+          <>
+            <TextField
+              size="small"
+              label="Text"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              sx={{ minWidth: 180 }}
+            />
+            <TextField
+              size="small"
+              label="Size"
+              type="number"
+              value={textSize}
+              onChange={(e) => setTextSize(Math.max(10, Math.min(72, Number(e.target.value) || 10)))}
+              sx={{ width: 90 }}
+            />
+          </>
+        ) : null}
         <Button size="small" variant="outlined" onClick={clearCanvas}>
           Clear
         </Button>
@@ -281,6 +538,7 @@ function DiagramDrawInput({ value, onSave, onArrowPlaced }) {
 }
 
 export default function ExamsTab() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [rows, setRows] = useState([]);
@@ -305,8 +563,23 @@ export default function ExamsTab() {
   const [templatePagesForExam, setTemplatePagesForExam] = useState([{ id: "page-1", elements: [] }]);
   const [saving, setSaving] = useState(false);
   const [viewRow, setViewRow] = useState(null);
+  const [statusEditRow, setStatusEditRow] = useState(null);
+  const [statusEditValue, setStatusEditValue] = useState("draft");
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [markingRow, setMarkingRow] = useState(null);
+  const [markingLoading, setMarkingLoading] = useState(false);
+  const [markingError, setMarkingError] = useState("");
+  const [markingSubmissions, setMarkingSubmissions] = useState([]);
+  const [markInputs, setMarkInputs] = useState({});
+  const [markSavingId, setMarkSavingId] = useState("");
+  const [cleanupRunning, setCleanupRunning] = useState(false);
   const [simulateRow, setSimulateRow] = useState(null);
   const [simulateAnswers, setSimulateAnswers] = useState({});
+  const [generatingFromDoc, setGeneratingFromDoc] = useState(false);
+  const [questionGenCount, setQuestionGenCount] = useState(10);
+  const [ocrRawText, setOcrRawText] = useState("");
+  const [ocrParsedBlocks, setOcrParsedBlocks] = useState([]);
+  const questionDocInputRef = useRef(null);
   const questionCanvasRef = useRef(null);
   const questionDragRef = useRef(null);
   const questionResizeRef = useRef(null);
@@ -421,6 +694,59 @@ export default function ExamsTab() {
     return [];
   };
 
+  const renderCanvasQuestionText = (q, index) =>
+    `${q.order_number || index + 1}. ${q.question_text || "Untitled question"} (${Number(q.marks) || 0} marks)`;
+
+  const renderCanvasChoiceControls = (q, scopeKey = "canvas") => {
+    if (q.question_type === "multiple_choice") {
+      return (
+        <Stack spacing={0}>
+          {parseQuestionOptions(q).map((opt) => (
+            <FormControlLabel
+              key={`${scopeKey}-radio-${q.key || q.id || "q"}-${opt}`}
+              control={<Radio size="small" disabled sx={{ p: 0.4 }} />}
+              label={<Typography sx={{ fontSize: 11.5 }}>{opt}</Typography>}
+              sx={{ m: 0, pointerEvents: "none" }}
+            />
+          ))}
+        </Stack>
+      );
+    }
+    if (q.question_type === "multi_select") {
+      return (
+        <Stack spacing={0}>
+          {parseQuestionOptions(q).map((opt) => (
+            <FormControlLabel
+              key={`${scopeKey}-check-${q.key || q.id || "q"}-${opt}`}
+              control={<Checkbox size="small" disabled sx={{ p: 0.4 }} />}
+              label={<Typography sx={{ fontSize: 11.5 }}>{opt}</Typography>}
+              sx={{ m: 0, pointerEvents: "none" }}
+            />
+          ))}
+        </Stack>
+      );
+    }
+    if (q.question_type === "true_false") {
+      return (
+        <RadioGroup row value="">
+          <FormControlLabel
+            value="True"
+            control={<Radio size="small" disabled sx={{ p: 0.4 }} />}
+            label={<Typography sx={{ fontSize: 11.5 }}>True</Typography>}
+            sx={{ mr: 1.25, ml: 0, pointerEvents: "none" }}
+          />
+          <FormControlLabel
+            value="False"
+            control={<Radio size="small" disabled sx={{ p: 0.4 }} />}
+            label={<Typography sx={{ fontSize: 11.5 }}>False</Typography>}
+            sx={{ mr: 0, ml: 0, pointerEvents: "none" }}
+          />
+        </RadioGroup>
+      );
+    }
+    return null;
+  };
+
   const openStudentPreview = (row) => {
     setSimulateRow(row);
     const initialAnswers = {};
@@ -476,6 +802,15 @@ export default function ExamsTab() {
 
   useEffect(() => {
     void load();
+  }, []);
+
+  useEffect(() => {
+    const onCreateFromHeader = () => {
+      resetForm();
+      setMode("create");
+    };
+    window.addEventListener("exams:create", onCreateFromHeader);
+    return () => window.removeEventListener("exams:create", onCreateFromHeader);
   }, []);
 
   useEffect(() => {
@@ -589,6 +924,8 @@ export default function ExamsTab() {
     setExamLayout(defaultExamLayout());
     setTemplatePagesForExam([{ id: "page-1", elements: [] }]);
     setQuestions([emptyQuestion(1)]);
+    setOcrRawText("");
+    setOcrParsedBlocks([]);
   };
 
   const parseInstructionLines = (raw) => {
@@ -675,6 +1012,147 @@ export default function ExamsTab() {
     );
   };
 
+  const openStatusDialog = (row) => {
+    setStatusEditRow(row);
+    setStatusEditValue(row?.status || "draft");
+  };
+
+  const saveExamStatusOnly = async () => {
+    if (!statusEditRow?.id) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    setStatusSaving(true);
+    try {
+      const res = await fetch(`/api/exams/${statusEditRow.id}`, {
+        method: "PUT",
+        headers: authHeaders(token),
+        body: JSON.stringify({ status: statusEditValue }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.message || "Could not update exam status.");
+      await Swal.fire({
+        icon: "success",
+        title: "Exam status updated",
+        text: `Status changed to ${statusEditValue}.`,
+        timer: 1200,
+        showConfirmButton: false,
+      });
+      setStatusEditRow(null);
+      await load();
+    } catch (e) {
+      await Swal.fire({
+        icon: "error",
+        title: "Status update failed",
+        text: e.message || "Could not update exam status.",
+      });
+    } finally {
+      setStatusSaving(false);
+    }
+  };
+
+  const openMarkingDialog = async (row) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    setMarkingRow(row);
+    setMarkingLoading(true);
+    setMarkingError("");
+    setMarkingSubmissions([]);
+    setMarkInputs({});
+    try {
+      const res = await fetch(`/api/exams/${row.id}/submissions?status=submitted`, {
+        headers: authHeaders(token),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.message || "Could not load submissions.");
+      const submissions = Array.isArray(data?.data?.submissions) ? data.data.submissions : [];
+      setMarkingSubmissions(submissions);
+      const nextInputs = {};
+      submissions.forEach((s) => {
+        nextInputs[s.id] = s?.marking?.total_score != null ? String(s.marking.total_score) : "";
+      });
+      setMarkInputs(nextInputs);
+    } catch (e) {
+      setMarkingError(e.message || "Could not load submissions.");
+    } finally {
+      setMarkingLoading(false);
+    }
+  };
+
+  const saveSubmissionMark = async (submissionId) => {
+    const token = localStorage.getItem("token");
+    if (!token || !markingRow?.id) return;
+    const raw = markInputs[submissionId];
+    const score = Number(raw);
+    if (!Number.isFinite(score) || score < 0) {
+      await Swal.fire({ icon: "error", title: "Invalid mark", text: "Enter a valid non-negative score." });
+      return;
+    }
+    setMarkSavingId(submissionId);
+    try {
+      const res = await fetch(`/api/exams/${markingRow.id}/submissions/${submissionId}/mark`, {
+        method: "PUT",
+        headers: authHeaders(token),
+        body: JSON.stringify({ total_score: score }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.message || "Could not save mark.");
+      setMarkingSubmissions((prev) =>
+        prev.map((s) =>
+          s.id === submissionId
+            ? {
+                ...s,
+                marking: {
+                  ...(s.marking || {}),
+                  total_score: data?.data?.total_score,
+                  percentage: data?.data?.percentage,
+                  is_passed: data?.data?.is_passed,
+                },
+              }
+            : s
+        )
+      );
+      await Swal.fire({ icon: "success", title: "Mark saved", timer: 900, showConfirmButton: false });
+    } catch (e) {
+      await Swal.fire({ icon: "error", title: "Marking failed", text: e.message || "Could not save mark." });
+    } finally {
+      setMarkSavingId("");
+    }
+  };
+
+  const runCleanupStaleDrafts = async () => {
+    const token = localStorage.getItem("token");
+    if (!token || !markingRow?.id) return;
+    const confirm = await Swal.fire({
+      icon: "warning",
+      title: "Clean stale drafts?",
+      text: "This removes old draft submissions for students who already submitted this exam.",
+      showCancelButton: true,
+      confirmButtonColor: accentDark,
+    });
+    if (!confirm.isConfirmed) return;
+    setCleanupRunning(true);
+    try {
+      const res = await fetch(`/api/exams/${markingRow.id}/submissions/cleanup-stale-drafts`, {
+        method: "POST",
+        headers: authHeaders(token),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.message || "Cleanup failed.");
+      await Swal.fire({
+        icon: "success",
+        title: "Cleanup complete",
+        text: `Deleted ${data?.data?.draft_submissions_deleted || 0} stale drafts.`,
+        timer: 1200,
+        showConfirmButton: false,
+      });
+      await openMarkingDialog(markingRow);
+    } catch (e) {
+      await Swal.fire({ icon: "error", title: "Cleanup failed", text: e.message || "Could not clean stale drafts." });
+    } finally {
+      setCleanupRunning(false);
+    }
+  };
+
   const createExam = async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -750,7 +1228,7 @@ export default function ExamsTab() {
           prevent_tab_switch: Boolean(preventTabSwitch),
           allow_retake: Boolean(allowRetake),
           max_attempts: allowRetake ? Math.max(1, Number(maxAttempts) || 1) : 1,
-          status,
+          ...(isEdit ? {} : { status }),
           instructions: instructions || null,
           exam_layout_json: { ...examLayout, template_pages_override: selectedTemplatePages },
           questions: payloadQuestions,
@@ -767,6 +1245,147 @@ export default function ExamsTab() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const importQuestionsFromDocument = async (file) => {
+    if (!file) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    setGeneratingFromDoc(true);
+    try {
+      const formData = new FormData();
+      formData.append("document", file);
+      formData.append("questionCount", String(Math.max(1, Number(questionGenCount) || 10)));
+      const res = await fetch("/api/exams/ocr/extract-questions-from-document", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success || !Array.isArray(data?.data)) {
+        throw new Error(data?.message || "Could not extract questions from document.");
+      }
+
+      const incoming = data.data;
+      if (!incoming.length) {
+        await Swal.fire({ icon: "info", title: "No questions found", text: "No questions were detected from this document." });
+        return;
+      }
+
+      setOcrRawText(String(data?.meta?.raw_text || "").trim());
+      setOcrParsedBlocks(
+        incoming.map((q, idx) => ({
+          id: `${Date.now()}-${idx}`,
+          text: String(q?.text || "").trim(),
+          type: String(q?.type || "short_text"),
+          marks: Number.isFinite(Number(q?.marks)) ? Number(q.marks) : 5,
+          options: Array.isArray(q?.options) ? q.options : [],
+          correctAnswer: String(q?.correctAnswer || "").trim(),
+          explanation: String(q?.explanation || "").trim(),
+        }))
+      );
+
+      await Swal.fire({
+        icon: "success",
+        title: "OCR extraction ready",
+        text: `Detected ${incoming.length} question block(s). Review/merge/split, then add to exam.`,
+        timer: 1300,
+        showConfirmButton: false,
+      });
+    } catch (e) {
+      await Swal.fire({ icon: "error", title: "Extraction failed", text: e.message || "Could not extract questions." });
+    } finally {
+      setGeneratingFromDoc(false);
+      if (questionDocInputRef.current) questionDocInputRef.current.value = "";
+    }
+  };
+
+  const updateOcrBlockText = (index, value) => {
+    setOcrParsedBlocks((prev) => prev.map((b, i) => (i === index ? { ...b, text: value } : b)));
+  };
+
+  const mergeOcrBlockWithNext = (index) => {
+    setOcrParsedBlocks((prev) => {
+      if (index < 0 || index >= prev.length - 1) return prev;
+      const current = prev[index];
+      const next = prev[index + 1];
+      const merged = {
+        ...current,
+        text: `${String(current.text || "").trim()}\n${String(next.text || "").trim()}`.trim(),
+      };
+      return [...prev.slice(0, index), merged, ...prev.slice(index + 2)];
+    });
+  };
+
+  const splitOcrBlock = (index) => {
+    setOcrParsedBlocks((prev) => {
+      if (index < 0 || index >= prev.length) return prev;
+      const target = prev[index];
+      const text = String(target.text || "").trim();
+      if (!text) return prev;
+      let parts = text
+        .split(/\n{2,}/)
+        .map((x) => x.trim())
+        .filter(Boolean);
+      if (parts.length < 2) {
+        const lines = text.split(/\n+/).map((x) => x.trim()).filter(Boolean);
+        if (lines.length >= 2) {
+          const mid = Math.ceil(lines.length / 2);
+          parts = [lines.slice(0, mid).join(" "), lines.slice(mid).join(" ")];
+        }
+      }
+      if (parts.length < 2) return prev;
+      const [first, ...rest] = parts;
+      const nextBlocks = [
+        { ...target, text: first },
+        ...rest.map((p, i) => ({ ...target, id: `${target.id}-split-${i + 1}`, text: p })),
+      ];
+      return [...prev.slice(0, index), ...nextBlocks, ...prev.slice(index + 1)];
+    });
+  };
+
+  const removeOcrBlock = (index) => {
+    setOcrParsedBlocks((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const addOcrBlocksToQuestions = () => {
+    const validBlocks = ocrParsedBlocks
+      .map((b) => ({ ...b, text: String(b?.text || "").trim() }))
+      .filter((b) => b.text);
+    if (!validBlocks.length) {
+      void Swal.fire({ icon: "warning", title: "Nothing to add", text: "No parsed question blocks to add." });
+      return;
+    }
+    setQuestions((prev) => {
+      const base = prev.length;
+      const mapped = validBlocks.map((block, idx) => ({
+        ...emptyQuestion(base + idx + 1),
+        question_text: block.text,
+        question_type: "short_text",
+        marks: Number.isFinite(Number(block?.marks)) ? Number(block.marks) : 5,
+        options_text: Array.isArray(block?.options)
+          ? block.options.map((x) => String(x || "").trim()).filter(Boolean).join(", ")
+          : "",
+        correct_answer: String(block?.correctAnswer || "").trim(),
+        explanation: String(block?.explanation || "").trim(),
+        order_number: base + idx + 1,
+        canvas_page: currentTemplatePage,
+      }));
+      return [...prev, ...mapped];
+    });
+    void Swal.fire({
+      icon: "success",
+      title: "Questions added",
+      text: `Added ${validBlocks.length} reviewed question(s) to this exam.`,
+      timer: 1200,
+      showConfirmButton: false,
+    });
+    setOcrParsedBlocks([]);
+    setOcrRawText("");
   };
 
   const deleteExam = async (row) => {
@@ -787,6 +1406,40 @@ export default function ExamsTab() {
       return;
     }
     await load();
+    await Swal.fire({
+      icon: "success",
+      title: "Exam deleted",
+      text: row.title || row.name || "Exam removed successfully.",
+      timer: 1200,
+      showConfirmButton: false,
+    });
+  };
+
+  const duplicateExam = async (row) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/exams/${row.id}/duplicate`, {
+        method: "POST",
+        headers: authHeaders(token),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.message || "Could not duplicate exam.");
+      await load();
+      await Swal.fire({
+        icon: "success",
+        title: "Exam duplicated",
+        text: `${row.title || row.name || "Exam"} copied to a new draft.`,
+        timer: 1200,
+        showConfirmButton: false,
+      });
+    } catch (e) {
+      await Swal.fire({
+        icon: "error",
+        title: "Duplicate failed",
+        text: e.message || "Could not duplicate exam.",
+      });
+    }
   };
 
   const downloadExamPdf = async () => {
@@ -986,9 +1639,9 @@ ${imageParts}--${boundary}--`;
   if (mode === "create") {
     return (
       <Stack spacing={2}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ width: "100%" }}>
           <Typography sx={{ fontWeight: 800 }}>{editingId ? "Edit exam" : "Create exam"}</Typography>
-          <Button variant="outlined" onClick={() => setMode("list")}>
+          <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => setMode("list")}>
             Back
           </Button>
         </Stack>
@@ -1038,11 +1691,13 @@ ${imageParts}--${boundary}--`;
               <Typography sx={{ fontWeight: 800, mt: 1 }}>Advanced settings</Typography>
               <TextField fullWidth label="Total marks" type="number" value={totalMarks} onChange={(e) => setTotalMarks(e.target.value)} />
               <TextField fullWidth label="Passing marks" type="number" value={passingMarks} onChange={(e) => setPassingMarks(e.target.value)} />
-              <Select fullWidth value={status} onChange={(e) => setStatus(e.target.value)}>
-                <MenuItem value="draft">Draft</MenuItem>
-                <MenuItem value="published">Published</MenuItem>
-                <MenuItem value="archived">Archived</MenuItem>
-              </Select>
+              {!editingId ? (
+                <Select fullWidth value={status} onChange={(e) => setStatus(e.target.value)}>
+                  <MenuItem value="draft">Draft</MenuItem>
+                  <MenuItem value="published">Published</MenuItem>
+                  <MenuItem value="archived">Archived</MenuItem>
+                </Select>
+              ) : null}
               <FormControlLabel
                 control={<Switch checked={requiresWebcam} onChange={(e) => setRequiresWebcam(e.target.checked)} />}
                 label="Require webcam"
@@ -1175,12 +1830,13 @@ ${imageParts}--${boundary}--`;
                               <Stack spacing={1}>
                                 <DiagramDrawInput
                                   value={q.diagram_data || ""}
+                                  hotspots={Array.isArray(q.diagram_hotspots) ? q.diagram_hotspots : []}
                                   onSave={(imageDataUrl) =>
                                     setQuestions((prev) =>
                                       prev.map((x) => (x.key === q.key ? { ...x, diagram_data: imageDataUrl } : x))
                                     )
                                   }
-                                  onArrowPlaced={({ x, y }) =>
+                                  onArrowPlaced={({ id, x, y }) =>
                                     setQuestions((prev) =>
                                       prev.map((item) =>
                                         item.key !== q.key
@@ -1188,9 +1844,19 @@ ${imageParts}--${boundary}--`;
                                           : {
                                               ...item,
                                               diagram_hotspots: [
-                                                ...(Array.isArray(item.diagram_hotspots) ? item.diagram_hotspots : []),
+                                                ...(Array.isArray(item.diagram_hotspots)
+                                                  ? item.diagram_hotspots.filter((hs) => {
+                                                      // Drop the default placeholder hotspot once the user starts placing arrows.
+                                                      const isPlaceholder =
+                                                        (hs?.prompt || "") === "" &&
+                                                        (hs?.correct_answer || "") === "" &&
+                                                        Number(hs?.x) === 50 &&
+                                                        Number(hs?.y) === 50;
+                                                      return !isPlaceholder;
+                                                    })
+                                                  : []),
                                                 {
-                                                  id: `hs-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+                                                  id: id || `hs-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
                                                   x,
                                                   y,
                                                   prompt: "",
@@ -1293,10 +1959,7 @@ ${imageParts}--${boundary}--`;
                                             x.key === q.key
                                               ? {
                                                   ...x,
-                                                  diagram_hotspots:
-                                                    x.diagram_hotspots.length <= 1
-                                                      ? x.diagram_hotspots
-                                                      : x.diagram_hotspots.filter((_, i) => i !== hsIdx),
+                                                  diagram_hotspots: x.diagram_hotspots.filter((_, i) => i !== hsIdx),
                                                 }
                                               : x
                                           )
@@ -1393,7 +2056,33 @@ ${imageParts}--${boundary}--`;
                         </CardContent>
                       </Card>
                     ))}
-                    <Stack direction="row" spacing={1}>
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      <TextField
+                        size="small"
+                        label="Auto-generate count"
+                        type="number"
+                        value={questionGenCount}
+                        onChange={(e) => setQuestionGenCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                        sx={{ width: 150 }}
+                      />
+                      <input
+                        ref={questionDocInputRef}
+                        type="file"
+                        accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void importQuestionsFromDocument(file);
+                        }}
+                      />
+                      <Button
+                        variant="outlined"
+                        startIcon={<UploadFileIcon />}
+                        onClick={() => questionDocInputRef.current?.click()}
+                        disabled={generatingFromDoc}
+                      >
+                        {generatingFromDoc ? "Extracting..." : "Upload & extract (OCR)"}
+                      </Button>
                       <Button
                         variant="outlined"
                         startIcon={<AddIcon />}
@@ -1415,6 +2104,78 @@ ${imageParts}--${boundary}--`;
                         {saving ? "Saving..." : editingId ? "Update exam" : "Save exam"}
                       </Button>
                     </Stack>
+                    {ocrRawText || ocrParsedBlocks.length ? (
+                      <Card variant="outlined" sx={{ mt: 1, borderColor: "#fecaca" }}>
+                        <CardContent>
+                          <Stack spacing={1.25}>
+                            <Typography sx={{ fontWeight: 800 }}>OCR review before adding</Typography>
+                            <TextField
+                              label="Raw extracted text"
+                              value={ocrRawText}
+                              multiline
+                              minRows={4}
+                              maxRows={10}
+                              InputProps={{ readOnly: true }}
+                              fullWidth
+                            />
+                            <Typography variant="body2" color="text.secondary">
+                              Parsed question blocks (edit text, merge/split quickly, then add to exam).
+                            </Typography>
+                            <Stack spacing={1}>
+                              {ocrParsedBlocks.map((b, idx) => (
+                                <Card key={b.id || idx} variant="outlined">
+                                  <CardContent sx={{ p: 1.25, "&:last-child": { pb: 1.25 } }}>
+                                    <Stack spacing={1}>
+                                      <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                        Block {idx + 1}
+                                      </Typography>
+                                      <TextField
+                                        fullWidth
+                                        multiline
+                                        minRows={2}
+                                        value={b.text || ""}
+                                        onChange={(e) => updateOcrBlockText(idx, e.target.value)}
+                                      />
+                                      <Stack direction="row" spacing={1} flexWrap="wrap">
+                                        <Button size="small" variant="outlined" onClick={() => splitOcrBlock(idx)}>
+                                          Split
+                                        </Button>
+                                        <Button
+                                          size="small"
+                                          variant="outlined"
+                                          disabled={idx >= ocrParsedBlocks.length - 1}
+                                          onClick={() => mergeOcrBlockWithNext(idx)}
+                                        >
+                                          Merge with next
+                                        </Button>
+                                        <Button size="small" color="error" variant="outlined" onClick={() => removeOcrBlock(idx)}>
+                                          Remove
+                                        </Button>
+                                      </Stack>
+                                    </Stack>
+                                  </CardContent>
+                                </Card>
+                              ))}
+                            </Stack>
+                            <Stack direction="row" spacing={1} flexWrap="wrap">
+                              <Button variant="contained" onClick={addOcrBlocksToQuestions} sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark } }}>
+                                Add reviewed blocks to exam
+                              </Button>
+                              <Button
+                                variant="outlined"
+                                color="error"
+                                onClick={() => {
+                                  setOcrParsedBlocks([]);
+                                  setOcrRawText("");
+                                }}
+                              >
+                                Clear OCR review
+                              </Button>
+                            </Stack>
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    ) : null}
                   </Stack>
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -1639,16 +2400,24 @@ ${imageParts}--${boundary}--`;
                           left: Number(q.canvas_x || 0),
                           top: Number(q.canvas_y || 0),
                           width: Number(q.canvas_w || 520),
-                          height: Number(q.canvas_h || 26),
+                          height: Math.max(
+                            Number(q.canvas_h || 26),
+                            ["multiple_choice", "multi_select", "true_false"].includes(String(q.question_type || "")) ? 74 : 26
+                          ),
                           border: "1px dashed #dc2626",
                           bgcolor: "rgba(255,255,255,0.95)",
                           cursor: "move",
                           fontSize: 12.5,
                           fontWeight: 600,
+                          whiteSpace: "pre-line",
+                          lineHeight: 1.35,
                           overflow: "hidden",
                         }}
                       >
-                        {`${index + 1}. ${q.question_text || "Untitled question"} (${Number(q.marks) || 0} marks)`}
+                        <Typography component="div" sx={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.35, mb: 0.25 }}>
+                          {renderCanvasQuestionText(q, index)}
+                        </Typography>
+                        {renderCanvasChoiceControls(q, "create-canvas")}
                         <Box
                           onMouseDown={(e) => startQuestionResize(e, q.key)}
                           sx={{
@@ -1733,11 +2502,8 @@ ${imageParts}--${boundary}--`;
   return (
     <Stack spacing={2}>
       {error ? <Alert severity="error">{error}</Alert> : null}
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ width: "100%" }}>
         <Typography sx={{ fontWeight: 800 }}>Exams</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setMode("create")} sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark } }}>
-          Create exam
-        </Button>
       </Stack>
       <Card elevation={0} sx={{ border: "1px solid #fecaca" }}>
         <CardContent>
@@ -1754,6 +2520,7 @@ ${imageParts}--${boundary}--`;
                   <TableCell width={70}>No</TableCell>
                   <TableCell>Name</TableCell>
                   <TableCell>Template</TableCell>
+                  <TableCell>Status</TableCell>
                   <TableCell>Duration</TableCell>
                   <TableCell>Questions</TableCell>
                   <TableCell align="right">Action</TableCell>
@@ -1765,6 +2532,7 @@ ${imageParts}--${boundary}--`;
                     <TableCell sx={{ color: "text.secondary" }}>{idx + 1}</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>{r.title || r.name}</TableCell>
                     <TableCell>{r.template?.name || templateMap.get(String(r.template_id))?.name || "-"}</TableCell>
+                    <TableCell>{r.status || "draft"}</TableCell>
                     <TableCell>{r.duration_minutes} min</TableCell>
                     <TableCell>{Array.isArray(r.questions) ? r.questions.length : 0}</TableCell>
                     <TableCell align="right">
@@ -1776,6 +2544,23 @@ ${imageParts}--${boundary}--`;
                       </IconButton>
                       <IconButton size="small" onClick={() => startEditExam(r)}>
                         <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" title="Duplicate exam" onClick={() => void duplicateExam(r)}>
+                        <ContentCopyIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        title="View submissions and mark"
+                        onClick={() =>
+                          navigate(`/exam/${r.id}/submissions`, {
+                            state: { examTitle: r.title || r.name || "Exam" },
+                          })
+                        }
+                      >
+                        <FactCheckIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" title="Edit status" onClick={() => openStatusDialog(r)}>
+                        <PublishedWithChangesIcon fontSize="small" />
                       </IconButton>
                       <IconButton size="small" color="error" onClick={() => void deleteExam(r)}>
                         <DeleteIcon fontSize="small" />
@@ -1789,7 +2574,121 @@ ${imageParts}--${boundary}--`;
         </CardContent>
       </Card>
 
-      <Dialog open={!!viewRow} onClose={() => setViewRow(null)} maxWidth="lg" fullWidth>
+      <Dialog open={!!statusEditRow} onClose={() => !statusSaving && setStatusEditRow(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Update exam status</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              {statusEditRow?.title || statusEditRow?.name || "Exam"}
+            </Typography>
+            <Select fullWidth value={statusEditValue} onChange={(e) => setStatusEditValue(e.target.value)} disabled={statusSaving}>
+              <MenuItem value="draft">Draft</MenuItem>
+              <MenuItem value="published">Published</MenuItem>
+              <MenuItem value="archived">Archived</MenuItem>
+            </Select>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStatusEditRow(null)} disabled={statusSaving}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={() => void saveExamStatusOnly()} disabled={statusSaving}>
+            {statusSaving ? "Saving..." : "Save status"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!markingRow} onClose={() => setMarkingRow(null)} maxWidth="lg" fullWidth>
+        <DialogTitle>
+          Submissions and marking - {markingRow?.title || markingRow?.name || "Exam"}
+        </DialogTitle>
+        <DialogContent>
+          {markingLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : markingError ? (
+            <Alert severity="error">{markingError}</Alert>
+          ) : markingSubmissions.length === 0 ? (
+            <Alert severity="info">No student submissions yet for this exam.</Alert>
+          ) : (
+            <Stack spacing={1.25}>
+              {markingSubmissions.map((s, idx) => (
+                <Card key={s.id} variant="outlined">
+                  <CardContent sx={{ p: 1.25, "&:last-child": { pb: 1.25 } }}>
+                    <Stack spacing={1}>
+                      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={1}>
+                        <Typography sx={{ fontWeight: 800 }}>
+                          {idx + 1}. {s.student?.user?.full_name || s.student?.user?.username || "Student"}
+                        </Typography>
+                        <Stack direction="row" spacing={1}>
+                          <Typography variant="caption" color="text.secondary">Status: {s.status || "draft"}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Submitted: {s.submitted_at ? new Date(s.submitted_at).toLocaleString() : "—"}
+                          </Typography>
+                        </Stack>
+                      </Stack>
+                      {Array.isArray(s.answers) && s.answers.length ? (
+                        <Box sx={{ maxHeight: 180, overflow: "auto", border: "1px solid #eee", borderRadius: 1, p: 1 }}>
+                          <Stack spacing={0.75}>
+                            {s.answers.map((a) => (
+                              <Box key={a.id}>
+                                <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                  {a.order_number || "Q"}: {a.question_text}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-wrap" }}>
+                                  {a.answer_text || (a.answer_json != null ? JSON.stringify(a.answer_json) : "—")}
+                                </Typography>
+                              </Box>
+                            ))}
+                          </Stack>
+                        </Box>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">No answers captured.</Typography>
+                      )}
+                      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
+                        <TextField
+                          size="small"
+                          label="Total score"
+                          type="number"
+                          value={markInputs[s.id] ?? ""}
+                          onChange={(e) => setMarkInputs((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                          sx={{ width: { xs: "100%", sm: 180 } }}
+                        />
+                        <Button
+                          variant="contained"
+                          onClick={() => void saveSubmissionMark(s.id)}
+                          disabled={markSavingId === s.id || s.status !== "submitted"}
+                          sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark } }}
+                        >
+                          {markSavingId === s.id ? "Saving..." : "Save mark"}
+                        </Button>
+                        {s.marking?.total_score != null ? (
+                          <Typography variant="body2" color="text.secondary">
+                            Saved: {s.marking.total_score} ({s.marking.percentage ?? 0}% · {s.marking.is_passed ? "Pass" : "Fail"})
+                          </Typography>
+                        ) : null}
+                      </Stack>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ))}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            color="warning"
+            onClick={() => void runCleanupStaleDrafts()}
+            disabled={cleanupRunning || markingLoading}
+          >
+            {cleanupRunning ? "Cleaning..." : "Clean stale drafts"}
+          </Button>
+          <Button onClick={() => setMarkingRow(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!viewRow} onClose={() => setViewRow(null)} maxWidth="md" fullWidth>
         <DialogTitle>Exam preview - {viewRow?.title || viewRow?.name || ""}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} ref={previewPagesContainerRef}>
@@ -1864,42 +2763,23 @@ ${imageParts}--${boundary}--`;
                       left: Number(q.page_x || 36),
                       top: Number(q.page_y || 120 + index * 34),
                       width: Number(q.page_w || 520),
-                      height: Number(q.canvas_h || 26),
+                      height: Math.max(
+                        Number(q.canvas_h || 26),
+                        ["multiple_choice", "multi_select", "true_false"].includes(String(q.question_type || "")) ? 74 : 26
+                      ),
                       px: 1,
                       py: 0.35,
                       bgcolor: "rgba(255,255,255,0.98)",
                       fontSize: 12.5,
                       fontWeight: 600,
+                      whiteSpace: "pre-line",
+                      lineHeight: 1.35,
                     }}
                   >
-                    {q.question_type === "diagram_label" && q.diagram_data ? (
-                      <Box sx={{ width: "100%", height: "100%", position: "relative" }}>
-                        <Box
-                          component="img"
-                          src={q.diagram_data}
-                          alt="Diagram question"
-                          sx={{ width: "100%", height: "100%", objectFit: "contain", bgcolor: "#fff" }}
-                        />
-                        <Box
-                          sx={{
-                            position: "absolute",
-                            left: 4,
-                            top: 4,
-                            px: 0.5,
-                            py: 0.25,
-                            borderRadius: 0.5,
-                            bgcolor: "rgba(255,255,255,0.9)",
-                            color: "#111827",
-                            fontSize: 11,
-                            lineHeight: 1.1,
-                          }}
-                        >
-                          {(q.order_number || index + 1)}. {q.question_text || "Diagram question"} ({Number(q.marks) || 0})
-                        </Box>
-                      </Box>
-                    ) : (
-                      `${q.order_number || index + 1}. ${q.question_text} (${Number(q.marks) || 0} marks) ${q.required ? "(Required)" : ""}`
-                    )}
+                    <Typography component="div" sx={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.35, mb: 0.25 }}>
+                      {renderCanvasQuestionText(q, index)}
+                    </Typography>
+                    {renderCanvasChoiceControls(q, "saved-preview")}
                   </Box>
                 ))}
                 {page.questions
@@ -1961,36 +2841,64 @@ ${imageParts}--${boundary}--`;
                             />
                           ) : null}
                           {q.question_type === "true_false" ? (
-                            <Select
-                              fullWidth
-                              size="small"
+                            <RadioGroup
                               value={String(simulateAnswers[qKey] || "")}
                               onChange={(e) => setSimulateAnswers((prev) => ({ ...prev, [qKey]: e.target.value }))}
                             >
-                              <MenuItem value="">Select answer</MenuItem>
-                              <MenuItem value="True">True</MenuItem>
-                              <MenuItem value="False">False</MenuItem>
-                            </Select>
+                              <FormControlLabel value="True" control={<Radio size="small" />} label="True" />
+                              <FormControlLabel value="False" control={<Radio size="small" />} label="False" />
+                            </RadioGroup>
                           ) : null}
-                          {["multiple_choice", "multi_select"].includes(q.question_type) ? (
-                            <Select
-                              fullWidth
-                              size="small"
-                              multiple={q.question_type === "multi_select"}
-                              value={simulateAnswers[qKey] ?? (q.question_type === "multi_select" ? [] : "")}
+                          {q.question_type === "multiple_choice" ? (
+                            <RadioGroup
+                              value={String(simulateAnswers[qKey] || "")}
                               onChange={(e) => setSimulateAnswers((prev) => ({ ...prev, [qKey]: e.target.value }))}
                             >
                               {choiceOptions.map((opt) => (
-                                <MenuItem key={`${qKey}-${opt}`} value={opt}>
-                                  {opt}
-                                </MenuItem>
+                                <FormControlLabel
+                                  key={`${qKey}-radio-${opt}`}
+                                  value={opt}
+                                  control={<Radio size="small" />}
+                                  label={opt}
+                                />
                               ))}
-                            </Select>
+                            </RadioGroup>
+                          ) : null}
+                          {q.question_type === "multi_select" ? (
+                            <Stack spacing={0.25}>
+                              {choiceOptions.map((opt) => {
+                                const selectedValues = Array.isArray(simulateAnswers[qKey]) ? simulateAnswers[qKey] : [];
+                                const checked = selectedValues.includes(opt);
+                                return (
+                                  <FormControlLabel
+                                    key={`${qKey}-check-${opt}`}
+                                    control={
+                                      <Checkbox
+                                        size="small"
+                                        checked={checked}
+                                        onChange={(e) =>
+                                          setSimulateAnswers((prev) => {
+                                            const curr = Array.isArray(prev[qKey]) ? prev[qKey] : [];
+                                            return {
+                                              ...prev,
+                                              [qKey]: e.target.checked ? [...curr, opt] : curr.filter((x) => x !== opt),
+                                            };
+                                          })
+                                        }
+                                      />
+                                    }
+                                    label={opt}
+                                  />
+                                );
+                              })}
+                            </Stack>
                           ) : null}
                           {q.question_type === "diagram_label" ? (
                             <Stack spacing={1}>
                               {q.diagram_data ? (
-                                <Box component="img" src={q.diagram_data} alt="Diagram" sx={{ width: "100%", maxHeight: 220, objectFit: "contain", border: "1px solid #e5e7eb", borderRadius: 1 }} />
+                                <Box sx={{ width: "100%", maxHeight: 220, position: "relative", border: "1px solid #e5e7eb", borderRadius: 1, overflow: "hidden" }}>
+                                  <Box component="img" src={q.diagram_data} alt="Diagram" sx={{ width: "100%", maxHeight: 220, objectFit: "contain", display: "block" }} />
+                                </Box>
                               ) : null}
                               {(Array.isArray(q?.options?.hotspots) ? q.options.hotspots : []).map((hs, hsIdx) => {
                                 const hsKey = String(hs.id || hsIdx + 1);

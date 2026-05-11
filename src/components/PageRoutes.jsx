@@ -24,6 +24,7 @@ import CurriculumFeeStructureCreate from "./Curriculum/CurriculumFeeStructureCre
 import ElimuPlusSchoolProfile from "./SchoolProfile/ElimuPlusSchoolProfile";
 import ElimuPlusSchoolProfileForm from "./SchoolProfile/ElimuPlusSchoolProfileForm";
 import ElimuPlusStudentCreate from "./SchoolProfile/ElimuPlusStudentCreate";
+import ElimuPlusStudentEdit from "./SchoolProfile/ElimuPlusStudentEdit";
 import ElimuPlusTeacherCreate from "./SchoolProfile/ElimuPlusTeacherCreate";
 import ElimuPlusTeacherDetail from "./SchoolProfile/ElimuPlusTeacherDetail";
 import Analytics from "./Analytics/Analytics";
@@ -53,7 +54,9 @@ import ElimuPlusOnlineHub from "../Pages/ElimuPlusOnlineHub";
 import OnlineScheduledLessonsPage from "../Pages/OnlineScheduledLessonsPage";
 import OnlineScheduledExamsPage from "../Pages/OnlineScheduledExamsPage";
 import ExamManagementPage from "../Pages/ExamManagementPage";
+import ExamSubmissionsPage from "../Pages/ExamSubmissionsPage";
 import AccountingDashboardPage from "../Pages/AccountingDashboardPage";
+import HRPage from "../Pages/HRPage";
 import TrainingEventCreate from "./TrainingOpportunities/TrainingEvents/TrainingEventCreate";
 import TrainingEventEdit from "./TrainingOpportunities/TrainingEvents/TrainingEventEdit";
 import TrainingEventView from "./TrainingOpportunities/TrainingEvents/TrainingEventView";
@@ -110,10 +113,11 @@ function PageRoutes() {
           <Routes>
             <Route path="home" element={<Navigate to="/analytics" replace />} />
             <Route path="dashboard" element={<Navigate to="/analytics" replace />} />
-            <Route path="hr" element={<Navigate to="/users" replace />} />
+            <Route path="hr" element={<HRPage />} />
             <Route path="accounting" element={<AccountingDashboardPage />} />
             <Route path="accounting/fee-structures/create" element={<CurriculumFeeStructureCreate />} />
             <Route path="exam" element={<ExamManagementPage />} />
+            <Route path="exam/:examId/submissions" element={<ExamSubmissionsPage />} />
             <Route path="blogs" element={<Blogs />} />
             <Route path="blogs/create" element={<BlogCreate />} />
             <Route path="blogs/:id" element={<BlogView />} />
@@ -156,6 +160,7 @@ function PageRoutes() {
             <Route path="elimu-plus/teachers/create" element={<ElimuPlusTeacherCreate />} />
             <Route path="elimu-plus/teachers/:teacherId" element={<ElimuPlusTeacherDetail />} />
             <Route path="elimu-plus/students/create" element={<ElimuPlusStudentCreate />} />
+            <Route path="elimu-plus/students/:studentId/edit" element={<ElimuPlusStudentEdit />} />
             <Route path="elimu-plus" element={<ElimuPlusSchoolProfile />} />
             <Route path="users/create" element={<UsersCreate />} />
             <Route path="users" element={<UsersTable />} />

@@ -1,0 +1,427 @@
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Paper,
+  Stack,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Tabs,
+  TextField,
+  Typography,
+} from "@mui/material";
+import BadgeIcon from "@mui/icons-material/Badge";
+import SchoolIcon from "@mui/icons-material/School";
+import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import RadioButtonUncheckedRoundedIcon from "@mui/icons-material/RadioButtonUncheckedRounded";
+import DownloadIcon from "@mui/icons-material/Download";
+
+const accent = "#DC2626";
+const accentDark = "#B91C1C";
+
+const fullMainBleedSx = (theme) => ({
+  width: `calc(100% + ${theme.spacing(6)})`,
+  maxWidth: "none",
+  marginLeft: theme.spacing(-3),
+  marginRight: theme.spacing(-3),
+  marginTop: "1px",
+  marginBottom: "1px",
+  boxSizing: "border-box",
+});
+
+function todayIso() {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+function fmtTime(v) {
+  const s = String(v || "").trim();
+  return s.length >= 5 ? s.slice(0, 5) : s || "—";
+}
+
+function escapeCsv(value) {
+  const raw = value == null ? "" : String(value);
+  if (/[",\n]/.test(raw)) return `"${raw.replace(/"/g, '""')}"`;
+  return raw;
+}
+
+export default function HRPage() {
+  const [tab, setTab] = useState(0);
+  const [scope, setScope] = useState("lessons");
+  const [date, setDate] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [teachers, setTeachers] = useState([]);
+  const [students, setStudents] = useState([]);
+
+  const load = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setError("Please sign in again.");
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams();
+      if (date) params.set("date", date);
+      params.set("scope", scope);
+      const query = params.toString() ? `?${params.toString()}` : "";
+      const res = await fetch(`/api/reports/hr-attendance-overview${query}`, {
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.message || "Could not load HR attendance.");
+      const data = json.data || {};
+      setTeachers(Array.isArray(data.teacher_attendance) ? data.teacher_attendance : []);
+      setStudents(Array.isArray(data.student_attendance) ? data.student_attendance : []);
+    } catch (e) {
+      setError(e.message || "Could not load HR attendance.");
+      setTeachers([]);
+      setStudents([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [date, scope]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const stats = useMemo(() => {
+    const teacherAttended = teachers.filter((x) => x.teacher_attended).length;
+    const studentAttended = students.filter((x) => x.status === "Attended").length;
+    return {
+      teacherTotal: teachers.length,
+      teacherAttended,
+      studentTotal: students.length,
+      studentAttended,
+    };
+  }, [teachers, students]);
+
+  const exportAttendanceCsv = () => {
+    const combinedHeader = [
+      "Record Type",
+      "Date",
+      "Curriculum",
+      "Class",
+      scope === "exams" ? "Exam" : "Subject",
+      "Teacher",
+      "Student",
+      "Admission",
+      "Start",
+      "End",
+      "Join Time",
+      "Leave Time",
+      "Duration Minutes",
+      "Attendance",
+    ];
+
+    const teacherRows = teachers.map((r) => [
+      "Teacher",
+      r.lesson_date || date || "",
+      r.curriculum?.name || "",
+      r.curriculum_class?.name || "",
+      scope === "exams" ? r.exam?.title || "" : r.subject?.name || "",
+      r.teacher?.user?.full_name || r.teacher?.user?.username || "Unassigned",
+      "",
+      "",
+      fmtTime(r.starts_at),
+      fmtTime(r.ends_at),
+      "",
+      "",
+      "",
+      r.teacher_attended ? "Attended" : "Pending",
+    ]);
+
+    const studentRows = students.map((r) => [
+      "Student",
+      r.lesson?.lesson_date || date || "",
+      r.lesson?.timetable?.curriculum_class?.curriculum?.name || "",
+      r.lesson?.timetable?.curriculum_class?.name || "",
+      scope === "exams" ? r.exam_schedule?.exam?.title || "" : r.lesson?.curriculum_subject?.name || "",
+      "",
+      r.student?.user?.full_name || r.student?.user?.username || "",
+      r.student?.admission_number || "",
+      fmtTime(r.lesson?.starts_at),
+      fmtTime(r.lesson?.ends_at),
+      r.join_time ? new Date(r.join_time).toLocaleString() : "",
+      r.leave_time ? new Date(r.leave_time).toLocaleString() : "",
+      r.duration_minutes != null ? r.duration_minutes : "",
+      r.status || "Pending",
+    ]);
+
+    const combinedRows = [...teacherRows, ...studentRows];
+    const lines = [
+      combinedHeader.map(escapeCsv).join(","),
+      ...combinedRows.map((row) => row.map(escapeCsv).join(",")),
+    ];
+    const csv = lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `hr-attendance-${date || "all-dates"}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <Box
+      sx={(theme) => ({
+        ...fullMainBleedSx(theme),
+        /** Match Users page top offset under fixed navbar. */
+        marginTop: theme.spacing(-2.5),
+        minHeight: "100%",
+        background: "linear-gradient(180deg, #FEF2F2 0%, #fff 45%)",
+        overflow: "hidden",
+      })}
+    >
+      <Box
+        sx={{
+          background: `linear-gradient(135deg, ${accentDark} 0%, ${accent} 60%, #EF4444 100%)`,
+          color: "#fff",
+          px: { xs: 2, sm: 3 },
+          py: { xs: 1.25, sm: 1.5 },
+        }}
+      >
+        <Typography variant="overline" sx={{ letterSpacing: 1 }}>
+          Human Resources
+        </Typography>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>
+          HR Dashboard
+        </Typography>
+        <Typography variant="body2" sx={{ opacity: 0.9 }}>
+          Track teacher and student attendance from timetable lessons.
+        </Typography>
+      </Box>
+
+      <Box sx={{ px: { xs: 2, sm: 3 }, pb: 4, pt: { xs: 1.25, sm: 1.5 } }}>
+        <Paper elevation={0} sx={{ border: "1px solid #fecaca", borderRadius: 2, mb: 2 }}>
+          <Tabs
+            value={tab}
+            onChange={(_, v) => setTab(v)}
+            sx={{
+              px: 1,
+              "& .MuiTab-root": { textTransform: "none", fontWeight: 700 },
+              "& .MuiTabs-indicator": { bgcolor: accent },
+            }}
+          >
+            <Tab label="Attendance" />
+            <Tab label="Leave & Payroll (coming soon)" />
+          </Tabs>
+        </Paper>
+
+        {tab === 0 ? (
+          <Stack spacing={2}>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1.25}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              justifyContent="flex-end"
+            >
+              <Stack direction="row" spacing={1} sx={{ mr: { sm: "auto" } }}>
+                <Chip
+                  clickable
+                  label="Lessons"
+                  color={scope === "lessons" ? "error" : "default"}
+                  variant={scope === "lessons" ? "filled" : "outlined"}
+                  onClick={() => setScope("lessons")}
+                />
+                <Chip
+                  clickable
+                  label="Exams"
+                  color={scope === "exams" ? "error" : "default"}
+                  variant={scope === "exams" ? "filled" : "outlined"}
+                  onClick={() => setScope("exams")}
+                />
+              </Stack>
+              <TextField
+                label="Date"
+                type="date"
+                size="small"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                sx={{
+                  width: { xs: "100%", sm: 180 },
+                  "& .MuiInputBase-root": { height: 36 },
+                }}
+              />
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setDate(todayIso())}
+                sx={{ textTransform: "none", fontWeight: 700, borderColor: "#fecaca", color: accentDark, height: 36 }}
+              >
+                Today
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setDate("")}
+                sx={{ textTransform: "none", fontWeight: 700, borderColor: "#fecaca", color: accentDark, height: 36 }}
+              >
+                All dates
+              </Button>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<DownloadIcon />}
+                onClick={exportAttendanceCsv}
+                sx={{ textTransform: "none", fontWeight: 700, bgcolor: accent, height: 36, "&:hover": { bgcolor: accentDark } }}
+              >
+                Export CSV
+              </Button>
+            </Stack>
+
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+              <Card sx={{ flex: 1, border: "1px solid #fecaca" }}>
+                <CardContent>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <BadgeIcon sx={{ color: accent }} />
+                    <Typography sx={{ fontWeight: 700 }}>
+                      Teacher Attendance ({scope === "exams" ? "Exams" : "Lessons"})
+                    </Typography>
+                  </Stack>
+                  <Typography variant="h5" sx={{ fontWeight: 800, mt: 1 }}>
+                    {stats.teacherAttended}/{stats.teacherTotal}
+                  </Typography>
+                </CardContent>
+              </Card>
+              <Card sx={{ flex: 1, border: "1px solid #fecaca" }}>
+                <CardContent>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <SchoolIcon sx={{ color: accent }} />
+                    <Typography sx={{ fontWeight: 700 }}>
+                      Student Attendance ({scope === "exams" ? "Exams" : "Lessons"})
+                    </Typography>
+                  </Stack>
+                  <Typography variant="h5" sx={{ fontWeight: 800, mt: 1 }}>
+                    {stats.studentAttended}/{stats.studentTotal}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Stack>
+
+            {error ? <Alert severity="error">{error}</Alert> : null}
+
+            {loading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
+                <CircularProgress sx={{ color: accent }} />
+              </Box>
+            ) : (
+              <>
+                <Paper elevation={0} sx={{ border: "1px solid #fecaca", borderRadius: 2, overflow: "hidden" }}>
+                  <Box sx={{ px: 2, py: 1.25, borderBottom: "1px solid #fecaca", bgcolor: "#fff7f7" }}>
+                    <Typography sx={{ fontWeight: 800 }}>Teachers</Typography>
+                  </Box>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>No.</TableCell>
+                        <TableCell>Curriculum</TableCell>
+                        <TableCell>Class</TableCell>
+                        <TableCell>{scope === "exams" ? "Exam" : "Subject"}</TableCell>
+                        <TableCell>Teacher</TableCell>
+                        <TableCell>Time</TableCell>
+                        <TableCell align="center">Attendance</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {teachers.map((r, idx) => (
+                        <TableRow key={r.lesson_id || idx} hover>
+                          <TableCell>{idx + 1}</TableCell>
+                          <TableCell>{r.curriculum?.name || "—"}</TableCell>
+                          <TableCell>{r.curriculum_class?.name || "—"}</TableCell>
+                          <TableCell>{scope === "exams" ? r.exam?.title || "—" : r.subject?.name || "—"}</TableCell>
+                          <TableCell>{r.teacher?.user?.full_name || r.teacher?.user?.username || "Unassigned"}</TableCell>
+                          <TableCell>
+                            {r.starts_at ? new Date(r.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"} -{" "}
+                            {r.ends_at ? new Date(r.ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
+                          </TableCell>
+                          <TableCell align="center">
+                            <Chip
+                              size="small"
+                              label={r.teacher_attended ? "Attended" : "Pending"}
+                              color={r.teacher_attended ? "success" : "default"}
+                              icon={r.teacher_attended ? <CheckCircleRoundedIcon fontSize="small" /> : <RadioButtonUncheckedRoundedIcon fontSize="small" />}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Paper>
+
+                <Paper elevation={0} sx={{ border: "1px solid #fecaca", borderRadius: 2, overflow: "hidden" }}>
+                  <Box sx={{ px: 2, py: 1.25, borderBottom: "1px solid #fecaca", bgcolor: "#fff7f7" }}>
+                    <Typography sx={{ fontWeight: 800 }}>Students</Typography>
+                  </Box>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>No.</TableCell>
+                        <TableCell>Student</TableCell>
+                        <TableCell>Admission</TableCell>
+                        <TableCell>{scope === "exams" ? "Exam" : "Subject"}</TableCell>
+                        <TableCell>Class</TableCell>
+                        <TableCell>Joined</TableCell>
+                        <TableCell align="center">Attendance</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {students.map((r, idx) => (
+                        <TableRow key={r.attendance_id || idx} hover>
+                          <TableCell>{idx + 1}</TableCell>
+                          <TableCell>{r.student?.user?.full_name || r.student?.user?.username || "—"}</TableCell>
+                          <TableCell>{r.student?.admission_number || "—"}</TableCell>
+                          <TableCell>{scope === "exams" ? r.exam_schedule?.exam?.title || "—" : r.lesson?.curriculum_subject?.name || "—"}</TableCell>
+                          <TableCell>
+                            {scope === "exams"
+                              ? r.exam_schedule?.curriculum_class?.name || "—"
+                              : r.lesson?.timetable?.curriculum_class?.name || "—"}
+                          </TableCell>
+                          <TableCell>{r.join_time ? new Date(r.join_time).toLocaleTimeString() : "—"}</TableCell>
+                          <TableCell align="center">
+                            <Chip
+                              size="small"
+                              label={r.status || "Pending"}
+                              color={r.status === "Attended" ? "success" : "default"}
+                              icon={r.status === "Attended" ? <CheckCircleRoundedIcon fontSize="small" /> : <RadioButtonUncheckedRoundedIcon fontSize="small" />}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Paper>
+              </>
+            )}
+          </Stack>
+        ) : (
+          <Alert severity="info">Leave, payroll, and HR policies tabs can be added next.</Alert>
+        )}
+      </Box>
+    </Box>
+  );
+}
+

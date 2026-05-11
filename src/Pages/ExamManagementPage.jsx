@@ -2,8 +2,10 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box, Button, Stack, Tab, Tabs, Typography } from "@mui/material";
 import QuizOutlined from "@mui/icons-material/QuizOutlined";
+import AddIcon from "@mui/icons-material/Add";
 import ExamTemplatesTab from "../components/Exams/ExamTemplatesTab";
 import ExamsTab from "../components/Exams/ExamsTab";
+import ExamProctorMonitorTab from "../components/Exams/ExamProctorMonitorTab";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
@@ -24,6 +26,14 @@ const fullMainBleedSx = (theme) => ({
 export default function ExamManagementPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
+  const isCreateTab = tab === 0 || tab === 1;
+  const actionLabel = tab === 0 ? "Create template" : tab === 1 ? "Create exam" : "";
+
+  const onHeaderCreate = () => {
+    if (!isCreateTab) return;
+    const eventName = tab === 0 ? "exam-templates:create" : "exams:create";
+    window.dispatchEvent(new CustomEvent(eventName));
+  };
 
   return (
     <Box sx={(theme) => ({ ...fullMainBleedSx(theme) })}>
@@ -49,6 +59,21 @@ export default function ExamManagementPage() {
               Manage exam templates and created exams.
             </Typography>
           </Box>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={onHeaderCreate}
+            sx={{
+              bgcolor: "#fff",
+              color: accentDark,
+              fontWeight: 700,
+              whiteSpace: "nowrap",
+              "&:hover": { bgcolor: "#fee2e2" },
+              display: isCreateTab ? "inline-flex" : "none",
+            }}
+          >
+            {actionLabel}
+          </Button>
         </Stack>
       </Box>
 
@@ -82,9 +107,10 @@ export default function ExamManagementPage() {
         >
           <Tab label="Exam templates" />
           <Tab label="Exam" />
+          <Tab label="Proctor monitor" />
         </Tabs>
 
-        {tab === 0 ? <ExamTemplatesTab /> : <ExamsTab />}
+        {tab === 0 ? <ExamTemplatesTab /> : tab === 1 ? <ExamsTab /> : <ExamProctorMonitorTab />}
       </Box>
     </Box>
   );

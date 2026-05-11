@@ -23,7 +23,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon, Visibility as VisibilityIcon } from "@mui/icons-material";
+import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon, Visibility as VisibilityIcon, ArrowBack as ArrowBackIcon, ContentCopy as ContentCopyIcon } from "@mui/icons-material";
 import Swal from "sweetalert2";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -80,14 +80,26 @@ export default function ExamTemplatesTab() {
   const elements = useMemo(() => pages[currentPage]?.elements || [], [pages, currentPage]);
 
   const selected = useMemo(() => elements.find((e) => e.id === selectedId) || null, [elements, selectedId]);
+  const boundCurriculumId = useMemo(() => {
+    const allElements = pages.flatMap((p) => (Array.isArray(p?.elements) ? p.elements : []));
+    const curriculumField = allElements.find((el) => el?.type === "curriculum");
+    return curriculumField?.bind_id ? String(curriculumField.bind_id) : "";
+  }, [pages]);
+
   const dbOptions = useMemo(() => {
     if (!selected) return [];
     if (selected.type === "curriculum") return curricula;
-    if (selected.type === "class") return classes;
+    if (selected.type === "class") {
+      if (!boundCurriculumId) return [];
+      return classes.filter((c) => String(c.curriculum_id || c.curriculum?.id || "") === String(boundCurriculumId));
+    }
     if (selected.type === "term") return levels;
-    if (selected.type === "subject") return subjects;
+    if (selected.type === "subject") {
+      if (!boundCurriculumId) return [];
+      return subjects.filter((s) => String(s.curriculum_id || s.curriculum?.id || "") === String(boundCurriculumId));
+    }
     return [];
-  }, [selected, curricula, classes, levels, subjects]);
+  }, [selected, curricula, classes, levels, subjects, boundCurriculumId]);
 
   const loadTemplates = async () => {
     const token = localStorage.getItem("token");
@@ -116,6 +128,14 @@ export default function ExamTemplatesTab() {
   }, []);
 
   useEffect(() => {
+    const onCreateFromHeader = () => {
+      startCreate();
+    };
+    window.addEventListener("exam-templates:create", onCreateFromHeader);
+    return () => window.removeEventListener("exam-templates:create", onCreateFromHeader);
+  }, []);
+
+  useEffect(() => {
     const loadData = async () => {
       const token = localStorage.getItem("token");
       if (!token) return;
@@ -135,9 +155,27 @@ export default function ExamTemplatesTab() {
           schRes.json().catch(() => ({})),
         ]);
         setCurricula(Array.isArray(curJson.data) ? curJson.data.map((x) => ({ id: x.id, name: x.name })) : []);
-        setClasses(Array.isArray(clsJson.data) ? clsJson.data.map((x) => ({ id: x.id, name: x.name })) : []);
+        setClasses(
+          Array.isArray(clsJson.data)
+            ? clsJson.data.map((x) => ({
+                id: x.id,
+                name: x.name,
+                curriculum_id: x.curriculum_id || x.curriculum?.id || null,
+                curriculum: x.curriculum || null,
+              }))
+            : []
+        );
         setLevels(Array.isArray(lvlJson.data) ? lvlJson.data.map((x) => ({ id: x.id, name: x.name })) : []);
-        setSubjects(Array.isArray(subJson.data) ? subJson.data.map((x) => ({ id: x.id, name: x.name })) : []);
+        setSubjects(
+          Array.isArray(subJson.data)
+            ? subJson.data.map((x) => ({
+                id: x.id,
+                name: x.name,
+                curriculum_id: x.curriculum_id || x.curriculum?.id || null,
+                curriculum: x.curriculum || null,
+              }))
+            : []
+        );
         setSchoolProfile(schRes.ok && schJson.success ? schJson.data || null : null);
       } catch {
         // optional dataset
@@ -228,6 +266,53 @@ export default function ExamTemplatesTab() {
       await Swal.fire({ icon: "error", title: "Name required", text: "Template name is required." });
       return;
     }
+    const allElements = pages.flatMap((p) => (Array.isArray(p?.elements) ? p.elements : []));
+    const curriculumField = allElements.find((el) => el?.type === "curriculum");
+    const selectedCurriculumId = curriculumField?.bind_id ? String(curriculumField.bind_id) : "";
+    const boundClassFields = allElements.filter((el) => el?.type === "class" && el?.bind_id);
+    const boundSubjectFields = allElements.filter((el) => el?.type === "subject" && el?.bind_id);
+    if ((boundClassFields.length || boundSubjectFields.length) && !selectedCurriculumId) {
+      await Swal.fire({
+        icon: "error",
+        title: "Curriculum required",
+        text: "Bind curriculum first before binding class or subject fields.",
+      });
+      return;
+    }
+    if (selectedCurriculumId) {
+      const invalidClass = boundClassFields.find(
+        (el) =>
+          !classes.some(
+            (c) =>
+              String(c.id) === String(el.bind_id) &&
+              String(c.curriculum_id || c.curriculum?.id || "") === selectedCurriculumId
+          )
+      );
+      if (invalidClass) {
+        await Swal.fire({
+          icon: "error",
+          title: "Invalid class binding",
+          text: "One or more bound classes do not belong to the selected curriculum.",
+        });
+        return;
+      }
+      const invalidSubject = boundSubjectFields.find(
+        (el) =>
+          !subjects.some(
+            (s) =>
+              String(s.id) === String(el.bind_id) &&
+              String(s.curriculum_id || s.curriculum?.id || "") === selectedCurriculumId
+          )
+      );
+      if (invalidSubject) {
+        await Swal.fire({
+          icon: "error",
+          title: "Invalid subject binding",
+          text: "One or more bound subjects do not belong to the selected curriculum.",
+        });
+        return;
+      }
+    }
     setSaving(true);
     try {
       const body = {
@@ -287,6 +372,33 @@ export default function ExamTemplatesTab() {
     }
     await loadTemplates();
     if (editingId === row.id) resetDesigner();
+  };
+
+  const duplicateTemplate = async (row) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/exam-templates/${row.id}/duplicate`, {
+        method: "POST",
+        headers: authHeaders(token),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.message || "Could not duplicate template.");
+      await loadTemplates();
+      await Swal.fire({
+        icon: "success",
+        title: "Template duplicated",
+        text: `${row.name || "Template"} copied successfully.`,
+        timer: 1200,
+        showConfirmButton: false,
+      });
+    } catch (e) {
+      await Swal.fire({
+        icon: "error",
+        title: "Duplicate failed",
+        text: e.message || "Could not duplicate template.",
+      });
+    }
   };
 
   const updateSelected = (patch) => {
@@ -370,6 +482,36 @@ export default function ExamTemplatesTab() {
     if (/^https?:\/\//i.test(raw)) return raw;
     return raw.startsWith("/") ? raw : `/${raw}`;
   }, [schoolProfile]);
+
+  const getTemplateCurriculum = (row) => {
+    const pages = Array.isArray(row?.layout_json?.pages)
+      ? row.layout_json.pages
+      : [{ elements: Array.isArray(row?.layout_json?.elements) ? row.layout_json.elements : [] }];
+    const elementsInTemplate = pages.flatMap((p) => (Array.isArray(p?.elements) ? p.elements : []));
+    const curriculumField = elementsInTemplate.find((el) => el?.type === "curriculum");
+    if (!curriculumField) return "—";
+    if (curriculumField.bind_id) {
+      const found = curricula.find((c) => String(c.id) === String(curriculumField.bind_id));
+      if (found?.name) return found.name;
+    }
+    const fallback = String(curriculumField.label || "").trim();
+    return fallback || "—";
+  };
+
+  const getTemplateSubject = (row) => {
+    const pages = Array.isArray(row?.layout_json?.pages)
+      ? row.layout_json.pages
+      : [{ elements: Array.isArray(row?.layout_json?.elements) ? row.layout_json.elements : [] }];
+    const elementsInTemplate = pages.flatMap((p) => (Array.isArray(p?.elements) ? p.elements : []));
+    const subjectField = elementsInTemplate.find((el) => el?.type === "subject");
+    if (!subjectField) return "—";
+    if (subjectField.bind_id) {
+      const found = subjects.find((s) => String(s.id) === String(subjectField.bind_id));
+      if (found?.name) return found.name;
+    }
+    const fallback = String(subjectField.label || "").trim();
+    return fallback || "—";
+  };
 
   const getLayoutPages = (layoutJson) => {
     if (Array.isArray(layoutJson?.pages) && layoutJson.pages.length > 0) return layoutJson.pages;
@@ -462,11 +604,8 @@ ${imageParts}--${boundary}--`;
     return (
       <Stack spacing={2}>
         {error ? <Alert severity="error">{error}</Alert> : null}
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ width: "100%" }}>
           <Typography sx={{ fontWeight: 800 }}>Exam templates</Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={startCreate} sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark } }}>
-            Create template
-          </Button>
         </Stack>
         <Card elevation={0} sx={{ border: "1px solid #fecaca" }}>
           <CardContent>
@@ -482,6 +621,8 @@ ${imageParts}--${boundary}--`;
                   <TableRow>
                     <TableCell width={72}>No</TableCell>
                     <TableCell>Name</TableCell>
+                    <TableCell>Curriculum</TableCell>
+                    <TableCell>Subject</TableCell>
                     <TableCell align="right">Action</TableCell>
                   </TableRow>
                 </TableHead>
@@ -490,12 +631,17 @@ ${imageParts}--${boundary}--`;
                     <TableRow key={r.id} hover>
                       <TableCell sx={{ color: "text.secondary" }}>{idx + 1}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{r.name}</TableCell>
+                      <TableCell>{getTemplateCurriculum(r)}</TableCell>
+                      <TableCell>{getTemplateSubject(r)}</TableCell>
                       <TableCell align="right">
                         <IconButton size="small" onClick={() => setViewRow(r)}>
                           <VisibilityIcon fontSize="small" />
                         </IconButton>
                         <IconButton size="small" onClick={() => openTemplate(r)}>
                           <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" title="Duplicate template" onClick={() => void duplicateTemplate(r)}>
+                          <ContentCopyIcon fontSize="small" />
                         </IconButton>
                         <IconButton size="small" color="error" onClick={() => void removeTemplate(r)}>
                           <DeleteIcon fontSize="small" />
@@ -571,8 +717,8 @@ ${imageParts}--${boundary}--`;
       {error ? <Alert severity="error">{error}</Alert> : null}
       <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap" }}>
         <TextField label="Template name" value={templateName} onChange={(e) => setTemplateName(e.target.value)} size="small" sx={{ minWidth: 240, flex: 1 }} />
-        <Button variant="outlined" onClick={() => setMode("list")} sx={{ whiteSpace: "nowrap" }}>
-          Templates
+        <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => setMode("list")} sx={{ whiteSpace: "nowrap" }}>
+          Back
         </Button>
         <Button variant="outlined" onClick={resetDesigner} sx={{ whiteSpace: "nowrap" }}>
           New
@@ -633,7 +779,11 @@ ${imageParts}--${boundary}--`;
                     }}
                   >
                     <MenuItem value="">
-                      <em>Select from database</em>
+                      <em>
+                        {(selected.type === "class" || selected.type === "subject") && !boundCurriculumId
+                          ? "Select curriculum first"
+                          : "Select from database"}
+                      </em>
                     </MenuItem>
                     {dbOptions.map((o) => (
                       <MenuItem key={o.id} value={o.id}>

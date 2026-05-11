@@ -35,11 +35,13 @@ import {
   Visibility as ViewIcon,
   Edit as EditIcon,
   Close as CloseIcon,
+  Rule as RuleIcon,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
 import CurriculumClassesTab from "./CurriculumClassesTab";
 import CurriculumClassLevelsTab from "./CurriculumClassLevelsTab";
 import CurriculumSubjectsTab from "./CurriculumSubjectsTab";
+import CurriculumGradingSystemTab from "./CurriculumGradingSystemTab";
 
 const primaryRed = "#DC2626";
 const primaryDark = "#B91C1C";
@@ -75,6 +77,7 @@ export default function CurriculumTable() {
   const classesTabRef = useRef(null);
   const termsTabRef = useRef(null);
   const subjectsTabRef = useRef(null);
+  const gradingTabRef = useRef(null);
 
   const [pageTab, setPageTab] = useState(0);
   const [classesCurriculumId, setClassesCurriculumId] = useState("");
@@ -111,6 +114,7 @@ export default function CurriculumTable() {
     if (tab === "classes") setPageTab(1);
     else if (tab === "terms") setPageTab(2);
     else if (tab === "subjects") setPageTab(3);
+    else if (tab === "grading") setPageTab(4);
     else setPageTab(0);
     setClassesCurriculumId(cid);
     setTermsClassId(termsCls);
@@ -150,6 +154,12 @@ export default function CurriculumTable() {
         if (cid) next.set("curriculumId", cid);
         if (subCls) next.set("subjectClassId", subCls);
         if (subLvl) next.set("subjectLevelId", subLvl);
+        setSearchParams(next, { replace: true });
+        return;
+      }
+      if (tabIdx === 4) {
+        next.set("tab", "grading");
+        if (cid) next.set("curriculumId", cid);
         setSearchParams(next, { replace: true });
         return;
       }
@@ -415,6 +425,25 @@ export default function CurriculumTable() {
             >
               Add subject
             </Button>
+          ) : pageTab === 4 ? (
+            <Button
+              variant="contained"
+              startIcon={<RuleIcon />}
+              onClick={() => gradingTabRef.current?.openCreateDialog?.()}
+              sx={{
+                bgcolor: "rgba(255,255,255,0.95)",
+                color: primaryDark,
+                fontWeight: 700,
+                textTransform: "none",
+                borderRadius: 2,
+                px: 3,
+                py: 1.25,
+                boxShadow: "0 4px 14px rgba(0,0,0,0.15)",
+                "&:hover": { bgcolor: "#fff", color: primaryRed },
+              }}
+            >
+              Add grading config
+            </Button>
           ) : (
             <Button
               variant="contained"
@@ -461,6 +490,7 @@ export default function CurriculumTable() {
           <Tab icon={<SchoolIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Classes" />
           <Tab icon={<CalendarMonthIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Terms" />
           <Tab icon={<SubjectIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Subjects" />
+          <Tab icon={<RuleIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Grading system" />
         </Tabs>
 
         {error && (
@@ -485,6 +515,15 @@ export default function CurriculumTable() {
             filterClassId={subjectsClassFilterId}
             filterLevelId={subjectsLevelFilterId}
             onContextChange={handleSubjectsContextChange}
+          />
+        ) : pageTab === 4 ? (
+          <CurriculumGradingSystemTab
+            ref={gradingTabRef}
+            curriculumId={classesCurriculumId}
+            onCurriculumChange={(id) => {
+              setClassesCurriculumId(id || "");
+              syncTabUrl(4, { curriculumId: id || "" });
+            }}
           />
         ) : loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -113,6 +114,7 @@ function rowToForm(row) {
 }
 
 export default function ElimuPlusStudentsTab({ active }) {
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [curricula, setCurricula] = useState([]);
   const [allClasses, setAllClasses] = useState([]);
@@ -188,10 +190,9 @@ export default function ElimuPlusStudentsTab({ active }) {
   }, [profilePhotoFile]);
 
   const openEdit = (row) => {
-    setForm(rowToForm(row));
-    setProfilePhotoFile(null);
-    setDialogError(null);
-    setDialogOpen(true);
+    navigate(`/elimu-plus/students/${row.id}/edit`, {
+      state: { studentRow: row },
+    });
   };
 
   const handleDeleteStudent = async (row) => {
@@ -466,8 +467,8 @@ export default function ElimuPlusStudentsTab({ active }) {
         </TableContainer>
       )}
 
-      <Dialog open={!!viewRow} onClose={() => setViewRow(null)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
+      <Dialog open={!!viewRow} onClose={() => setViewRow(null)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800, pr: 6, bgcolor: "#fff5f5", borderBottom: `1px solid ${accentLight}` }}>
           Student details
           <IconButton aria-label="Close" onClick={() => setViewRow(null)} sx={{ position: "absolute", right: 8, top: 8 }}>
             <CloseIcon />
@@ -476,52 +477,65 @@ export default function ElimuPlusStudentsTab({ active }) {
         <DialogContent dividers>
           {viewRow ? (
             <Stack spacing={2}>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Avatar
-                  src={profilePhotoUrl(viewRow.profile_picture) || undefined}
-                  sx={{ width: 64, height: 64, bgcolor: `${accent}22`, color: accentDark, fontWeight: 700 }}
-                >
-                  {!profilePhotoUrl(viewRow.profile_picture) ? (viewRow.user?.full_name || "?").charAt(0).toUpperCase() : null}
-                </Avatar>
-                <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                    {viewRow.user?.full_name || viewRow.user?.username || "—"}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {viewRow.user?.email || "—"}
-                  </Typography>
-                </Box>
-              </Stack>
+              {(() => {
+                const vf = rowToForm(viewRow);
+                return (
+                  <>
+              <Box sx={{ p: 2, borderRadius: 2, background: `linear-gradient(135deg, ${accentDark} 0%, ${accent} 100%)`, color: "#fff" }}>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Avatar
+                    src={profilePhotoUrl(viewRow.profile_picture) || undefined}
+                    sx={{ width: 64, height: 64, bgcolor: "rgba(255,255,255,0.2)", color: "#fff", fontWeight: 700 }}
+                  >
+                    {!profilePhotoUrl(viewRow.profile_picture) ? (viewRow.user?.full_name || "?").charAt(0).toUpperCase() : null}
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                      {viewRow.user?.full_name || viewRow.user?.username || "—"}
+                    </Typography>
+                    <Typography variant="body2" sx={{ opacity: 0.92 }}>
+                      {viewRow.user?.email || "—"}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Box>
               <Divider />
-              <Stack spacing={0.5}>
-                <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                  Admission number
-                </Typography>
-                <Typography>{viewRow.admission_number ?? "—"}</Typography>
+              <Box sx={{ border: `1px solid ${accentLight}`, borderRadius: 2, p: 2, bgcolor: "#fff" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: accentDark, mb: 1 }}>
+                Account (user)
+              </Typography>
+              <Stack spacing={1.2}>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Full name</Typography><Typography>{vf.user_full_name || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Email</Typography><Typography>{vf.user_email || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Username</Typography><Typography>{vf.user_username || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Phone</Typography><Typography>{vf.user_phone || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Address</Typography><Typography>{vf.user_address || "—"}</Typography></Box>
               </Stack>
-              <Stack spacing={0.5}>
-                <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                  Curriculum
-                </Typography>
-                <Typography>{viewRow.curriculum?.name || "—"}</Typography>
+              </Box>
+              <Divider />
+              <Box sx={{ border: `1px solid ${accentLight}`, borderRadius: 2, p: 2, bgcolor: "#fff" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: accentDark, mb: 1 }}>
+                Student record
+              </Typography>
+              <Stack spacing={1.2}>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Admission number</Typography><Typography>{vf.admission_number || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Date of birth</Typography><Typography>{vf.date_of_birth || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Gender</Typography><Typography sx={{ textTransform: "capitalize" }}>{vf.gender || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Curriculum</Typography><Typography>{viewRow.curriculum?.name || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Class</Typography><Typography>{formatClassDisplay(viewRow.curriculum_class)}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Enrollment date</Typography><Typography>{vf.enrollment_date || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Graduation year</Typography><Typography>{vf.graduation_year || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Blood group</Typography><Typography>{vf.blood_group || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Medical conditions</Typography><Typography>{vf.medical_conditions || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Emergency contact name</Typography><Typography>{vf.emergency_contact_name || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Emergency contact phone</Typography><Typography>{vf.emergency_contact_phone || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Homeroom teacher</Typography><Typography>{vf.class_teacher_label || "—"}</Typography></Box>
+                <Box><Typography variant="caption" color="text.secondary" fontWeight={700}>Alumni</Typography><Typography>{vf.is_alumni ? "Yes" : "No"}</Typography></Box>
               </Stack>
-              <Stack spacing={0.5}>
-                <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                  Class
-                </Typography>
-                <Typography>{formatClassDisplay(viewRow.curriculum_class)}</Typography>
-              </Stack>
-              <Stack spacing={0.5}>
-                <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                  Homeroom teacher
-                </Typography>
-                <Typography>
-                  {viewRow.class_teacher?.user?.full_name ||
-                    viewRow.class_teacher?.user?.username ||
-                    viewRow.class_teacher?.user?.email ||
-                    "—"}
-                </Typography>
-              </Stack>
+              </Box>
+              </>
+                );
+              })()}
             </Stack>
           ) : null}
         </DialogContent>

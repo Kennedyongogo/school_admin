@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, Button, IconButton, Stack, Typography } from "@mui/material";
+import { Box, Button, CircularProgress, IconButton, Stack, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import QuizOutlined from "@mui/icons-material/QuizOutlined";
 import { format } from "date-fns";
@@ -16,6 +16,12 @@ const accent = "#DC2626";
 const accentDark = "#B91C1C";
 const backgroundLight = "#FEF2F2";
 
+const authHeaders = (token) => ({
+  Accept: "application/json",
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${token}`,
+});
+
 const fullMainBleedSx = (theme) => ({
   width: `calc(100% + ${theme.spacing(6)})`,
   maxWidth: "none",
@@ -28,21 +34,96 @@ const fullMainBleedSx = (theme) => ({
   background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
 });
 
-/** When online exam API exists, replace with fetched rows. */
-const PLACEHOLDER_EXAMS = [];
-
 export default function OnlineScheduledExamsPage() {
   const navigate = useNavigate();
   const todayIso = format(new Date(), "yyyy-MM-dd");
+  const [exams, setExams] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setExams([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const q = `from=${encodeURIComponent(todayIso)}&days=42&limit=60`;
+      const res = await fetch(`/api/exam-schedules/online-upcoming?${q}`, {
+        headers: authHeaders(token),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.message || "Could not load online exams");
+      setExams(Array.isArray(data.data) ? data.data : []);
+    } catch {
+      setExams([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [todayIso]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const toCardExam = (row) => {
+    const examTitle = row?.exam?.title || row?.exam?.name || "Online exam";
+    const cur = row?.curriculum;
+    const cc = row?.curriculum_class;
+    const level = row?.curriculum_class_level;
+    const teacher = row?.teacher?.user?.full_name || row?.teacher?.user?.username || "";
+    const start = row?.start_time ? new Date(row.start_time) : null;
+    const end = row?.end_time ? new Date(row.end_time) : null;
+    const timeLabel =
+      start && end
+        ? `${format(start, "yyyy-MM-dd HH:mm")} - ${format(end, "HH:mm")} (${row?.timezone || "UTC"})`
+        : "";
+
+    return {
+      id: row.id,
+      title: examTitle,
+      subtitle: [cur?.name && `Curriculum: ${cur.name}`, cc?.name && `Class: ${cc.name}`, level?.name && `Term: ${level.name}`]
+        .filter(Boolean)
+        .join(" · "),
+      slotLabel: [timeLabel, teacher ? `Teacher: ${teacher}` : "", row?.status ? `Status: ${row.status}` : ""]
+        .filter(Boolean)
+        .join(" · "),
+      _raw: row,
+    };
+  };
 
   const handleInitiateExam = (exam) => {
-    void Swal.fire({
-      icon: "info",
-      title: "Exam session",
-      text: "Session launch will connect here when online exams are scheduled in the system.",
-      confirmButtonColor: accent,
-    });
-    if (exam?.navigateTo) navigate(exam.navigateTo);
+    const scheduleId = exam?._raw?.id;
+    if (!scheduleId) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    void (async () => {
+      try {
+        const res = await fetch(`/api/exam-schedules/${scheduleId}/initiate-online`, {
+          method: "POST",
+          headers: authHeaders(token),
+          body: JSON.stringify({}),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.message || "Failed to initiate online exam");
+        await Swal.fire({
+          icon: "success",
+          title: "Online exam initiated",
+          text: "Exam session is now marked live.",
+          confirmButtonColor: accent,
+        });
+        await load();
+      } catch (error) {
+        void Swal.fire({
+          icon: "error",
+          title: "Could not initiate",
+          text: error?.message || "Please try again.",
+          confirmButtonColor: accent,
+        });
+      }
+    })();
   };
 
   return (
@@ -93,12 +174,15 @@ export default function OnlineScheduledExamsPage() {
           boxSizing: "border-box",
         }}
       >
-        {PLACEHOLDER_EXAMS.length === 0 ? (
+        {loading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+            <CircularProgress sx={{ color: accent }} />
+          </Box>
+        ) : exams.length === 0 ? (
           <EmptyListNotice>
             <Stack spacing={2}>
               <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.65 }}>
-                No online exams scheduled yet. When exam slots are stored, they will appear here in the same card layout
-                as lessons.
+                No online exams scheduled yet. Create exam schedules with proctoring/online setup to list them here.
               </Typography>
               <Button
                 variant="outlined"
@@ -112,11 +196,14 @@ export default function OnlineScheduledExamsPage() {
           </EmptyListNotice>
         ) : (
           <SessionsGrid>
-            {PLACEHOLDER_EXAMS.map((exam) => (
+            {exams.map((row) => {
+              const exam = toCardExam(row);
+              return (
               <SessionGridItem key={exam.id}>
                 <ExamOnlineCard exam={exam} onInitiate={handleInitiateExam} />
               </SessionGridItem>
-            ))}
+              );
+            })}
           </SessionsGrid>
         )}
       </Box>
