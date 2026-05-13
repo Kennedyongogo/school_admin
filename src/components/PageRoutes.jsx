@@ -26,6 +26,8 @@ import ElimuPlusSchoolProfileForm from "./SchoolProfile/ElimuPlusSchoolProfileFo
 import ElimuPlusStudentCreate from "./SchoolProfile/ElimuPlusStudentCreate";
 import ElimuPlusStudentEdit from "./SchoolProfile/ElimuPlusStudentEdit";
 import ElimuPlusTeacherCreate from "./SchoolProfile/ElimuPlusTeacherCreate";
+import ElimuPlusSchoolAdminCreate from "./SchoolProfile/ElimuPlusSchoolAdminCreate";
+import ElimuPlusSchoolAdminDetail from "./SchoolProfile/ElimuPlusSchoolAdminDetail";
 import ElimuPlusTeacherDetail from "./SchoolProfile/ElimuPlusTeacherDetail";
 import Analytics from "./Analytics/Analytics";
 import Audit from "./Audit/Audit";
@@ -159,6 +161,8 @@ function PageRoutes() {
             <Route path="elimu-plus/edit" element={<ElimuPlusSchoolProfileForm mode="edit" />} />
             <Route path="elimu-plus/teachers/create" element={<ElimuPlusTeacherCreate />} />
             <Route path="elimu-plus/teachers/:teacherId" element={<ElimuPlusTeacherDetail />} />
+            <Route path="elimu-plus/school-admins/create" element={<ElimuPlusSchoolAdminCreate />} />
+            <Route path="elimu-plus/school-admins/:id" element={<ElimuPlusSchoolAdminDetail />} />
             <Route path="elimu-plus/students/create" element={<ElimuPlusStudentCreate />} />
             <Route path="elimu-plus/students/:studentId/edit" element={<ElimuPlusStudentEdit />} />
             <Route path="elimu-plus" element={<ElimuPlusSchoolProfile />} />

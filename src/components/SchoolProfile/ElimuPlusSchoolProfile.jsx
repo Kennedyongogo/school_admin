@@ -36,6 +36,7 @@ import {
 import ElimuPlusDepartmentsTab from "./ElimuPlusDepartmentsTab";
 import ElimuPlusTeachersTab from "./ElimuPlusTeachersTab";
 import ElimuPlusStudentsTab from "./ElimuPlusStudentsTab";
+import ElimuPlusSchoolAdminsTab from "./ElimuPlusSchoolAdminsTab";
 
 const authHeaders = (token) => ({
   "Content-Type": "application/json",
@@ -206,7 +207,7 @@ export default function ElimuPlusSchoolProfile() {
 
   useEffect(() => {
     const t = location.state?.tab;
-    if (typeof t === "number" && t >= 0 && t <= 3) {
+    if (typeof t === "number" && t >= 0 && t <= 4) {
       setTab(t);
     }
   }, [location.state]);
@@ -270,6 +271,18 @@ export default function ElimuPlusSchoolProfile() {
           sx={headerButtonSx}
         >
           Create student
+        </Button>
+      );
+    }
+    if (tab === 4) {
+      return (
+        <Button
+          variant="contained"
+          startIcon={<PersonAddIcon />}
+          onClick={() => navigate("/elimu-plus/school-admins/create")}
+          sx={headerButtonSx}
+        >
+          Create school admin
         </Button>
       );
     }
@@ -342,6 +355,7 @@ export default function ElimuPlusSchoolProfile() {
             <Tab label="Department" disableRipple />
             <Tab label="Teachers" disableRipple />
             <Tab label="Students" disableRipple />
+            <Tab label="School Admin" disableRipple />
           </Tabs>
         </Stack>
       </Box>
@@ -516,6 +530,7 @@ export default function ElimuPlusSchoolProfile() {
         <ElimuPlusDepartmentsTab ref={deptPanelRef} active={tab === 1} />
         <ElimuPlusTeachersTab active={tab === 2} />
         <ElimuPlusStudentsTab active={tab === 3} />
+        <ElimuPlusSchoolAdminsTab active={tab === 4} />
       </Box>
     </Box>
   );
