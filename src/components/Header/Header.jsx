@@ -20,25 +20,7 @@ import UserAccount from "./userAccount";
 import EditUserDetails from "./editUserDetails";
 import ChangePassword from "./changePassword";
 import { useNavigate } from "react-router-dom";
-
-const LoadingScreen = () => (
-  <Box
-    sx={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100%",
-      height: "100%",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: "rgba(255, 255, 255, 1)",
-      zIndex: 1300, // Ensure it covers other components
-    }}
-  >
-    <CircularProgress />
-  </Box>
-);
+import BrandPageLoader from "../Util/BrandPageLoader";
 
 // Helper to build URL for uploaded assets using Vite proxy
 const buildImageUrl = (imageUrl) => {
@@ -136,7 +118,7 @@ export default function Header(props) {
 
   return (
     <>
-      {loading && <LoadingScreen />}
+      {loading && <BrandPageLoader message="Loading your account..." />}
       <Box
         sx={{
           display: "flex",

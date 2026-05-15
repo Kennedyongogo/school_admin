@@ -37,6 +37,8 @@ import ElimuPlusDepartmentsTab from "./ElimuPlusDepartmentsTab";
 import ElimuPlusTeachersTab from "./ElimuPlusTeachersTab";
 import ElimuPlusStudentsTab from "./ElimuPlusStudentsTab";
 import ElimuPlusSchoolAdminsTab from "./ElimuPlusSchoolAdminsTab";
+import ElimuPlusServicesTab from "./ElimuPlusServicesTab";
+import ElimuPlusReviewsTab from "./ElimuPlusReviewsTab";
 
 const authHeaders = (token) => ({
   "Content-Type": "application/json",
@@ -170,6 +172,7 @@ export default function ElimuPlusSchoolProfile() {
   const navigate = useNavigate();
   const location = useLocation();
   const deptPanelRef = useRef(null);
+  const servicesPanelRef = useRef(null);
   const [tab, setTab] = useState(0);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -207,7 +210,7 @@ export default function ElimuPlusSchoolProfile() {
 
   useEffect(() => {
     const t = location.state?.tab;
-    if (typeof t === "number" && t >= 0 && t <= 4) {
+    if (typeof t === "number" && t >= 0 && t <= 6) {
       setTab(t);
     }
   }, [location.state]);
@@ -286,6 +289,18 @@ export default function ElimuPlusSchoolProfile() {
         </Button>
       );
     }
+    if (tab === 5) {
+      return (
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => servicesPanelRef.current?.openCreateDialog()}
+          sx={headerButtonSx}
+        >
+          Add service
+        </Button>
+      );
+    }
     return null;
   };
 
@@ -356,6 +371,8 @@ export default function ElimuPlusSchoolProfile() {
             <Tab label="Teachers" disableRipple />
             <Tab label="Students" disableRipple />
             <Tab label="School Admin" disableRipple />
+            <Tab label="Services" disableRipple />
+            <Tab label="Reviews" disableRipple />
           </Tabs>
         </Stack>
       </Box>
@@ -531,6 +548,8 @@ export default function ElimuPlusSchoolProfile() {
         <ElimuPlusTeachersTab active={tab === 2} />
         <ElimuPlusStudentsTab active={tab === 3} />
         <ElimuPlusSchoolAdminsTab active={tab === 4} />
+        <ElimuPlusServicesTab ref={servicesPanelRef} active={tab === 5} />
+        <ElimuPlusReviewsTab active={tab === 6} />
       </Box>
     </Box>
   );

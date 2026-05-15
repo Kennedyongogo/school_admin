@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Route, Routes, Navigate } from "react-router-dom";
-import { Box, CircularProgress } from "@mui/material";
+import { Box } from "@mui/material";
+import BrandPageLoader from "./Util/BrandPageLoader";
 import Navbar from "./Navbar";
 import Settings from "../Pages/Settings";
 import NotFound from "../Pages/NotFound";
@@ -102,16 +103,7 @@ function PageRoutes() {
       <Navbar user={user} setUser={setUser} />
       <Box component="main" sx={{ flexGrow: 1, p: 3, mt: 9 }}>
         {loading ? (
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              height: "100vh",
-            }}
-          >
-            <CircularProgress />
-          </Box>
+          <BrandPageLoader />
         ) : (
           <Routes>
             <Route path="home" element={<Navigate to="/analytics" replace />} />
