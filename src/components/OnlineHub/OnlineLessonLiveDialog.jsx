@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -65,6 +66,7 @@ export default function OnlineLessonLiveDialog({
   onGoToDayTimetable,
   onLinksReady,
 }) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
   const [live, setLive] = useState(null);
@@ -125,8 +127,12 @@ export default function OnlineLessonLiveDialog({
       await loadTracking();
       if (cancelled) return;
     })();
+    const interval = setInterval(() => {
+      void loadTracking();
+    }, 15000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, [open, lessonId, loading, loadTracking]);
 
@@ -198,6 +204,9 @@ export default function OnlineLessonLiveDialog({
 
   const join = live?.join_url?.trim?.() ? String(live.join_url).trim() : "";
   const host = live?.host_url?.trim?.() ? String(live.host_url).trim() : join;
+  const isInAppVideo =
+    live?.id && (live?.platform === "webrtc" || live?.platform === "livekit");
+  const hostRoomPath = isInAppVideo ? `/live-class/${live.id}` : host;
 
   const copy = (text) => {
     void navigator.clipboard?.writeText(text).catch(() => {});
@@ -276,6 +285,19 @@ export default function OnlineLessonLiveDialog({
   const lc = trackPayload?.live_class;
   const attendances = lc?.live_attendances ?? lc?.liveAttendances ?? [];
   const recordings = lc?.recordings ?? [];
+
+  const formatAttendanceMinutes = (row) => {
+    if (row?.duration_minutes != null && Number.isFinite(Number(row.duration_minutes))) {
+      return String(row.duration_minutes);
+    }
+    if (!row?.join_time) return "—";
+    const joinMs = new Date(row.join_time).getTime();
+    if (Number.isNaN(joinMs)) return "—";
+    const endMs = row.leave_time ? new Date(row.leave_time).getTime() : Date.now();
+    if (Number.isNaN(endMs)) return "—";
+    const mins = Math.max(0, Math.round((endMs - joinMs) / 60000));
+    return row.leave_time ? String(mins) : `${mins} (in class)`;
+  };
 
   const rosterSection =
     curriculumClassId != null && String(curriculumClassId).trim() !== "" ? (
@@ -398,30 +420,59 @@ export default function OnlineLessonLiveDialog({
               }}
             />
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1} flexWrap="wrap" sx={{ alignSelf: "stretch" }}>
-              <Button
-                variant="contained"
-                href={host || "#"}
-                target="_self"
-                rel="noopener noreferrer"
-                disabled={!host}
-                sx={{ alignSelf: "flex-start" }}
-              >
-                Open host link here
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<OpenInNewRoundedIcon />}
-                href={host || "#"}
-                target="_blank"
-                rel="noopener noreferrer"
-                disabled={!host}
-                sx={{ alignSelf: "flex-start" }}
-              >
-                Open host link in new tab
-              </Button>
+              {isInAppVideo ? (
+                <>
+                  <Button
+                    variant="contained"
+                    disabled={!live?.id}
+                    sx={{ alignSelf: "flex-start" }}
+                    onClick={() => {
+                      onClose?.();
+                      navigate(hostRoomPath);
+                    }}
+                  >
+                    Start class (in-app video)
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<OpenInNewRoundedIcon />}
+                    disabled={!live?.id}
+                    sx={{ alignSelf: "flex-start" }}
+                    onClick={() => window.open(hostRoomPath, "_blank", "noopener,noreferrer")}
+                  >
+                    Open class in new tab
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="contained"
+                    href={host || "#"}
+                    target="_self"
+                    rel="noopener noreferrer"
+                    disabled={!host}
+                    sx={{ alignSelf: "flex-start" }}
+                  >
+                    Open host link here
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<OpenInNewRoundedIcon />}
+                    href={host || "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    disabled={!host}
+                    sx={{ alignSelf: "flex-start" }}
+                  >
+                    Open host link in new tab
+                  </Button>
+                </>
+              )}
             </Stack>
             <Typography variant="caption" color="text.secondary">
-              <strong>Open here</strong> uses this browser tab (your OS still opens Jitsi in the browser — use <strong>new tab</strong> if you want to keep the admin timetable open).
+              {isInAppVideo
+                ? "WebRTC in-app room — no Jitsi. Students join from their portal bell notification or Classes page."
+                : "External meeting link — share the join URL with your class."}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
               Student join link
@@ -467,10 +518,15 @@ export default function OnlineLessonLiveDialog({
                 Open join link in new tab
               </Button>
             </Stack>
-            <Typography variant="body2" color="text.secondary">
-              Rooms use free <strong>Jitsi Meet</strong> by default (no API keys). Share the join URL with your class. To disable Jitsi and use only manual URLs, set <code>JITSI_DISABLED=1</code> on the API server and configure{" "}
-              <code>ONLINE_MEETING_DEFAULT_JOIN_URL</code>.
-            </Typography>
+            {isInAppVideo ? (
+              <Typography variant="body2" color="text.secondary">
+                Student join link (portal): <strong>{join || "—"}</strong>
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Share the join URL with your class, or set <code>ONLINE_MEETING_PLATFORM=livekit</code> on the API for in-app video (recommended for large classes).
+              </Typography>
+            )}
 
             {curriculumClassId ? (
               <>
@@ -530,7 +586,7 @@ export default function OnlineLessonLiveDialog({
               </Button>
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.45 }}>
-              Rows appear when students open the meeting link from their portal notification (same join URL). Add a recording URL after class (Drive upload, JaaS link, etc.).
+              This list is <strong>portal attendance only</strong> — students who opened the in-app class from their portal (Classes page or notification). It is not the video roster above. Teachers joining from admin are not listed here. If a student sees a warning about attendance, their profile class may not match this lesson&apos;s class.
             </Typography>
             {trackLoading ? (
               <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
@@ -555,7 +611,9 @@ export default function OnlineLessonLiveDialog({
                   Students who joined (portal)
                 </Typography>
                 {attendances.length === 0 ? (
-                  <Alert severity="info">No portal joins recorded yet.</Alert>
+                  <Alert severity="info">
+                    No portal joins recorded yet. Ask students to use <strong>Join live class</strong> on their portal Classes page (not only the teacher video room). Refreshes every 15s while this dialog is open.
+                  </Alert>
                 ) : (
                   <TableContainer sx={{ maxHeight: 220, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
                     <Table size="small" stickyHeader>
@@ -577,9 +635,13 @@ export default function OnlineLessonLiveDialog({
                               {row.join_time ? new Date(row.join_time).toLocaleString() : "—"}
                             </TableCell>
                             <TableCell sx={{ whiteSpace: "nowrap" }}>
-                              {row.leave_time ? new Date(row.leave_time).toLocaleString() : "—"}
+                              {row.leave_time
+                                ? new Date(row.leave_time).toLocaleString()
+                                : row.join_time
+                                ? "In class"
+                                : "—"}
                             </TableCell>
-                            <TableCell>{row.duration_minutes != null ? row.duration_minutes : "—"}</TableCell>
+                            <TableCell>{formatAttendanceMinutes(row)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

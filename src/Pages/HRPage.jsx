@@ -24,6 +24,7 @@ import SchoolIcon from "@mui/icons-material/School";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import RadioButtonUncheckedRoundedIcon from "@mui/icons-material/RadioButtonUncheckedRounded";
 import DownloadIcon from "@mui/icons-material/Download";
+import HRAdmissionsTab from "../components/HR/HRAdmissionsTab";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
@@ -48,6 +49,16 @@ function todayIso() {
 function fmtTime(v) {
   const s = String(v || "").trim();
   return s.length >= 5 ? s.slice(0, 5) : s || "—";
+}
+
+function formatLessonSlot(lessonDate, startsAt, endsAt) {
+  const d = lessonDate ? String(lessonDate).slice(0, 10) : "";
+  const start = fmtTime(startsAt);
+  const end = fmtTime(endsAt);
+  if (d && start !== "—" && end !== "—") return `${d} · ${start}–${end}`;
+  if (d && start !== "—") return `${d} · ${start}`;
+  if (start !== "—" && end !== "—") return `${start}–${end}`;
+  return "—";
 }
 
 function escapeCsv(value) {
@@ -225,6 +236,7 @@ export default function HRPage() {
                 "& .MuiTabs-indicator": { bgcolor: accent },
               }}
             >
+              <Tab label="Admissions" />
               <Tab label="Attendance" />
               <Tab label="Parent & Student" />
               <Tab label="Leave & Payroll (coming soon)" />
@@ -232,6 +244,8 @@ export default function HRPage() {
         </Paper>
 
         {tab === 0 ? (
+          <HRAdmissionsTab />
+        ) : tab === 1 ? (
           <Stack spacing={2}>
             <Stack
               direction={{ xs: "column", sm: "row" }}
@@ -356,8 +370,7 @@ export default function HRPage() {
                           <TableCell>{scope === "exams" ? r.exam?.title || "—" : r.subject?.name || "—"}</TableCell>
                           <TableCell>{r.teacher?.user?.full_name || r.teacher?.user?.username || "Unassigned"}</TableCell>
                           <TableCell>
-                            {r.starts_at ? new Date(r.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"} -{" "}
-                            {r.ends_at ? new Date(r.ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
+                            {formatLessonSlot(r.lesson_date, r.starts_at, r.ends_at)}
                           </TableCell>
                           <TableCell align="center">
                             <Chip
@@ -386,6 +399,8 @@ export default function HRPage() {
                         <TableCell>{scope === "exams" ? "Exam" : "Subject"}</TableCell>
                         <TableCell>Class</TableCell>
                         <TableCell>Joined</TableCell>
+                        {scope === "lessons" ? <TableCell>Left</TableCell> : null}
+                        {scope === "lessons" ? <TableCell>Minutes</TableCell> : null}
                         <TableCell align="center">Attendance</TableCell>
                       </TableRow>
                     </TableHead>
@@ -401,7 +416,23 @@ export default function HRPage() {
                               ? r.exam_schedule?.curriculum_class?.name || "—"
                               : r.lesson?.timetable?.curriculum_class?.name || "—"}
                           </TableCell>
-                          <TableCell>{r.join_time ? new Date(r.join_time).toLocaleTimeString() : "—"}</TableCell>
+                          <TableCell sx={{ whiteSpace: "nowrap" }}>
+                            {r.join_time ? new Date(r.join_time).toLocaleString() : "—"}
+                          </TableCell>
+                          {scope === "lessons" ? (
+                            <TableCell sx={{ whiteSpace: "nowrap" }}>
+                              {r.leave_time ? new Date(r.leave_time).toLocaleString() : r.join_time ? "In class" : "—"}
+                            </TableCell>
+                          ) : null}
+                          {scope === "lessons" ? (
+                            <TableCell>
+                              {r.duration_minutes != null
+                                ? r.duration_minutes
+                                : r.join_time && !r.leave_time
+                                ? `${Math.max(0, Math.round((Date.now() - new Date(r.join_time)) / 60000))} (ongoing)`
+                                : "—"}
+                            </TableCell>
+                          ) : null}
                           <TableCell align="center">
                             <Chip
                               size="small"
@@ -418,7 +449,7 @@ export default function HRPage() {
               </>
             )}
           </Stack>
-        ) : tab === 1 ? (
+        ) : tab === 2 ? (
           <Alert severity="info">Parent & Student relationships and management features can be added here.</Alert>
         ) : (
           <Alert severity="info">Leave, payroll, and HR policies tabs can be added next.</Alert>
