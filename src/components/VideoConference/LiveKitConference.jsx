@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -8,7 +8,8 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { LiveKitRoom } from "@livekit/components-react";
+import { LiveKitRoom, useConnectionState, useRoomContext } from "@livekit/components-react";
+import { ConnectionState } from "livekit-client";
 import LiveKitVideoRoom from "./LiveKitVideoRoom";
 import "@livekit/components-styles";
 import { useSocket } from "../../hooks/useSocket";
@@ -32,6 +33,17 @@ async function fetchLiveKitToken(liveClassId, token) {
   return data.data;
 }
 
+function LiveKitConnectionTracker({ wasConnectedRef }) {
+  const room = useRoomContext();
+  const state = useConnectionState(room);
+  useEffect(() => {
+    if (state === ConnectionState.Connected) wasConnectedRef.current = true;
+  }, [state, wasConnectedRef]);
+  return null;
+}
+
+/** @typedef {'optional' | 'audio' | 'video'} LiveMediaMode */
+
 export default function LiveKitConference({
   token,
   liveClassId,
@@ -39,7 +51,11 @@ export default function LiveKitConference({
   role = "teacher",
   onLeave,
   showLobbyPanel = true,
+  /** From timetable: optional = no auto cam/mic; audio/video = try to enable on join (failures are non-blocking). */
+  mediaMode = "optional",
 }) {
+  const joinMedia =
+    mediaMode === "video" ? { audio: true, video: true } : mediaMode === "audio" ? { audio: true, video: false } : { audio: false, video: false };
   const [lkToken, setLkToken] = useState(null);
   const [serverUrl, setServerUrl] = useState("");
   const [loading, setLoading] = useState(true);
@@ -50,6 +66,8 @@ export default function LiveKitConference({
   const isTeacher = role === "teacher";
 
   const { socket, connected } = useSocket(token);
+  const intentionalLeaveRef = useRef(false);
+  const wasConnectedRef = useRef(false);
 
   useEffect(() => {
     if (!token || !liveClassId) return undefined;
@@ -74,6 +92,11 @@ export default function LiveKitConference({
   }, [token, liveClassId]);
 
   useEffect(() => {
+    wasConnectedRef.current = false;
+    intentionalLeaveRef.current = false;
+  }, [liveClassId, lkToken]);
+
+  useEffect(() => {
     if (!socket || !liveClassId) return undefined;
     const joinRoom = () => socket.emit("join:live-class", liveClassId);
     if (socket.connected) joinRoom();
@@ -84,9 +107,40 @@ export default function LiveKitConference({
     };
   }, [socket, liveClassId]);
 
+  const handleRequestLeave = useCallback(() => {
+    intentionalLeaveRef.current = true;
+  }, []);
+
   const handleDisconnected = useCallback(() => {
+    if (!intentionalLeaveRef.current) {
+      if (!wasConnectedRef.current) {
+        console.warn("LiveKit disconnected before session was established (ignored).");
+      } else {
+        console.warn("LiveKit disconnected unexpectedly.");
+      }
+      return;
+    }
+    intentionalLeaveRef.current = false;
     onLeave?.();
   }, [onLeave]);
+
+  const handleMediaDeviceFailure = useCallback((failure, kind) => {
+    // LiveKitRoom passes MediaDeviceFailure enum (e.g. "NotFound"), not a DOMException — do not call getFailure().
+    console.warn("LiveKit media device:", failure, kind);
+  }, []);
+
+  const handleRoomError = useCallback((err) => {
+    const msg = err?.message || "";
+    if (/device|permission|not found|in use/i.test(msg)) {
+      console.warn("LiveKit media (non-fatal):", msg);
+      return;
+    }
+    if (/client initiated|cancelled|canceled|abort/i.test(msg)) {
+      console.warn("LiveKit connection ended:", msg);
+      return;
+    }
+    setError(msg || "LiveKit connection error.");
+  }, []);
 
   const header = useMemo(
     () => (
@@ -138,7 +192,16 @@ export default function LiveKitConference({
           {error || "LiveKit is not available for this session."}
         </Alert>
         <Box sx={{ px: 2, pb: 2 }}>
-          <Controls micOn={false} camOn={false} onToggleMic={() => {}} onToggleCam={() => {}} onLeave={() => onLeave?.()} />
+          <Controls
+            micOn={false}
+            camOn={false}
+            onToggleMic={() => {}}
+            onToggleCam={() => {}}
+            onLeave={() => {
+              intentionalLeaveRef.current = true;
+              onLeave?.();
+            }}
+          />
         </Box>
       </Box>
     );
@@ -150,15 +213,18 @@ export default function LiveKitConference({
 
       <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         <LiveKitRoom
-          video
-          audio
+          video={joinMedia.video}
+          audio={joinMedia.audio}
           token={lkToken}
           serverUrl={serverUrl}
           connect
           onDisconnected={handleDisconnected}
+          onMediaDeviceFailure={handleMediaDeviceFailure}
+          onError={handleRoomError}
           data-lk-theme="default"
           style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
         >
+          <LiveKitConnectionTracker wasConnectedRef={wasConnectedRef} />
           <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <LiveClassHostLayout
               isTeacher={isTeacher}
@@ -189,7 +255,7 @@ export default function LiveKitConference({
               }
             />
           </Box>
-          <LiveKitMediaControls onLeave={handleDisconnected} />
+          <LiveKitMediaControls onRequestLeave={handleRequestLeave} />
         </LiveKitRoom>
       </Box>
     </Box>

@@ -34,7 +34,7 @@ export function statusChip(entry, nowMs) {
   }
   if (entry.status === "left") {
     const dur = durationLabel(entry, nowMs);
-    return { label: dur || "Left", color: "default" };
+    return { label: dur || "Left", color: "info", variant: "outlined" };
   }
   if (entry.status === "denied") return { label: "Denied", color: "error" };
   return null;

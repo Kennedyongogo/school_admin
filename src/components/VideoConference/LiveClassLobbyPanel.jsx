@@ -35,7 +35,25 @@ function formatTime(iso) {
   }
 }
 
+/** LiveKit theme can force white text; keep roster readable on light paper. */
+const rosterSurfaceSx = {
+  bgcolor: "background.paper",
+  color: "text.primary",
+  "& .MuiTypography-root:not(.MuiTypography-colorTextSecondary)": { color: "text.primary" },
+  "& .MuiTableCell-root": { color: "text.primary" },
+  "& .MuiTab-root": { color: "text.secondary" },
+  "& .MuiTab-root.Mui-selected": { color: "primary.main" },
+  "& .MuiTabs-indicator": { backgroundColor: "primary.main" },
+};
+
 function StatCard({ label, value, color = "default" }) {
+  const valueColor =
+    color === "default" || !color
+      ? "text.secondary"
+      : typeof color === "string" && color.startsWith("text.")
+      ? color
+      : `${color}.main`;
+
   return (
     <Box
       sx={{
@@ -48,7 +66,7 @@ function StatCard({ label, value, color = "default" }) {
         textAlign: "center",
       }}
     >
-      <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.2 }} color={`${color}.main`}>
+      <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.2, color: valueColor }}>
         {value}
       </Typography>
       <Typography variant="caption" color="text.secondary">
@@ -116,9 +134,9 @@ export default function LiveClassLobbyPanel({ liveClassId, token, socket, embedd
         borderColor: "divider",
         display: "flex",
         flexDirection: "column",
-        bgcolor: "background.paper",
         minHeight: 0,
         overflow: "hidden",
+        ...rosterSurfaceSx,
       }}
     >
       <Box sx={{ px: 1.5, py: 1, borderBottom: 1, borderColor: "divider", flexShrink: 0 }}>
@@ -169,7 +187,7 @@ export default function LiveClassLobbyPanel({ liveClassId, token, socket, embedd
             >
               <StatCard label="Waiting" value={stats.waiting ?? 0} color="warning" />
               <StatCard label="In class" value={stats.in_class ?? 0} color="success" />
-              <StatCard label="Left" value={stats.left_after_admit ?? 0} />
+              <StatCard label="Left" value={stats.left_after_admit ?? 0} color="text.secondary" />
               <StatCard label="Denied" value={stats.denied ?? 0} color="error" />
             </Stack>
 
@@ -237,14 +255,34 @@ export default function LiveClassLobbyPanel({ liveClassId, token, socket, embedd
                               size="small"
                               label={chip.label}
                               color={chip.color}
-                              variant={row.status === "admitted" ? "filled" : "outlined"}
-                              sx={{ mt: 0.25, height: 20, fontSize: "0.65rem", maxWidth: "100%" }}
+                              variant={chip.variant || (row.status === "admitted" ? "filled" : "outlined")}
+                              sx={{
+                                mt: 0.25,
+                                height: 20,
+                                fontSize: "0.65rem",
+                                maxWidth: "100%",
+                                ...(row.status === "left"
+                                  ? {
+                                      color: "info.main",
+                                      borderColor: "info.light",
+                                      "& .MuiChip-label": { color: "info.dark" },
+                                    }
+                                  : {}),
+                              }}
                             />
                           ) : null}
                         </TableCell>
                         <TableCell sx={{ whiteSpace: "nowrap", fontSize: "0.75rem" }}>
                           <Typography variant="caption" display="block">
-                            {row.status === "admitted" ? "Admitted" : row.status === "waiting" ? "Requested" : "—"}{" "}
+                            {row.status === "admitted"
+                              ? "Admitted"
+                              : row.status === "waiting"
+                              ? "Requested"
+                              : row.status === "left"
+                              ? "Left"
+                              : row.status === "denied"
+                              ? "Denied"
+                              : "—"}{" "}
                             {formatTime(
                               row.status === "admitted"
                                 ? row.admitted_at
@@ -253,8 +291,12 @@ export default function LiveClassLobbyPanel({ liveClassId, token, socket, embedd
                                 : row.requested_at
                             )}
                           </Typography>
-                          {row.status === "admitted" && durationLabel(row, now) ? (
-                            <Typography variant="caption" color="success.main" display="block">
+                          {durationLabel(row, now) ? (
+                            <Typography
+                              variant="caption"
+                              color={row.status === "left" ? "info.main" : "success.main"}
+                              display="block"
+                            >
                               {durationLabel(row, now)}
                             </Typography>
                           ) : null}

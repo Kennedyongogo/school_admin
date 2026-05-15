@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import {
   CarouselLayout,
-  ConnectionStateToast,
   FocusLayout,
   FocusLayoutContainer,
   GridLayout,
@@ -93,7 +92,6 @@ export default function LiveKitVideoRoom() {
         </div>
       </LayoutContextProvider>
       <RoomAudioRenderer />
-      <ConnectionStateToast />
     </div>
   );
 }

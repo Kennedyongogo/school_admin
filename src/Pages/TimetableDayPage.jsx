@@ -41,6 +41,7 @@ import ClassOutlinedIcon from "@mui/icons-material/ClassOutlined";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import MeetingRoomOutlinedIcon from "@mui/icons-material/MeetingRoomOutlined";
 import VideocamOutlinedIcon from "@mui/icons-material/VideocamOutlined";
+import MicRoundedIcon from "@mui/icons-material/MicRounded";
 import DrawRoundedIcon from "@mui/icons-material/DrawRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import RadioButtonUncheckedRoundedIcon from "@mui/icons-material/RadioButtonUncheckedRounded";
@@ -124,6 +125,26 @@ function formatTimeRange(start, end) {
   const b = fmt(end);
   if (a && b) return `${a} – ${b}`;
   return a || b || "—";
+}
+
+function formatLessonMediaMode(raw) {
+  const s = raw == null ? "optional" : String(raw).trim().toLowerCase();
+  if (s === "video") return "Video class — camera and microphone on when joining";
+  if (s === "audio") return "Audio class — microphone on when joining";
+  return "Optional — camera and microphone off until turned on";
+}
+
+function lessonMediaModeChipLabel(raw) {
+  const s = raw == null ? "optional" : String(raw).trim().toLowerCase();
+  if (s === "video") return "Video";
+  if (s === "audio") return "Audio";
+  return "Optional";
+}
+
+function lessonMediaModeIcon(raw) {
+  const s = raw == null ? "optional" : String(raw).trim().toLowerCase();
+  if (s === "audio") return <MicRoundedIcon fontSize="small" />;
+  return <VideocamOutlinedIcon fontSize="small" />;
 }
 
 function parseDbTime(val) {
@@ -261,6 +282,7 @@ export default function TimetableDayPage() {
     endTime: null,
     room: "",
     delivery_mode: "physical",
+    media_mode: "optional",
   });
 
   const parsed = useMemo(() => {
@@ -389,6 +411,7 @@ export default function TimetableDayPage() {
         endTime: parseDbTime(row.ends_at),
         room: row.room || "",
         delivery_mode: row.delivery_mode === "online" ? "online" : "physical",
+        media_mode: row.media_mode === "video" || row.media_mode === "audio" ? row.media_mode : "optional",
       });
       if (curriculumId && classId) {
         loadEditLookups(curriculumId, classId, sid);
@@ -455,6 +478,7 @@ export default function TimetableDayPage() {
         ends_at,
         room: editForm.room?.trim() || null,
         delivery_mode: editForm.delivery_mode === "online" ? "online" : "physical",
+        ...(editForm.delivery_mode === "online" ? { media_mode: editForm.media_mode || "optional" } : {}),
       };
       const res = await fetch(
         `/api/curricula/${curriculumId}/classes/${classId}/timetables/${timetableId}/lessons/${lessonId}`,
@@ -781,12 +805,22 @@ export default function TimetableDayPage() {
       dateLabel,
       attended,
       deliveryOnline: online,
+      mediaMode: online ? row.media_mode : null,
       tiles: [
         {
           icon: online ? <VideocamOutlinedIcon fontSize="small" /> : <MeetingRoomOutlinedIcon fontSize="small" />,
           label: "Delivery",
           value: online ? "Online class" : "Physical class",
         },
+        ...(online
+          ? [
+              {
+                icon: lessonMediaModeIcon(row.media_mode),
+                label: "Online media",
+                value: formatLessonMediaMode(row.media_mode),
+              },
+            ]
+          : []),
         {
           icon: <SchoolOutlinedIcon fontSize="small" />,
           label: "Curriculum",
@@ -1594,6 +1628,17 @@ export default function TimetableDayPage() {
                     border: vr?.deliveryOnline ? "none" : "1px solid rgba(255,255,255,0.35)",
                   }}
                 />
+                {vr?.deliveryOnline ? (
+                  <Chip
+                    label={lessonMediaModeChipLabel(vr.mediaMode)}
+                    size="small"
+                    sx={{
+                      fontWeight: 800,
+                      bgcolor: "rgba(254,226,226,0.95)",
+                      color: primaryDark,
+                    }}
+                  />
+                ) : null}
                 <Chip
                   label={vr?.attended ? "Teacher attended" : "Attendance pending"}
                   icon={vr?.attended ? <CheckCircleRoundedIcon fontSize="small" /> : <RadioButtonUncheckedRoundedIcon fontSize="small" />}
@@ -1610,6 +1655,9 @@ export default function TimetableDayPage() {
           <DialogContent sx={{ p: 3, bgcolor: "#fafafa" }}>
             <Box sx={{ display: { xs: "flex", sm: "none" }, gap: 1, flexWrap: "wrap", mb: 2 }}>
               <Chip size="small" label={vr?.deliveryOnline ? "Online class" : "Physical class"} sx={{ fontWeight: 700 }} />
+              {vr?.deliveryOnline ? (
+                <Chip size="small" label={lessonMediaModeChipLabel(vr.mediaMode)} sx={{ fontWeight: 700 }} />
+              ) : null}
               <Chip
                 size="small"
                 label={vr?.attended ? "Teacher attended" : "Attendance pending"}
@@ -1788,13 +1836,34 @@ export default function TimetableDayPage() {
                   label="Lesson delivery"
                   fullWidth
                   value={editForm.delivery_mode}
-                  onChange={(e) => setEditForm((f) => ({ ...f, delivery_mode: e.target.value }))}
+                  onChange={(e) =>
+                    setEditForm((f) => ({
+                      ...f,
+                      delivery_mode: e.target.value,
+                      media_mode: e.target.value === "online" ? f.media_mode || "optional" : "optional",
+                    }))
+                  }
                   helperText="Online for remote / video sessions; physical for in-room teaching."
                   sx={outlinedFieldSx}
                 >
                   <MenuItem value="physical">Physical (in classroom)</MenuItem>
                   <MenuItem value="online">Online</MenuItem>
                 </TextField>
+                {editForm.delivery_mode === "online" ? (
+                  <TextField
+                    select
+                    label="Online media"
+                    fullWidth
+                    value={editForm.media_mode || "optional"}
+                    onChange={(e) => setEditForm((f) => ({ ...f, media_mode: e.target.value }))}
+                    helperText="Optional: join without camera/mic (recommended). Video class auto-starts camera — may prompt for permission."
+                    sx={outlinedFieldSx}
+                  >
+                    <MenuItem value="optional">Optional — camera/mic off until user turns on</MenuItem>
+                    <MenuItem value="audio">Audio class — microphone on when joining</MenuItem>
+                    <MenuItem value="video">Video class — camera and microphone on when joining</MenuItem>
+                  </TextField>
+                ) : null}
                 <TextField
                   label="Room"
                   fullWidth

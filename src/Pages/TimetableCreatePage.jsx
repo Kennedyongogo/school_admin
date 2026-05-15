@@ -97,6 +97,7 @@ export default function TimetableCreatePage() {
   const [endTime, setEndTime] = useState(null);
   const [name, setName] = useState("");
   const [deliveryMode, setDeliveryMode] = useState("physical");
+  const [mediaMode, setMediaMode] = useState("optional");
 
   const parsedDate = isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate) ? parseISO(isoDate) : null;
   const dateOk = parsedDate && isValid(parsedDate);
@@ -293,6 +294,7 @@ export default function TimetableCreatePage() {
         ends_at,
         teacher_attended: false,
         delivery_mode: deliveryMode === "online" ? "online" : "physical",
+        ...(deliveryMode === "online" ? { media_mode: mediaMode || "optional" } : {}),
       };
       const lRes = await fetch(`/api/curricula/${curriculumId}/classes/${classId}/timetables/${tid}/lessons`, {
         method: "POST",
@@ -522,13 +524,33 @@ export default function TimetableCreatePage() {
                   label="Lesson delivery"
                   fullWidth
                   value={deliveryMode}
-                  onChange={(e) => setDeliveryMode(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setDeliveryMode(next);
+                    if (next !== "online") setMediaMode("optional");
+                  }}
                   helperText="Physical for in-room lessons; online for remote / video sessions."
                   sx={outlinedFieldSx}
                 >
                   <MenuItem value="physical">Physical (classroom)</MenuItem>
                   <MenuItem value="online">Online</MenuItem>
                 </TextField>
+
+                {deliveryMode === "online" ? (
+                  <TextField
+                    select
+                    label="Online media"
+                    fullWidth
+                    value={mediaMode}
+                    onChange={(e) => setMediaMode(e.target.value)}
+                    helperText="Optional is recommended — students join without camera/mic until they choose to turn them on."
+                    sx={outlinedFieldSx}
+                  >
+                    <MenuItem value="optional">Optional — camera/mic off until turned on</MenuItem>
+                    <MenuItem value="audio">Audio class — microphone on when joining</MenuItem>
+                    <MenuItem value="video">Video class — camera and microphone on when joining</MenuItem>
+                  </TextField>
+                ) : null}
 
                 <Stack spacing={2.5} sx={{ width: "100%" }}>
                   <TimePicker

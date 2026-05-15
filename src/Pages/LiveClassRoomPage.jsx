@@ -84,6 +84,7 @@ export default function LiveClassRoomPage() {
             liveClassId={liveClassId}
             userName={userName}
             role={room.role || "teacher"}
+            mediaMode={room.media_mode || "optional"}
             onLeave={() => navigate(-1)}
           />
         ) : (
