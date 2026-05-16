@@ -25,6 +25,7 @@ import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import RadioButtonUncheckedRoundedIcon from "@mui/icons-material/RadioButtonUncheckedRounded";
 import DownloadIcon from "@mui/icons-material/Download";
 import HRAdmissionsTab from "../components/HR/HRAdmissionsTab";
+import HRNewsEventsTab from "../components/HR/HRNewsEventsTab";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
@@ -238,6 +239,7 @@ export default function HRPage() {
             >
               <Tab label="Admissions" />
               <Tab label="Attendance" />
+              <Tab label="News & Events" />
               <Tab label="Parent & Student" />
               <Tab label="Leave & Payroll (coming soon)" />
             </Tabs>
@@ -450,6 +452,8 @@ export default function HRPage() {
             )}
           </Stack>
         ) : tab === 2 ? (
+          <HRNewsEventsTab />
+        ) : tab === 3 ? (
           <Alert severity="info">Parent & Student relationships and management features can be added here.</Alert>
         ) : (
           <Alert severity="info">Leave, payroll, and HR policies tabs can be added next.</Alert>
