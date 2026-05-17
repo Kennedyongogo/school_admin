@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from "@mui/material";
 import EventLiveConference from "../components/EventLive/EventLiveConference";
+import { canEndStaleEventLive } from "../utils/eventJoinWindow";
 
 const authHeaders = (token) => ({
   Accept: "application/json",
@@ -66,6 +67,32 @@ export default function EventLiveRoomPage() {
 
   const ev = session?.event;
   const joinWindow = session?.join_window;
+  const joinBlocked = joinWindow?.can_join === false;
+  const canEndStale = canEndStaleEventLive(ev);
+
+  if (joinBlocked) {
+    return (
+      <Box sx={{ maxWidth: 520, mx: "auto", mt: 6, px: 2 }}>
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {joinWindow?.reason || "This event is not open for hosting or joining."}
+        </Alert>
+        <Stack direction="row" spacing={1}>
+          {canEndStale ? (
+            <Button
+              variant="contained"
+              color="error"
+              onClick={() => postLiveAction(`/api/events/${eventId}/live/end`).catch((e) => alert(e.message))}
+            >
+              End live session
+            </Button>
+          ) : null}
+          <Button variant="outlined" onClick={() => navigate("/hr")}>
+            Back to HR
+          </Button>
+        </Stack>
+      </Box>
+    );
+  }
 
   if (!session?.live_configured || !ev?.live_meeting_id) {
     return (

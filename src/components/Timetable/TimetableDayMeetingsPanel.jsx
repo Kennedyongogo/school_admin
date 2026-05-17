@@ -382,14 +382,18 @@ export default function TimetableDayMeetingsPanel({ isoDate, openCreateSignal = 
                       ) : null}
                       {showEndLive ? (
                         <Tooltip title="End live session (scheduled time has passed)">
-                          <span>
+                          <span style={{ display: "inline-flex", alignItems: "center" }}>
                             <IconButton
                               size="small"
                               disabled={endLiveBusyId === row.id}
                               onClick={() => void endLiveMeeting(row)}
                               sx={{ color: primaryRed }}
                             >
-                              <StopCircleOutlinedIcon fontSize="small" />
+                              {endLiveBusyId === row.id ? (
+                                <CircularProgress size={18} color="inherit" />
+                              ) : (
+                                <StopCircleOutlinedIcon fontSize="small" />
+                              )}
                             </IconButton>
                           </span>
                         </Tooltip>

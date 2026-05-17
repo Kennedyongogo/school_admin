@@ -24,6 +24,7 @@ import Swal from "sweetalert2";
 import { useSocket } from "../../hooks/useSocket";
 import { useEventHostAlerts } from "../../hooks/useEventHostAlerts";
 import { primeAlertAudio } from "../../utils/liveClassAlertSound";
+import { canEndStaleEventLive, getEventJoinWindow } from "../../utils/eventJoinWindow";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
@@ -129,7 +130,9 @@ export default function EventLiveHostDialog({ open, event, onClose }) {
   };
 
   const ev = liveInfo?.event || event;
-  const joinWindow = liveInfo?.join_window;
+  const joinWindow = liveInfo?.join_window || getEventJoinWindow(event);
+  const canEnterRoom = joinWindow?.can_join === true;
+  const canEndStale = canEndStaleEventLive(ev || event);
   const waiting = lobby?.waiting || [];
   const admitted = lobby?.admitted || [];
 
@@ -170,6 +173,7 @@ export default function EventLiveHostDialog({ open, event, onClose }) {
                 size="large"
                 startIcon={<VideocamIcon />}
                 endIcon={<OpenInNewIcon />}
+                disabled={!canEnterRoom}
                 onClick={handleEnterRoom}
                 sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark }, fontWeight: 800, py: 1.25 }}
               >
@@ -196,6 +200,7 @@ export default function EventLiveHostDialog({ open, event, onClose }) {
               <Button
                 size="small"
                 variant="contained"
+                disabled={!canEnterRoom}
                 onClick={() => postAction(`/api/events/${event.id}/live/start`, "Live started").catch((e) => setError(e.message))}
                 sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark } }}
               >
@@ -261,9 +266,29 @@ export default function EventLiveHostDialog({ open, event, onClose }) {
       </DialogContent>
       <DialogActions sx={{ px: 2, py: 1.5 }}>
         <Button onClick={onClose}>Close</Button>
-        <Button variant="contained" startIcon={<VideocamIcon />} onClick={handleEnterRoom} sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark } }}>
-          Enter live room
-        </Button>
+        {canEndStale ? (
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() =>
+              postAction(`/api/events/${event.id}/live/end`, "Live ended")
+                .then(() => onClose())
+                .catch((e) => setError(e.message))
+            }
+          >
+            End live session
+          </Button>
+        ) : null}
+        {canEnterRoom ? (
+          <Button
+            variant="contained"
+            startIcon={<VideocamIcon />}
+            onClick={handleEnterRoom}
+            sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark } }}
+          >
+            Enter live room
+          </Button>
+        ) : null}
       </DialogActions>
     </Dialog>
   );

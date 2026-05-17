@@ -43,6 +43,13 @@ import SummarizeIcon from "@mui/icons-material/Summarize";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 import EventLiveHostDialog from "./EventLiveHostDialog";
 import EventReportDialog from "./EventReportDialog";
+import StopCircleOutlinedIcon from "@mui/icons-material/StopCircleOutlined";
+import {
+  canEndStaleEventLive,
+  canManageEventLive,
+  canRegenerateEventPoster,
+  getEventStatusLabel,
+} from "../../utils/eventJoinWindow";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
@@ -166,7 +173,7 @@ function DetailField({ label, value }) {
 function ActionIconTooltip({ title, children }) {
   return (
     <Tooltip title={title} arrow>
-      <span style={{ display: "inline-flex" }}>{children}</span>
+      <span style={{ display: "inline-flex", alignItems: "center", verticalAlign: "middle" }}>{children}</span>
     </Tooltip>
   );
 }
@@ -285,8 +292,15 @@ function buildEventPayload(form, isEdit) {
   return payload;
 }
 
-function PosterAiSection({ form, setForm, disabled, isEdit, existingPosterUrl }) {
-  const showFields = isEdit || form.generate_poster;
+function PosterAiSection({
+  form,
+  setForm,
+  disabled,
+  isEdit,
+  existingPosterUrl,
+  allowRegenerate = true,
+}) {
+  const showFields = (isEdit || form.generate_poster) && allowRegenerate;
   const posterSrc = mediaUrl(existingPosterUrl);
 
   return (
@@ -294,6 +308,11 @@ function PosterAiSection({ form, setForm, disabled, isEdit, existingPosterUrl })
       <Typography variant="subtitle2" sx={{ fontWeight: 800, color: accentDark }}>
         AI poster
       </Typography>
+      {isEdit && !allowRegenerate ? (
+        <Typography variant="body2" color="text.secondary">
+          Poster regeneration is not available after the event&apos;s scheduled end time.
+        </Typography>
+      ) : null}
       {isEdit && posterSrc ? (
         <Box
           component="img"
@@ -307,16 +326,18 @@ function PosterAiSection({ form, setForm, disabled, isEdit, existingPosterUrl })
           No poster yet. Enable regenerate on save to create one.
         </Typography>
       ) : null}
-      <FormControlLabel
-        control={
-          <Checkbox
-            checked={form.generate_poster}
-            disabled={disabled}
-            onChange={(e) => setForm((f) => ({ ...f, generate_poster: e.target.checked }))}
-          />
-        }
-        label={isEdit ? "Regenerate AI poster on save" : "Generate AI poster"}
-      />
+      {allowRegenerate ? (
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={form.generate_poster}
+              disabled={disabled}
+              onChange={(e) => setForm((f) => ({ ...f, generate_poster: e.target.checked }))}
+            />
+          }
+          label={isEdit ? "Regenerate AI poster on save" : "Generate AI poster"}
+        />
+      ) : null}
       {showFields ? (
         <Stack spacing={2}>
           <TextField
@@ -437,7 +458,14 @@ function NewsFormFields({ form, setForm, disabled, isEdit = false, existingPoste
   );
 }
 
-function EventFormFields({ form, setForm, disabled, isEdit = false, existingPosterUrl = null }) {
+function EventFormFields({
+  form,
+  setForm,
+  disabled,
+  isEdit = false,
+  existingPosterUrl = null,
+  allowPosterRegenerate = true,
+}) {
   const isOnlineOnly = form.delivery_mode === "online";
   const isHybrid = form.delivery_mode === "hybrid";
   const showLocation = form.delivery_mode === "physical" || isHybrid;
@@ -567,6 +595,7 @@ function EventFormFields({ form, setForm, disabled, isEdit = false, existingPost
         disabled={disabled}
         isEdit={isEdit}
         existingPosterUrl={existingPosterUrl}
+        allowRegenerate={allowPosterRegenerate}
       />
     </Stack>
   );
@@ -1041,6 +1070,7 @@ function EventsPanel() {
   const [editForm, setEditForm] = useState(emptyEventForm());
   const [editSaving, setEditSaving] = useState(false);
   const [posterLoadingId, setPosterLoadingId] = useState(null);
+  const [endLiveBusyId, setEndLiveBusyId] = useState(null);
 
   const load = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -1194,6 +1224,38 @@ function EventsPanel() {
     }
   };
 
+  const handleEndLive = async (row) => {
+    const token = localStorage.getItem("token");
+    if (!token || !row?.id) return;
+    setEndLiveBusyId(row.id);
+    try {
+      const res = await fetch(`/api/events/${row.id}/live/end`, {
+        method: "POST",
+        headers: authHeaders(token),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.message || "Could not end live session.");
+      await Swal.fire({
+        icon: "success",
+        title: "Event ended",
+        text: json.message || "Live session ended.",
+        timer: 2200,
+        showConfirmButton: false,
+        confirmButtonColor: accentDark,
+      });
+      void load();
+    } catch (e) {
+      await Swal.fire({
+        icon: "error",
+        title: "End live failed",
+        text: e.message,
+        confirmButtonColor: accentDark,
+      });
+    } finally {
+      setEndLiveBusyId(null);
+    }
+  };
+
   const handleRegeneratePoster = async (row) => {
     const token = localStorage.getItem("token");
     if (!token || !row?.id) return;
@@ -1314,19 +1376,37 @@ function EventsPanel() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  rows.map((row, idx) => (
+                  rows.map((row, idx) => {
+                    const showManageLive = canManageEventLive(row);
+                    const showEndLive = canEndStaleEventLive(row);
+                    const showPosterRegen = canRegenerateEventPoster(row);
+                    const sessionLabel = getEventStatusLabel(row);
+
+                    return (
                     <TableRow key={row.id} hover>
                       <TableCell>{page * rowsPerPage + idx + 1}</TableCell>
                       <TableCell sx={{ fontWeight: 700, maxWidth: 220 }}>{row.title}</TableCell>
                       <TableCell>{row.location || "—"}</TableCell>
                       <TableCell>
-                        <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap" alignItems="center">
                           <PublishedChip published={row.is_published} />
                           {row.is_featured ? <Chip size="small" label="Featured" color="warning" /> : null}
+                          {(row.delivery_mode === "online" || row.delivery_mode === "hybrid") &&
+                          sessionLabel !== row.session_status ? (
+                            <Chip size="small" label={sessionLabel} color="warning" variant="outlined" />
+                          ) : null}
                         </Stack>
                       </TableCell>
-                      <TableCell align="right">
-                        {(row.delivery_mode === "online" || row.delivery_mode === "hybrid") ? (
+                      <TableCell align="right" sx={{ whiteSpace: "nowrap", verticalAlign: "middle" }}>
+                        <Stack
+                          direction="row"
+                          spacing={0}
+                          justifyContent="flex-end"
+                          alignItems="center"
+                          useFlexGap
+                          sx={{ flexWrap: "nowrap" }}
+                        >
+                        {showManageLive ? (
                           <ActionIconTooltip title="Manage live">
                             <IconButton
                               size="small"
@@ -1335,6 +1415,23 @@ function EventsPanel() {
                               sx={{ color: accentDark }}
                             >
                               <VideocamIcon fontSize="small" />
+                            </IconButton>
+                          </ActionIconTooltip>
+                        ) : null}
+                        {showEndLive ? (
+                          <ActionIconTooltip title="End live session (scheduled time has passed)">
+                            <IconButton
+                              size="small"
+                              aria-label="End live"
+                              disabled={endLiveBusyId === row.id}
+                              onClick={() => void handleEndLive(row)}
+                              sx={{ color: "#b91c1c" }}
+                            >
+                              {endLiveBusyId === row.id ? (
+                                <CircularProgress size={18} color="inherit" />
+                              ) : (
+                                <StopCircleOutlinedIcon fontSize="small" />
+                              )}
                             </IconButton>
                           </ActionIconTooltip>
                         ) : null}
@@ -1373,21 +1470,23 @@ function EventsPanel() {
                             <EditIcon fontSize="small" />
                           </IconButton>
                         </ActionIconTooltip>
-                        <ActionIconTooltip title="Regenerate poster">
-                          <IconButton
-                            size="small"
-                            aria-label="Regenerate poster"
-                            disabled={posterLoadingId === row.id}
-                            onClick={() => handleRegeneratePoster(row)}
-                            sx={{ color: accentDark }}
-                          >
-                            {posterLoadingId === row.id ? (
-                              <CircularProgress size={18} />
-                            ) : (
-                              <ImageIcon fontSize="small" />
-                            )}
-                          </IconButton>
-                        </ActionIconTooltip>
+                        {showPosterRegen ? (
+                          <ActionIconTooltip title="Regenerate poster">
+                            <IconButton
+                              size="small"
+                              aria-label="Regenerate poster"
+                              disabled={posterLoadingId === row.id}
+                              onClick={() => handleRegeneratePoster(row)}
+                              sx={{ color: accentDark }}
+                            >
+                              {posterLoadingId === row.id ? (
+                                <CircularProgress size={18} color="inherit" />
+                              ) : (
+                                <ImageIcon fontSize="small" />
+                              )}
+                            </IconButton>
+                          </ActionIconTooltip>
+                        ) : null}
                         <ActionIconTooltip title="Delete">
                           <IconButton
                             size="small"
@@ -1398,9 +1497,11 @@ function EventsPanel() {
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         </ActionIconTooltip>
+                        </Stack>
                       </TableCell>
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -1443,6 +1544,7 @@ function EventsPanel() {
             disabled={editSaving}
             isEdit
             existingPosterUrl={editRow?.poster_image}
+            allowPosterRegenerate={editRow ? canRegenerateEventPoster(editRow) : true}
           />
         </DialogContent>
         <DialogActions>
