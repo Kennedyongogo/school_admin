@@ -63,20 +63,42 @@ const sidebarSurfaceSx = {
   "& .MuiInputBase-input": { color: "text.primary" },
 };
 
-export default function EventLiveSidebar({ eventId, token, socket, isStaff = true, variant = "sidebar" }) {
+export default function EventLiveSidebar({
+  eventId,
+  meetingId,
+  token,
+  socket,
+  isStaff = true,
+  userId,
+  variant = "sidebar",
+}) {
   const isDock = variant === "dock";
+  const isMeeting = !!meetingId;
   const [tab, setTab] = useState(0);
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  const { chat, reactions, raisedHands, loading, error, sendChat, markAnswered, dismissHand, sendReaction } =
-    useEventInteraction({
-      eventId,
-      token,
-      socket,
-      isStaff,
-    });
+  const {
+    chat,
+    reactions,
+    raisedHands,
+    loading,
+    error,
+    myHandRaised,
+    sendChat,
+    markAnswered,
+    toggleRaiseHand,
+    dismissHand,
+    sendReaction,
+  } = useEventInteraction({
+    eventId,
+    meetingId,
+    token,
+    socket,
+    isStaff,
+    userId,
+  });
 
   const chatMessages = useMemo(() => chat.filter((m) => !m.is_question), [chat]);
   const questions = useMemo(() => chat.filter((m) => m.is_question), [chat]);
@@ -119,7 +141,7 @@ export default function EventLiveSidebar({ eventId, token, socket, isStaff = tru
     >
       <Box sx={{ px: 1.5, py: 1, borderBottom: 1, borderColor: "divider", flexShrink: 0 }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-          Event interactions
+          {isMeeting ? "Meeting interactions" : "Event interactions"}
         </Typography>
         <Stack direction="row" spacing={0.5} flexWrap="nowrap" useFlexGap sx={{ overflowX: "auto", pb: 0.25 }}>
           {REACTIONS.map((emoji) => (
@@ -142,7 +164,9 @@ export default function EventLiveSidebar({ eventId, token, socket, isStaff = tru
         >
           {reactions.length === 0 ? (
             <Typography variant="caption" color="text.secondary">
-              Reactions appear here for everyone in the event.
+              {isMeeting
+                ? "Reactions appear here for everyone in the meeting."
+                : "Reactions appear here for everyone in the event."}
             </Typography>
           ) : (
             reactions.slice(-40).map((r, i) => (
@@ -159,9 +183,21 @@ export default function EventLiveSidebar({ eventId, token, socket, isStaff = tru
         </Stack>
       </Box>
 
-      {raisedHands.length > 0 ? (
-        <Box sx={{ px: 1.5, py: 1, borderBottom: 1, borderColor: "divider", flexShrink: 0 }}>
-          <Stack spacing={0.75} sx={{ maxHeight: 140, overflow: "auto" }}>
+      <Box sx={{ px: 1.5, py: 1, borderBottom: 1, borderColor: "divider", flexShrink: 0 }}>
+        {!isStaff ? (
+          <Button
+            fullWidth
+            size="small"
+            variant={myHandRaised ? "contained" : "outlined"}
+            color={myHandRaised ? "warning" : "primary"}
+            startIcon={<BackHandRoundedIcon />}
+            onClick={() => void toggleRaiseHand().catch((e) => alert(e.message))}
+          >
+            {myHandRaised ? "Lower hand" : "Raise hand"}
+          </Button>
+        ) : null}
+        {raisedHands.length > 0 ? (
+          <Stack spacing={0.75} sx={{ mt: isStaff ? 0 : 1, maxHeight: 140, overflow: "auto" }}>
             <Typography variant="caption" sx={{ fontWeight: 700 }}>
               Raised hands ({raisedHands.length})
             </Typography>
@@ -173,15 +209,18 @@ export default function EventLiveSidebar({ eventId, token, socket, isStaff = tru
                   label={authorLabel(h.user)}
                   color="warning"
                   variant="outlined"
+                  sx={{ maxWidth: "100%", "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" } }}
                 />
-                <Button size="small" onClick={() => void dismissHand(h.id).catch(() => {})}>
-                  Dismiss
-                </Button>
+                {isStaff ? (
+                  <Button size="small" onClick={() => void dismissHand(h.id).catch((e) => alert(e.message))}>
+                    Dismiss
+                  </Button>
+                ) : null}
               </Stack>
             ))}
           </Stack>
-        </Box>
-      ) : null}
+        ) : null}
+      </Box>
 
       <Tabs
         value={tab}

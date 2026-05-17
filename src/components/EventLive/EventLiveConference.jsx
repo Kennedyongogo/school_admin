@@ -15,8 +15,11 @@ import { useSocket } from "../../hooks/useSocket";
 import LiveKitVideoRoom from "../VideoConference/LiveKitVideoRoom";
 import LiveKitMediaControls from "../VideoConference/LiveKitMediaControls";
 import EventLiveHostLayout from "./EventLiveHostLayout";
+import EventLiveAttendeeLayout from "./EventLiveAttendeeLayout";
+import { primeAlertAudio } from "../../utils/liveClassAlertSound";
 
-import { eventLiveVideoSlotSx } from "./eventLiveVideoSlotSx";
+import { getEventLiveVideoSlotSx } from "./eventLiveVideoSlotSx";
+import { getLiveSessionApi } from "../../utils/liveSessionApi";
 
 const authHeaders = (token) => ({
   Accept: "application/json",
@@ -33,9 +36,19 @@ function LiveKitConnectionTracker({ wasConnectedRef }) {
   return null;
 }
 
-export default function EventLiveConference({ eventId, token, eventTitle, onLeave }) {
+export default function EventLiveConference({
+  eventId,
+  meetingId,
+  token,
+  eventTitle,
+  onLeave,
+  isHost = true,
+  userId,
+  canJoinVideo = true,
+}) {
   const [lkToken, setLkToken] = useState(null);
   const [serverUrl, setServerUrl] = useState("");
+  const [serverIsHost, setServerIsHost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [mobilePanel, setMobilePanel] = useState("video");
@@ -46,13 +59,21 @@ export default function EventLiveConference({ eventId, token, eventTitle, onLeav
   const wasConnectedRef = useRef(false);
 
   useEffect(() => {
-    if (!token || !eventId) return undefined;
+    primeAlertAudio();
+  }, []);
+
+  const api = getLiveSessionApi({ eventId, meetingId });
+
+  useEffect(() => {
+    if (!token || !api.id || !canJoinVideo) return undefined;
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError("");
+      setLkToken(null);
+      setServerUrl("");
       try {
-        const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/livekit-token`, {
+        const res = await fetch(`${api.base}/livekit-token`, {
           method: "POST",
           headers: authHeaders(token),
         });
@@ -61,6 +82,11 @@ export default function EventLiveConference({ eventId, token, eventTitle, onLeav
         if (!cancelled) {
           setLkToken(data.data.token);
           setServerUrl(data.data.url);
+          if (typeof data.data.is_host === "boolean") {
+            setServerIsHost(data.data.is_host);
+          } else {
+            setServerIsHost(null);
+          }
         }
       } catch (e) {
         if (!cancelled) setError(e.message || "Could not join video.");
@@ -71,28 +97,70 @@ export default function EventLiveConference({ eventId, token, eventTitle, onLeav
     return () => {
       cancelled = true;
     };
-  }, [token, eventId]);
+  }, [token, api.id, api.base, canJoinVideo]);
 
   useEffect(() => {
-    if (!socket || !eventId) return undefined;
-    const joinRoom = () => socket.emit("join:event", eventId);
+    if (!socket || !api.id) return undefined;
+    const joinRoom = () => socket.emit(api.joinSocket, api.id);
     if (socket.connected) joinRoom();
     socket.on("connect", joinRoom);
     return () => {
       socket.off("connect", joinRoom);
-      socket.emit("leave:event", eventId);
+      socket.emit(api.leaveSocket, api.id);
     };
-  }, [socket, eventId]);
+  }, [socket, api]);
 
   const handleRequestLeave = useCallback(() => {
     intentionalLeaveRef.current = true;
   }, []);
+
+  const handleLeaveNow = useCallback(() => {
+    intentionalLeaveRef.current = true;
+    onLeave?.();
+  }, [onLeave]);
 
   const handleDisconnected = useCallback(() => {
     if (!intentionalLeaveRef.current) return;
     intentionalLeaveRef.current = false;
     onLeave?.();
   }, [onLeave]);
+
+  useEffect(() => {
+    if (!socket || !api.id || !api.events.liveEnded) return undefined;
+
+    const onSessionEnded = (payload) => {
+      if (String(payload?.[api.idField]) !== String(api.id)) return;
+      intentionalLeaveRef.current = true;
+      setLkToken(null);
+      setServerUrl("");
+      onLeave?.();
+    };
+
+    socket.on(api.events.liveEnded, onSessionEnded);
+    return () => {
+      socket.off(api.events.liveEnded, onSessionEnded);
+    };
+  }, [socket, api, onLeave]);
+
+  const handleMediaDeviceFailure = useCallback((failure, kind) => {
+    console.warn("LiveKit media device:", failure, kind);
+  }, []);
+
+  const handleRoomError = useCallback((err) => {
+    const msg = err?.message || "";
+    if (/device|permission|not found|in use/i.test(msg)) {
+      console.warn("LiveKit media (non-fatal):", msg);
+      return;
+    }
+    if (/client initiated|cancelled|canceled|abort/i.test(msg)) {
+      console.warn("LiveKit connection ended:", msg);
+      return;
+    }
+    setError(msg || "LiveKit connection error.");
+  }, []);
+
+  const layoutIsHost = serverIsHost ?? isHost;
+  const videoSlotSx = getEventLiveVideoSlotSx({ isHost: layoutIsHost });
 
   if (loading) {
     return (
@@ -112,7 +180,9 @@ export default function EventLiveConference({ eventId, token, eventTitle, onLeav
         <Typography variant="subtitle2" sx={{ fontWeight: 700, flex: 1 }} noWrap>
           {eventTitle || "Live event"}
         </Typography>
-        <Chip size="small" label="Host" color="primary" sx={{ display: { xs: "none", sm: "flex" } }} />
+        {layoutIsHost ? (
+          <Chip size="small" label="Host" color="primary" sx={{ display: { xs: "none", sm: "flex" } }} />
+        ) : null}
         <Chip
           size="small"
           label={connected ? "Live chat on" : "Live chat (polling)"}
@@ -124,33 +194,57 @@ export default function EventLiveConference({ eventId, token, eventTitle, onLeav
 
       <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         <LiveKitRoom
+          key={lkToken}
           video
           audio
           token={lkToken}
           serverUrl={serverUrl}
           connect
+          options={{ autoSubscribe: true, dynacast: true }}
           onDisconnected={handleDisconnected}
+          onMediaDeviceFailure={handleMediaDeviceFailure}
+          onError={handleRoomError}
           data-lk-theme="default"
           style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}
         >
           <LiveKitConnectionTracker wasConnectedRef={wasConnectedRef} />
           <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-            <EventLiveHostLayout
-              eventId={eventId}
-              token={token}
-              socket={socket}
-              isNarrow={isNarrow}
-              mobilePanel={mobilePanel}
-              onMobilePanelChange={setMobilePanel}
-              videoSlot={
-                <Box sx={eventLiveVideoSlotSx}>
-                  <LiveKitVideoRoom />
-                </Box>
-              }
-            />
+            {layoutIsHost ? (
+              <EventLiveHostLayout
+                eventId={eventId}
+                meetingId={meetingId}
+                token={token}
+                socket={socket}
+                isNarrow={isNarrow}
+                mobilePanel={mobilePanel}
+                onMobilePanelChange={setMobilePanel}
+                videoSlot={
+                  <Box sx={videoSlotSx}>
+                    <LiveKitVideoRoom allowFocusLayout />
+                  </Box>
+                }
+              />
+            ) : (
+              <EventLiveAttendeeLayout
+                eventId={eventId}
+                meetingId={meetingId}
+                token={token}
+                socket={socket}
+                isStaff={false}
+                userId={userId}
+                isNarrow={isNarrow}
+                mobilePanel={mobilePanel}
+                onMobilePanelChange={setMobilePanel}
+                videoSlot={
+                  <Box sx={videoSlotSx}>
+                    <LiveKitVideoRoom allowFocusLayout={false} />
+                  </Box>
+                }
+              />
+            )}
           </Box>
           <Box sx={{ flexShrink: 0, zIndex: 2, bgcolor: "background.paper", borderTop: 1, borderColor: "divider" }}>
-            <LiveKitMediaControls onRequestLeave={handleRequestLeave} />
+            <LiveKitMediaControls onRequestLeave={handleRequestLeave} onLeave={handleLeaveNow} />
           </Box>
         </LiveKitRoom>
       </Box>

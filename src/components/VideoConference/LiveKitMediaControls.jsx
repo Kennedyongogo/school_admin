@@ -29,7 +29,7 @@ function deviceErrorMessage(kind, error) {
 }
 
 /** Mic / camera / leave bar below the video area (not inside the LiveKit tile). */
-export default function LiveKitMediaControls({ onRequestLeave }) {
+export default function LiveKitMediaControls({ onRequestLeave, onLeave }) {
   const room = useRoomContext();
   const connectionState = useConnectionState(room);
   const mediaReady = connectionState === ConnectionState.Connected;
@@ -64,7 +64,12 @@ export default function LiveKitMediaControls({ onRequestLeave }) {
 
   const handleLeave = () => {
     onRequestLeave?.();
-    room?.disconnect();
+    try {
+      room?.disconnect(true);
+    } catch (_) {
+      /* disconnect may throw if already disconnected */
+    }
+    onLeave?.();
   };
 
   return (

@@ -106,6 +106,8 @@ export default function EventLiveRoomPage() {
             eventId={eventId}
             token={token}
             eventTitle={ev.title}
+            isHost
+            canJoinVideo={joinWindow?.can_join !== false}
             onLeave={() => navigate("/hr")}
           />
         ) : (

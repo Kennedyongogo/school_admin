@@ -17,3 +17,16 @@ export const eventLiveVideoSlotSx = {
   "& .lk-chat": { display: "none !important" },
   "& .lk-control-bar": { display: "none !important" },
 };
+
+/** @param {{ isHost?: boolean }} opts */
+export function getEventLiveVideoSlotSx({ isHost = true } = {}) {
+  return {
+    ...eventLiveVideoSlotSx,
+    ...(!isHost
+      ? {
+          "& .lk-focus-toggle-button": { display: "none !important" },
+          "& .lk-focus-layout-wrapper": { display: "none !important" },
+        }
+      : {}),
+  };
+}

@@ -54,6 +54,7 @@ import Swal from "sweetalert2";
 import { showTeacherOverlapSweetAlert } from "../utils/timetableOverlapAlert";
 import OnlineLessonLiveDialog from "../components/OnlineHub/OnlineLessonLiveDialog";
 import OnlineExamLiveDialog from "../components/OnlineHub/OnlineExamLiveDialog";
+import TimetableDayMeetingsPanel from "../components/Timetable/TimetableDayMeetingsPanel";
 
 const primaryRed = "#DC2626";
 const primaryDark = "#B91C1C";
@@ -210,7 +211,11 @@ export default function TimetableDayPage() {
   const { isoDate } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [tab, setTab] = useState(() => (searchParams.get("tab") === "exams" ? 1 : 0));
+  const tabFromSearch = searchParams.get("tab");
+  const [tab, setTab] = useState(() =>
+    tabFromSearch === "exams" ? 1 : tabFromSearch === "meetings" ? 2 : 0
+  );
+  const [meetingCreateSignal, setMeetingCreateSignal] = useState(0);
   const [lessons, setLessons] = useState([]);
   const [lessonsLoading, setLessonsLoading] = useState(true);
   const [lessonsError, setLessonsError] = useState(null);
@@ -296,7 +301,8 @@ export default function TimetableDayPage() {
   }, [isoDate]);
 
   useEffect(() => {
-    const t = searchParams.get("tab") === "exams" ? 1 : 0;
+    const tParam = searchParams.get("tab");
+    const t = tParam === "exams" ? 1 : tParam === "meetings" ? 2 : 0;
     setTab(t);
   }, [isoDate, searchParams]);
 
@@ -304,6 +310,7 @@ export default function TimetableDayPage() {
     setTab(v);
     const next = new URLSearchParams(searchParams);
     if (v === 1) next.set("tab", "exams");
+    else if (v === 2) next.set("tab", "meetings");
     else next.delete("tab");
     setSearchParams(next, { replace: true });
   };
@@ -907,7 +914,11 @@ export default function TimetableDayPage() {
                   {longLabel}
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.92, mt: 0.5 }}>
-                  Lessons for this date are listed below with pagination. Mark teacher attendance when editing a lesson.
+                  {tab === 1
+                    ? "Exam schedules for this date. Use Create exam schedule or open meeting links when live."
+                    : tab === 2
+                      ? "Staff meetings for this date. You admit participants when they join from Elimu Plus Online."
+                      : "Lessons for this date are listed below with pagination. Mark teacher attendance when editing a lesson."}
                 </Typography>
               </Box>
             </Stack>
@@ -917,6 +928,8 @@ export default function TimetableDayPage() {
               onClick={() => {
                 if (tab === 1) {
                   void openCreateExamSchedule();
+                } else if (tab === 2) {
+                  setMeetingCreateSignal((n) => n + 1);
                 } else {
                   navigate(`/timetable/create?date=${isoDate}`);
                 }
@@ -931,7 +944,7 @@ export default function TimetableDayPage() {
                 "&:hover": { bgcolor: "rgba(255,255,255,0.92)" },
               }}
             >
-              {tab === 1 ? "Create exam schedule" : "Create lesson timetable"}
+              {tab === 1 ? "Create exam schedule" : tab === 2 ? "Schedule staff meeting" : "Create lesson timetable"}
             </Button>
           </Stack>
         </Box>
@@ -960,6 +973,7 @@ export default function TimetableDayPage() {
             >
               <Tab label="Lessons" />
               <Tab label="Exams" />
+              <Tab label="Staff meetings" />
             </Tabs>
 
             <Box sx={{ px: 2, pb: 3 }}>
@@ -1240,6 +1254,10 @@ export default function TimetableDayPage() {
                     </Table>
                   </TableContainer>
                 )}
+              </TabPanel>
+
+              <TabPanel value={tab} index={2}>
+                <TimetableDayMeetingsPanel isoDate={isoDate} openCreateSignal={meetingCreateSignal} />
               </TabPanel>
             </Box>
           </Paper>

@@ -15,7 +15,7 @@ import { isEqualTrackRef, isTrackReference, isWeb } from "@livekit/components-co
 import { RoomEvent, Track } from "livekit-client";
 
 /** LiveKit video + controls only — class chat uses LiveClassSidebar (Socket.io + DB). */
-export default function LiveKitVideoRoom() {
+export default function LiveKitVideoRoom({ allowFocusLayout = true }) {
   const lastAutoFocusedScreenShareTrack = useRef(null);
   const layoutContext = useCreateLayoutContext();
 
@@ -35,6 +35,13 @@ export default function LiveKitVideoRoom() {
   const carouselTracks = tracks.filter((track) => !isEqualTrackRef(track, focusTrack));
 
   useEffect(() => {
+    if (!allowFocusLayout) {
+      if (lastAutoFocusedScreenShareTrack.current) {
+        layoutContext.pin.dispatch?.({ msg: "clear_pin" });
+        lastAutoFocusedScreenShareTrack.current = null;
+      }
+      return;
+    }
     if (
       screenShareTracks.some((track) => track.publication.isSubscribed) &&
       lastAutoFocusedScreenShareTrack.current === null
@@ -64,16 +71,19 @@ export default function LiveKitVideoRoom() {
     screenShareTracks.map((ref) => `${ref.publication.trackSid}_${ref.publication.isSubscribed}`).join(),
     focusTrack?.publication?.trackSid,
     tracks,
+    allowFocusLayout,
     layoutContext.pin,
   ]);
 
   if (!isWeb()) return null;
 
+  const useFocusLayout = allowFocusLayout && !!focusTrack;
+
   return (
     <div className="lk-video-conference" style={{ height: "100%" }}>
       <LayoutContextProvider value={layoutContext}>
         <div className="lk-video-conference-inner">
-          {!focusTrack ? (
+          {!useFocusLayout ? (
             <div className="lk-grid-layout-wrapper">
               <GridLayout tracks={tracks}>
                 <ParticipantTile />

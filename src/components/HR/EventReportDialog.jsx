@@ -197,17 +197,20 @@ export default function EventReportDialog({ open, event, onClose }) {
             ) : null}
 
             <Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
-                Attendance — unique participants ({report.attendees?.length ?? 0})
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>
+                Attendance summary — totals per person ({report.attendees?.length ?? 0})
               </Typography>
-              <Paper variant="outlined" sx={{ overflow: "auto", maxHeight: 220 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                Total minutes combines every time they joined and left. Visit count shows how many sessions.
+              </Typography>
+              <Paper variant="outlined" sx={{ overflow: "auto", maxHeight: 200 }}>
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
                       <TableCell>Name</TableCell>
                       <TableCell>Role</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Minutes</TableCell>
+                      <TableCell>Visits</TableCell>
+                      <TableCell>Total min</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -224,8 +227,55 @@ export default function EventReportDialog({ open, event, onClose }) {
                             {a.user?.full_name || a.user?.username || "—"}
                           </TableCell>
                           <TableCell>{a.user?.role || "—"}</TableCell>
-                          <TableCell>{a.status}</TableCell>
+                          <TableCell>{a.visit_count ?? 1}</TableCell>
                           <TableCell>{a.minutes_in_event ?? "—"}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </Paper>
+            </Box>
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>
+                Attendance log — each join & leave ({report.attendance_log?.length ?? 0} rows)
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                One row per lobby session. Visit # is per person (1st join, 2nd join, …).
+              </Typography>
+              <Paper variant="outlined" sx={{ overflow: "auto", maxHeight: 260 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Visit</TableCell>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Role</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Admitted</TableCell>
+                      <TableCell>Left</TableCell>
+                      <TableCell>Min</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {(report.attendance_log || []).length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} align="center" sx={{ color: "text.secondary" }}>
+                          No visit log recorded.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      report.attendance_log.map((v) => (
+                        <TableRow key={v.id}>
+                          <TableCell>#{v.visit_number}</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>
+                            {v.user?.full_name || v.user?.username || "—"}
+                          </TableCell>
+                          <TableCell>{v.user?.role || "—"}</TableCell>
+                          <TableCell>{v.status}</TableCell>
+                          <TableCell>{fmtDate(v.admitted_at)}</TableCell>
+                          <TableCell>{fmtDate(v.left_at)}</TableCell>
+                          <TableCell>{v.minutes_in_event ?? "—"}</TableCell>
                         </TableRow>
                       ))
                     )}

@@ -21,6 +21,7 @@ import EditUserDetails from "./editUserDetails";
 import ChangePassword from "./changePassword";
 import { useNavigate } from "react-router-dom";
 import BrandPageLoader from "../Util/BrandPageLoader";
+import AdminNotificationBell from "./AdminNotificationBell";
 
 // Helper to build URL for uploaded assets using Vite proxy
 const buildImageUrl = (imageUrl) => {
@@ -145,7 +146,8 @@ export default function Header(props) {
         <Box sx={{ flexGrow: 1 }}></Box>
 
         <Box sx={{ display: "flex", alignItems: "center" }}>
-          <Typography variant="body1" sx={{ mr: 1 }}>
+          <AdminNotificationBell />
+          <Typography variant="body1" sx={{ mr: 1, display: { xs: "none", sm: "block" } }}>
             {currentUser?.full_name}
           </Typography>
 

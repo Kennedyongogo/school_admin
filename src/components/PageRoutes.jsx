@@ -56,8 +56,10 @@ import TimetableManagePage from "../Pages/TimetableManagePage";
 import ElimuPlusOnlineHub from "../Pages/ElimuPlusOnlineHub";
 import OnlineScheduledLessonsPage from "../Pages/OnlineScheduledLessonsPage";
 import OnlineScheduledExamsPage from "../Pages/OnlineScheduledExamsPage";
+import OnlineScheduledSessionsPage from "../Pages/OnlineScheduledSessionsPage";
 import LiveClassRoomPage from "../Pages/LiveClassRoomPage";
 import EventLiveRoomPage from "../Pages/EventLiveRoomPage";
+import AdminMeetingLiveRoomPage from "../Pages/AdminMeetingLiveRoomPage";
 import ExamManagementPage from "../Pages/ExamManagementPage";
 import ExamSubmissionsPage from "../Pages/ExamSubmissionsPage";
 import AccountingDashboardPage from "../Pages/AccountingDashboardPage";
@@ -171,11 +173,14 @@ function PageRoutes() {
               element={<TimetableManagePage />}
             />
             <Route path="timetable" element={<Timetable />} />
-            <Route path="elimu-plus-online/lessons" element={<OnlineScheduledLessonsPage />} />
-            <Route path="elimu-plus-online/exams" element={<OnlineScheduledExamsPage />} />
+            <Route path="elimu-plus-online/scheduled" element={<OnlineScheduledSessionsPage />} />
+            <Route path="elimu-plus-online/lessons" element={<OnlineScheduledSessionsPage />} />
+            <Route path="elimu-plus-online/exams" element={<OnlineScheduledSessionsPage />} />
+            <Route path="elimu-plus-online/meetings" element={<OnlineScheduledSessionsPage />} />
             <Route path="elimu-plus-online" element={<ElimuPlusOnlineHub />} />
             <Route path="live-class/:liveClassId" element={<LiveClassRoomPage />} />
             <Route path="live/event/:eventId" element={<EventLiveRoomPage />} />
+            <Route path="live/meeting/:meetingId" element={<AdminMeetingLiveRoomPage />} />
             <Route path="marketplace" element={<Marketplace />} />
             <Route path="marketplace/training-events/create" element={<TrainingEventCreate />} />
             <Route path="marketplace/training-events/:id" element={<TrainingEventView />} />

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { getLiveSessionApi } from "../utils/liveSessionApi";
 
 function authHeaders(token) {
   return {
@@ -8,7 +9,8 @@ function authHeaders(token) {
   };
 }
 
-export function useEventInteraction({ eventId, token, socket, isStaff, userId }) {
+export function useEventInteraction({ eventId, meetingId, token, socket, isStaff, userId }) {
+  const api = getLiveSessionApi({ eventId, meetingId });
   const [chat, setChat] = useState([]);
   const [raisedHands, setRaisedHands] = useState([]);
   const [reactions, setReactions] = useState([]);
@@ -19,15 +21,13 @@ export function useEventInteraction({ eventId, token, socket, isStaff, userId })
   const load = useCallback(
     async (opts = {}) => {
       const silent = opts?.silent === true;
-      if (!eventId || !token) return;
+      if (!api.id || !token) return;
       if (!silent) {
         setLoading(true);
         setError("");
       }
       try {
-        const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/interactions`, {
-          headers: authHeaders(token),
-        });
+        const res = await fetch(`${api.base}/interactions`, { headers: authHeaders(token) });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.success) throw new Error(data.message || "Could not load interactions");
         const hands = Array.isArray(data.data?.raised_hands) ? data.data.raised_hands : [];
@@ -43,7 +43,7 @@ export function useEventInteraction({ eventId, token, socket, isStaff, userId })
         if (!silent) setLoading(false);
       }
     },
-    [eventId, token, userId]
+    [api.id, api.base, token, userId]
   );
 
   useEffect(() => {
@@ -51,59 +51,61 @@ export function useEventInteraction({ eventId, token, socket, isStaff, userId })
   }, [load]);
 
   useEffect(() => {
-    if (!eventId || !token) return undefined;
+    if (!api.id || !token) return undefined;
     const id = setInterval(() => void load({ silent: true }), 6000);
     return () => clearInterval(id);
-  }, [eventId, token, load]);
+  }, [api.id, token, load]);
 
   useEffect(() => {
-    if (!socket || !eventId) return undefined;
+    if (!socket || !api.id) return undefined;
 
-    const joinRoom = () => socket.emit("join:event", eventId);
+    const joinRoom = () => socket.emit(api.joinSocket, api.id);
     if (socket.connected) joinRoom();
     socket.on("connect", joinRoom);
 
-    const onChatNew = ({ message, event_id }) => {
-      if (String(event_id) !== String(eventId) || !message?.id) return;
+    const onChatNew = (payload) => {
+      const { message } = payload;
+      const sid = payload[api.idField];
+      if (String(sid) !== String(api.id) || !message?.id) return;
       if (message.parent_id) void load({ silent: true });
       else setChat((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
     };
-    const onChatSync = ({ chat: next, event_id }) => {
-      if (String(event_id) === String(eventId) && Array.isArray(next)) setChat(next);
+    const onChatSync = (payload) => {
+      const next = payload.chat;
+      if (String(payload[api.idField]) === String(api.id) && Array.isArray(next)) setChat(next);
     };
     const onReaction = (payload) => {
-      if (String(payload?.event_id) !== String(eventId)) return;
+      if (String(payload[api.idField]) !== String(api.id)) return;
       setReactions((prev) => {
         const key = `${payload.user_id}-${payload.at}-${payload.emoji}`;
         if (prev.some((r) => `${r.user_id}-${r.at}-${r.emoji}` === key)) return prev;
         return [...prev.slice(-49), payload];
       });
     };
-    const onHandUpdate = ({ raised_hands, event_id }) => {
-      if (String(event_id) !== String(eventId)) return;
-      const hands = Array.isArray(raised_hands) ? raised_hands : [];
+    const onHandUpdate = (payload) => {
+      if (String(payload[api.idField]) !== String(api.id)) return;
+      const hands = Array.isArray(payload.raised_hands) ? payload.raised_hands : [];
       setRaisedHands(hands);
-      const uid = userId;
-      setMyHandRaised(uid ? hands.some((h) => String(h.user_id) === String(uid)) : false);
+      setMyHandRaised(userId ? hands.some((h) => String(h.user_id) === String(userId)) : false);
     };
 
-    socket.on("event-chat:new", onChatNew);
-    socket.on("event-chat:sync", onChatSync);
-    socket.on("event-reaction", onReaction);
-    socket.on("event-hand:update", onHandUpdate);
+    socket.on(api.events.chatNew, onChatNew);
+    socket.on(api.events.chatSync, onChatSync);
+    socket.on(api.events.reaction, onReaction);
+    socket.on(api.events.handUpdate, onHandUpdate);
 
     return () => {
       socket.off("connect", joinRoom);
-      socket.off("event-chat:new", onChatNew);
-      socket.off("event-chat:sync", onChatSync);
-      socket.off("event-reaction", onReaction);
-      socket.off("event-hand:update", onHandUpdate);
+      socket.off(api.events.chatNew, onChatNew);
+      socket.off(api.events.chatSync, onChatSync);
+      socket.off(api.events.reaction, onReaction);
+      socket.off(api.events.handUpdate, onHandUpdate);
     };
-  }, [socket, eventId, load, userId]);
+  }, [socket, api, load, userId]);
 
   const sendChat = useCallback(
     async ({ message, is_question = false, parent_id = null }) => {
-      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/chat`, {
+      const res = await fetch(`${api.base}/chat`, {
         method: "POST",
         headers: authHeaders(token),
         body: JSON.stringify({ message, is_question, parent_id }),
@@ -114,25 +116,25 @@ export function useEventInteraction({ eventId, token, socket, isStaff, userId })
       else if (data.data) setChat((prev) => (prev.some((m) => m.id === data.data.id) ? prev : [...prev, data.data]));
       return data.data;
     },
-    [eventId, token, load]
+    [api.base, token, load]
   );
 
   const markAnswered = useCallback(
     async (messageId) => {
-      const res = await fetch(
-        `/api/events/${encodeURIComponent(eventId)}/chat/${encodeURIComponent(messageId)}/answered`,
-        { method: "PATCH", headers: authHeaders(token) }
-      );
+      const res = await fetch(`${api.base}/chat/${encodeURIComponent(messageId)}/answered`, {
+        method: "PATCH",
+        headers: authHeaders(token),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.message || "Could not update question");
       await load({ silent: true });
     },
-    [eventId, token, load]
+    [api.base, token, load]
   );
 
   const toggleRaiseHand = useCallback(async () => {
     const path = myHandRaised ? "lower" : "raise";
-    const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/hand/${path}`, {
+    const res = await fetch(`${api.base}/hand/${path}`, {
       method: "POST",
       headers: authHeaders(token),
     });
@@ -140,24 +142,24 @@ export function useEventInteraction({ eventId, token, socket, isStaff, userId })
     if (!res.ok || !data.success) throw new Error(data.message || "Could not update hand raise");
     setMyHandRaised(!myHandRaised);
     await load({ silent: true });
-  }, [eventId, token, myHandRaised, load]);
+  }, [api.base, token, myHandRaised, load]);
 
   const dismissHand = useCallback(
     async (handId) => {
-      const res = await fetch(
-        `/api/events/${encodeURIComponent(eventId)}/hand/${encodeURIComponent(handId)}/dismiss`,
-        { method: "POST", headers: authHeaders(token) }
-      );
+      const res = await fetch(`${api.base}/hand/${encodeURIComponent(handId)}/dismiss`, {
+        method: "POST",
+        headers: authHeaders(token),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.message || "Could not dismiss hand");
       await load({ silent: true });
     },
-    [eventId, token, load]
+    [api.base, token, load]
   );
 
   const sendReaction = useCallback(
     async (emoji) => {
-      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/reaction`, {
+      const res = await fetch(`${api.base}/reaction`, {
         method: "POST",
         headers: authHeaders(token),
         body: JSON.stringify({ emoji }),
@@ -173,7 +175,7 @@ export function useEventInteraction({ eventId, token, socket, isStaff, userId })
       }
       return data.data;
     },
-    [eventId, token]
+    [api.base, token]
   );
 
   return {

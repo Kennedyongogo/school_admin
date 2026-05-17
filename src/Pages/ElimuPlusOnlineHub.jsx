@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Box, Card, CardActionArea, Stack, Typography } from "@mui/material";
 import VideocamOutlined from "@mui/icons-material/VideocamOutlined";
 import QuizOutlined from "@mui/icons-material/QuizOutlined";
+import GroupsRounded from "@mui/icons-material/GroupsRounded";
 import CalendarMonthOutlined from "@mui/icons-material/CalendarMonthOutlined";
 import ArrowForwardRounded from "@mui/icons-material/ArrowForwardRounded";
 const accent = "#DC2626";
@@ -22,7 +23,7 @@ export default function ElimuPlusOnlineHub() {
       icon: <CalendarMonthOutlined sx={{ fontSize: 42 }} />,
       gradient: `linear-gradient(145deg, #4f4338 0%, #857358 42%, #a0826d 100%)`,
       chipBg: "rgba(242,232,218,0.4)",
-      onClick: () => navigate("/elimu-plus-online/lessons"),
+      onClick: () => navigate("/elimu-plus-online/scheduled"),
     },
     {
       key: "exams",
@@ -33,7 +34,18 @@ export default function ElimuPlusOnlineHub() {
       icon: <QuizOutlined sx={{ fontSize: 42 }} />,
       gradient: `linear-gradient(145deg, ${accentDark} 0%, ${accent} 55%, #f97316 120%)`,
       chipBg: "rgba(254,226,226,0.35)",
-      onClick: () => navigate("/elimu-plus-online/exams"),
+      onClick: () => navigate("/elimu-plus-online/scheduled?tab=exams"),
+    },
+    {
+      key: "meetings",
+      title: "Staff meetings",
+      subtitle: "Internal LiveKit sessions",
+      description:
+        "Schedule meetings for admin portal staff. The creator admits participants; chat, questions, reactions, and PDF reports included.",
+      icon: <GroupsRounded sx={{ fontSize: 42 }} />,
+      gradient: "linear-gradient(145deg, #115E59 0%, #0F766E 55%, #14B8A6 120%)",
+      chipBg: "rgba(204,251,241,0.35)",
+      onClick: () => navigate("/elimu-plus-online/scheduled?tab=meetings"),
     },
   ];
 
@@ -87,8 +99,8 @@ export default function ElimuPlusOnlineHub() {
               Online exams & classes
             </Typography>
             <Typography variant="body2" sx={{ opacity: 0.94, mt: 0.75, maxWidth: 720 }}>
-              Choose <strong>Open</strong> on a card to see upcoming online lessons or online exams in one place — then
-              use <strong>Initiate</strong> on each row when you are ready to run that session.
+              Choose <strong>Open</strong> to see scheduled online classes, exams, and staff meetings. Schedule lessons and
+              exams from the timetable; schedule staff meetings on the timetable <strong>Staff meetings</strong> tab.
             </Typography>
           </Box>
         </Stack>

@@ -21,6 +21,9 @@ import VideocamIcon from "@mui/icons-material/Videocam";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import Swal from "sweetalert2";
+import { useSocket } from "../../hooks/useSocket";
+import { useEventHostAlerts } from "../../hooks/useEventHostAlerts";
+import { primeAlertAudio } from "../../utils/liveClassAlertSound";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
@@ -33,6 +36,14 @@ const authHeaders = (token) => ({
 
 export default function EventLiveHostDialog({ open, event, onClose }) {
   const navigate = useNavigate();
+  const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
+  const { socket } = useSocket(token);
+  useEventHostAlerts({
+    socket,
+    eventId: event?.id,
+    token,
+    enabled: open && !!event?.id && !!token,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [liveInfo, setLiveInfo] = useState(null);
@@ -103,6 +114,7 @@ export default function EventLiveHostDialog({ open, event, onClose }) {
   };
 
   const handleEnterRoom = () => {
+    primeAlertAudio();
     onClose();
     navigate(`/live/event/${event.id}`);
   };

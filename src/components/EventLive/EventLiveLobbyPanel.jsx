@@ -29,10 +29,12 @@ const rosterSurfaceSx = {
   "& .MuiTableCell-root": { color: "text.primary" },
 };
 
-export default function EventLiveLobbyPanel({ eventId, token, socket, embedded = false }) {
+export default function EventLiveLobbyPanel({ eventId, meetingId, token, socket, embedded = false }) {
+  const isMeeting = !!meetingId;
   const [tab, setTab] = useState(0);
   const { loading, error, lobby, busyId, loadLobby, admit, deny, admitAll } = useEventLobby({
     eventId,
+    meetingId,
     token,
     socket,
     isStaff: true,
@@ -44,7 +46,11 @@ export default function EventLiveLobbyPanel({ eventId, token, socket, embedded =
 
   const tabs = [
     { label: `Waiting (${waiting.length})`, rows: waiting, actions: true },
-    { label: `In event (${admitted.length})`, rows: admitted, actions: false },
+    {
+      label: isMeeting ? `In meeting (${admitted.length})` : `In event (${admitted.length})`,
+      rows: admitted,
+      actions: false,
+    },
   ];
   const active = tabs[tab] || tabs[0];
 
@@ -64,18 +70,25 @@ export default function EventLiveLobbyPanel({ eventId, token, socket, embedded =
         <Stack direction="row" alignItems="center" spacing={0.75}>
           <GroupsRoundedIcon color="primary" fontSize="small" />
           <Typography variant="subtitle2" sx={{ fontWeight: 800, flex: 1 }}>
-            Event lobby
+            {isMeeting ? "Meeting lobby" : "Event lobby"}
           </Typography>
           <Button size="small" onClick={() => void loadLobby()} disabled={loading}>
             <RefreshRoundedIcon fontSize="small" />
           </Button>
         </Stack>
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-          Admit parents and students from the waiting list. They must open the public join link to enter video.
+          {isMeeting
+            ? "Admit staff from the waiting list. They join from Elimu Plus Online → Staff meetings."
+            : "Admit parents and students from the waiting list. They must open the public join link to enter video."}
         </Typography>
         <Stack direction="row" spacing={0.75} sx={{ mt: 1, flexWrap: "wrap" }} useFlexGap>
           <Chip size="small" label={`Waiting ${stats.waiting ?? 0}`} color="warning" variant="outlined" />
-          <Chip size="small" label={`In event ${stats.in_event ?? 0}`} color="success" variant="outlined" />
+          <Chip
+            size="small"
+            label={isMeeting ? `In meeting ${stats.in_event ?? 0}` : `In event ${stats.in_event ?? 0}`}
+            color="success"
+            variant="outlined"
+          />
         </Stack>
         {waiting.length > 0 ? (
           <Button

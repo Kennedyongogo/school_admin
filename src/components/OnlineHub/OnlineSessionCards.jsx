@@ -12,10 +12,18 @@ import VideocamOutlined from "@mui/icons-material/VideocamOutlined";
 import QuizOutlined from "@mui/icons-material/QuizOutlined";
 import AccessTimeRounded from "@mui/icons-material/AccessTimeRounded";
 import SchoolOutlined from "@mui/icons-material/SchoolOutlined";
+import GroupsRounded from "@mui/icons-material/GroupsRounded";
+import {
+  canEndStaleAdminMeetingLive,
+  getAdminMeetingJoinWindow,
+} from "../../utils/adminMeetingJoinWindow";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
 const accentLight = "#FEE2E2";
+const meetingAccent = "#0F766E";
+const meetingAccentDark = "#115E59";
+const meetingLight = "#CCFBF1";
 
 /** Matches lesson chip / cream row — neutral stone, not brand red. */
 const lessonStone = "#5c4a38";
@@ -236,6 +244,96 @@ export function ExamOnlineCard({ exam, onInitiate }) {
         >
           Initiate
         </Button>
+      </Box>
+    </Card>
+  );
+}
+
+export function MeetingOnlineCard({ meeting, onJoin, onEndLive, endLiveBusy = false }) {
+  const host = meeting.creator?.full_name || meeting.creator?.username || "Host";
+  const joinWin = getAdminMeetingJoinWindow(meeting);
+  const showEndLive = canEndStaleAdminMeetingLive(meeting);
+  const start = meeting.start_time ? new Date(meeting.start_time) : null;
+  const end = meeting.end_time ? new Date(meeting.end_time) : null;
+  const timeLabel =
+    start && end
+      ? `${start.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} ${start.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} – ${end.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
+      : "";
+
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        height: "100%",
+        flex: 1,
+        width: "100%",
+        minWidth: 0,
+        borderRadius: 2,
+        border: `1px solid ${meetingLight}`,
+        boxShadow: "0 10px 28px rgba(15,118,110,0.08)",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <CardContent sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 1.25, pb: 1 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Chip
+            size="small"
+            icon={<GroupsRounded sx={{ fontSize: "16px !important" }} />}
+            label="Staff meeting"
+            sx={{
+              fontWeight: 800,
+              bgcolor: `${meetingAccent}18`,
+              color: meetingAccentDark,
+              border: `1px solid ${meetingLight}`,
+            }}
+          />
+          <VideocamOutlined sx={{ color: meetingAccent }} />
+        </Stack>
+        <Typography variant="subtitle1" sx={{ fontWeight: 900, color: "#111827" }}>
+          {meeting.title || "Meeting"}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Host: {host}
+          {meeting.is_creator ? " (you)" : ""}
+        </Typography>
+        {timeLabel ? (
+          <Typography variant="body2" color="text.secondary">
+            {timeLabel}
+          </Typography>
+        ) : null}
+        <Typography variant="body2" color="text.secondary">
+          Status: {meeting.session_status || meeting.status || "scheduled"}
+        </Typography>
+      </CardContent>
+      <Box sx={{ p: 2, pt: 0, mt: "auto" }}>
+        {joinWin.can_join ? (
+          <Button
+            fullWidth
+            variant="contained"
+            onClick={() => onJoin(meeting)}
+            sx={{
+              bgcolor: meetingAccent,
+              fontWeight: 800,
+              py: 1.1,
+              "&:hover": { bgcolor: meetingAccentDark },
+            }}
+          >
+            {meeting.is_creator ? "Host" : "Join"}
+          </Button>
+        ) : null}
+        {showEndLive ? (
+          <Button
+            fullWidth
+            variant="contained"
+            color="error"
+            disabled={endLiveBusy}
+            onClick={() => onEndLive?.(meeting)}
+            sx={{ fontWeight: 800, py: 1.1, mt: joinWin.can_join ? 1 : 0 }}
+          >
+            {endLiveBusy ? "Ending…" : "End live"}
+          </Button>
+        ) : null}
       </Box>
     </Card>
   );

@@ -2,47 +2,32 @@ import React from "react";
 import { Box, Tab, Tabs } from "@mui/material";
 import VideocamRoundedIcon from "@mui/icons-material/VideocamRounded";
 import ForumRoundedIcon from "@mui/icons-material/ForumRounded";
-import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
-import EventLiveLobbyPanel from "./EventLiveLobbyPanel";
 import EventLiveSidebar from "./EventLiveSidebar";
-import {
-  eventLiveScrollRootSx,
-  eventLiveVideoViewportSx,
-  eventLiveRosterSectionSx,
-} from "./eventLiveScrollLayoutSx";
-import { useEventHostAlerts } from "../../hooks/useEventHostAlerts";
+import { eventLiveScrollRootSx, eventLiveVideoViewportSx } from "./eventLiveScrollLayoutSx";
 
-/** Host (wide): fullscreen video, scroll down for roster + reactions/chat. */
-export default function EventLiveHostLayout({
+export default function EventLiveAttendeeLayout({
   eventId,
   meetingId,
   token,
   socket,
-  videoSlot,
+  isStaff,
+  userId,
   isNarrow,
   mobilePanel,
   onMobilePanelChange,
+  videoSlot,
 }) {
-  useEventHostAlerts({
-    socket,
-    eventId,
-    meetingId,
-    token,
-    enabled: !!eventId && !!token,
-  });
   if (!isNarrow) {
     return (
       <Box sx={eventLiveScrollRootSx}>
         <Box sx={eventLiveVideoViewportSx}>{videoSlot}</Box>
-        <Box sx={eventLiveRosterSectionSx}>
-          <EventLiveLobbyPanel eventId={eventId} meetingId={meetingId} token={token} socket={socket} embedded />
-        </Box>
         <EventLiveSidebar
           eventId={eventId}
           meetingId={meetingId}
           token={token}
           socket={socket}
-          isStaff
+          isStaff={isStaff}
+          userId={userId}
           variant="dock"
         />
       </Box>
@@ -65,7 +50,6 @@ export default function EventLiveHostLayout({
           }}
         >
           <Tab icon={<VideocamRoundedIcon fontSize="small" />} iconPosition="start" label="Video" value="video" sx={{ minHeight: 40, fontSize: "0.75rem" }} />
-          <Tab icon={<GroupsRoundedIcon fontSize="small" />} iconPosition="start" label="Roster" value="roster" sx={{ minHeight: 40, fontSize: "0.75rem" }} />
           <Tab icon={<ForumRoundedIcon fontSize="small" />} iconPosition="start" label="Chat" value="chat" sx={{ minHeight: 40, fontSize: "0.75rem" }} />
         </Tabs>
       ) : null}
@@ -73,14 +57,16 @@ export default function EventLiveHostLayout({
         {mobilePanel === "video" ? (
           <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden" }}>{videoSlot}</Box>
         ) : null}
-        {mobilePanel === "roster" ? (
-          <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-            <EventLiveLobbyPanel eventId={eventId} meetingId={meetingId} token={token} socket={socket} />
-          </Box>
-        ) : null}
         {mobilePanel === "chat" ? (
           <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-            <EventLiveSidebar eventId={eventId} meetingId={meetingId} token={token} socket={socket} isStaff />
+            <EventLiveSidebar
+              eventId={eventId}
+              meetingId={meetingId}
+              token={token}
+              socket={socket}
+              isStaff={isStaff}
+              userId={userId}
+            />
           </Box>
         ) : null}
       </Box>

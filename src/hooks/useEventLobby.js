@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { getLiveSessionApi } from "../utils/liveSessionApi";
 
 function authHeaders(token) {
   return {
@@ -8,7 +9,8 @@ function authHeaders(token) {
   };
 }
 
-export function useEventLobby({ eventId, token, socket, isStaff, enabled = true }) {
+export function useEventLobby({ eventId, meetingId, token, socket, isStaff, enabled = true }) {
+  const api = getLiveSessionApi({ eventId, meetingId });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [myStatus, setMyStatus] = useState(isStaff ? "admitted" : "none");
@@ -16,17 +18,17 @@ export function useEventLobby({ eventId, token, socket, isStaff, enabled = true 
   const [busyId, setBusyId] = useState(null);
 
   const loadLobby = useCallback(async () => {
-    if (!eventId || !token || !isStaff) return null;
-    const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/lobby`, { headers: authHeaders(token) });
+    if (!api.id || !token || !isStaff) return null;
+    const res = await fetch(`${api.base}/lobby`, { headers: authHeaders(token) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.success) throw new Error(data.message || "Could not load lobby");
     setLobby(data.data);
     return data.data;
-  }, [eventId, token, isStaff]);
+  }, [api.id, api.base, token, isStaff]);
 
   const requestJoin = useCallback(async () => {
-    if (!eventId || !token) return null;
-    const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/lobby/join`, {
+    if (!api.id || !token) return null;
+    const res = await fetch(`${api.base}/lobby/join`, {
       method: "POST",
       headers: authHeaders(token),
     });
@@ -34,25 +36,25 @@ export function useEventLobby({ eventId, token, socket, isStaff, enabled = true 
     if (!res.ok || !data.success) throw new Error(data.message || "Could not request to join");
     setMyStatus(data.data?.status || "waiting");
     return data.data;
-  }, [eventId, token]);
+  }, [api.id, api.base, token]);
 
   const leaveLobby = useCallback(async () => {
-    if (!eventId || !token) return;
-    await fetch(`/api/events/${encodeURIComponent(eventId)}/lobby/leave`, {
+    if (!api.id || !token) return;
+    await fetch(`${api.base}/lobby/leave`, {
       method: "POST",
       headers: authHeaders(token),
     }).catch(() => {});
-  }, [eventId, token]);
+  }, [api.id, api.base, token]);
 
   const admit = useCallback(
     async (entryId) => {
-      if (!eventId || !token) return;
+      if (!api.id || !token) return;
       setBusyId(entryId);
       try {
-        const res = await fetch(
-          `/api/events/${encodeURIComponent(eventId)}/lobby/${encodeURIComponent(entryId)}/admit`,
-          { method: "POST", headers: authHeaders(token) }
-        );
+        const res = await fetch(`${api.base}/lobby/${encodeURIComponent(entryId)}/admit`, {
+          method: "POST",
+          headers: authHeaders(token),
+        });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.success) throw new Error(data.message || "Admit failed");
         if (data.data?.lobby) setLobby(data.data.lobby);
@@ -61,18 +63,18 @@ export function useEventLobby({ eventId, token, socket, isStaff, enabled = true 
         setBusyId(null);
       }
     },
-    [eventId, token, loadLobby]
+    [api.id, api.base, token, loadLobby]
   );
 
   const deny = useCallback(
     async (entryId) => {
-      if (!eventId || !token) return;
+      if (!api.id || !token) return;
       setBusyId(entryId);
       try {
-        const res = await fetch(
-          `/api/events/${encodeURIComponent(eventId)}/lobby/${encodeURIComponent(entryId)}/deny`,
-          { method: "POST", headers: authHeaders(token) }
-        );
+        const res = await fetch(`${api.base}/lobby/${encodeURIComponent(entryId)}/deny`, {
+          method: "POST",
+          headers: authHeaders(token),
+        });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.success) throw new Error(data.message || "Deny failed");
         if (data.data?.lobby) setLobby(data.data.lobby);
@@ -81,14 +83,14 @@ export function useEventLobby({ eventId, token, socket, isStaff, enabled = true 
         setBusyId(null);
       }
     },
-    [eventId, token, loadLobby]
+    [api.id, api.base, token, loadLobby]
   );
 
   const admitAll = useCallback(async () => {
-    if (!eventId || !token) return;
+    if (!api.id || !token) return;
     setBusyId("all");
     try {
-      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/lobby/admit-all`, {
+      const res = await fetch(`${api.base}/lobby/admit-all`, {
         method: "POST",
         headers: authHeaders(token),
       });
@@ -99,10 +101,10 @@ export function useEventLobby({ eventId, token, socket, isStaff, enabled = true 
     } finally {
       setBusyId(null);
     }
-  }, [eventId, token, loadLobby]);
+  }, [api.id, api.base, token, loadLobby]);
 
   useEffect(() => {
-    if (!enabled || !eventId || !token) return undefined;
+    if (!enabled || !api.id || !token) return undefined;
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -112,14 +114,14 @@ export function useEventLobby({ eventId, token, socket, isStaff, enabled = true 
           await loadLobby();
           setMyStatus("admitted");
         } else {
-          const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/lobby/me`, {
-            headers: authHeaders(token),
-          });
+          const res = await fetch(`${api.base}/lobby/me`, { headers: authHeaders(token) });
           const data = await res.json().catch(() => ({}));
           if (!res.ok || !data.success) throw new Error(data.message || "Lobby status failed");
           const status = data.data?.status || "none";
-          if (status === "waiting" || status === "admitted" || status === "denied") {
+          if (status === "waiting" || status === "denied") {
             setMyStatus(status);
+          } else if (status === "admitted") {
+            setMyStatus("admitted");
           } else {
             await requestJoin();
           }
@@ -136,19 +138,19 @@ export function useEventLobby({ eventId, token, socket, isStaff, enabled = true 
     return () => {
       cancelled = true;
     };
-  }, [enabled, eventId, token, isStaff, loadLobby, requestJoin]);
+  }, [enabled, api.id, api.base, token, isStaff, loadLobby, requestJoin]);
 
   useEffect(() => {
-    if (!isStaff || !eventId || !token) return undefined;
+    if (!isStaff || !api.id || !token) return undefined;
     const poll = setInterval(() => void loadLobby().catch(() => {}), 8000);
     return () => clearInterval(poll);
-  }, [isStaff, eventId, token, loadLobby]);
+  }, [isStaff, api.id, api.base, token, loadLobby]);
 
   useEffect(() => {
-    if (!socket || !eventId) return undefined;
+    if (!socket || !api.id) return undefined;
 
     const onLobbyUpdate = (payload) => {
-      if (String(payload?.event_id) !== String(eventId)) return;
+      if (String(payload?.[api.idField]) !== String(api.id)) return;
       if (isStaff) {
         setLobby({
           stats: payload.stats,
@@ -162,22 +164,42 @@ export function useEventLobby({ eventId, token, socket, isStaff, enabled = true 
     };
 
     const onLobbyStatus = (payload) => {
-      if (String(payload?.event_id) !== String(eventId)) return;
-      if (!isStaff) setMyStatus(payload.status || "waiting");
+      if (String(payload?.[api.idField]) !== String(api.id)) return;
+      if (!isStaff) {
+        const next = payload.status || "waiting";
+        setMyStatus(next === "left" ? "none" : next);
+      }
     };
 
-    const joinRoom = () => socket.emit("join:event", eventId);
+    const onLiveEnded = (payload) => {
+      if (String(payload?.[api.idField]) !== String(api.id)) return;
+      if (!isStaff) setMyStatus("none");
+    };
+
+    const onLiveStarted = (payload) => {
+      if (String(payload?.[api.idField]) !== String(api.id)) return;
+      if (!isStaff) {
+        setMyStatus("none");
+        void requestJoin();
+      }
+    };
+
+    const joinRoom = () => socket.emit(api.joinSocket, api.id);
     if (socket.connected) joinRoom();
     socket.on("connect", joinRoom);
-    socket.on("event-lobby:update", onLobbyUpdate);
-    socket.on("event-lobby:status", onLobbyStatus);
+    socket.on(api.events.lobbyUpdate, onLobbyUpdate);
+    socket.on(api.events.lobbyStatus, onLobbyStatus);
+    if (api.events.liveStarted) socket.on(api.events.liveStarted, onLiveStarted);
+    if (api.events.liveEnded) socket.on(api.events.liveEnded, onLiveEnded);
 
     return () => {
       socket.off("connect", joinRoom);
-      socket.off("event-lobby:update", onLobbyUpdate);
-      socket.off("event-lobby:status", onLobbyStatus);
+      socket.off(api.events.lobbyUpdate, onLobbyUpdate);
+      socket.off(api.events.lobbyStatus, onLobbyStatus);
+      if (api.events.liveStarted) socket.off(api.events.liveStarted, onLiveStarted);
+      if (api.events.liveEnded) socket.off(api.events.liveEnded, onLiveEnded);
     };
-  }, [socket, eventId, isStaff]);
+  }, [socket, api, isStaff, requestJoin]);
 
   return {
     loading,
