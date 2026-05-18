@@ -190,36 +190,82 @@ export default function ExamProctorMonitorTab() {
     <Box sx={{ px: { xs: 0.5, sm: 0 }, py: 1 }}>
       <Card elevation={0} sx={{ border: "1px solid #FEE2E2", mb: 2 }}>
         <CardContent>
-          <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ sm: "center" }} spacing={2}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            alignItems={{ md: "center" }}
+            spacing={1.25}
+            sx={{
+              width: "100%",
+              flexWrap: { xs: "wrap", md: "nowrap" },
+              overflowX: { md: "auto" },
+            }}
+          >
             <TextField
               type="date"
               size="small"
+              label="Date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              sx={{ width: { xs: "100%", sm: 220 } }}
+              sx={{
+                width: { xs: "100%", md: 150 },
+                minWidth: { md: 150 },
+                maxWidth: { md: 150 },
+                flexShrink: 0,
+              }}
             />
-            <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 260 } }}>
+            <FormControl
+              size="small"
+              sx={{
+                width: { xs: "100%", md: 188 },
+                minWidth: { md: 188 },
+                maxWidth: { md: 188 },
+                flexShrink: 0,
+              }}
+            >
               <Select value={statusMode} onChange={(e) => setStatusMode(e.target.value)} displayEmpty>
-                <MenuItem value="active">Active only (scheduled + live)</MenuItem>
-                <MenuItem value="all">All (except cancelled)</MenuItem>
+                <MenuItem value="active">Active only</MenuItem>
+                <MenuItem value="all">All (not cancelled)</MenuItem>
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 200 } }}>
+            <FormControl
+              size="small"
+              sx={{
+                width: { xs: "100%", md: 142 },
+                minWidth: { md: 142 },
+                maxWidth: { md: 142 },
+                flexShrink: 0,
+              }}
+            >
               <Select
                 value={autoRefresh ? "on" : "off"}
                 onChange={(e) => setAutoRefresh(e.target.value === "on")}
                 displayEmpty
               >
-                <MenuItem value="on">Auto refresh: On</MenuItem>
-                <MenuItem value="off">Auto refresh: Off</MenuItem>
+                <MenuItem value="on">Refresh: On</MenuItem>
+                <MenuItem value="off">Refresh: Off</MenuItem>
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 360 }, flex: 1 }}>
+            <FormControl
+              size="small"
+              sx={{
+                width: { xs: "100%", md: "auto" },
+                flex: { md: 1 },
+                minWidth: { md: 140 },
+                maxWidth: { md: "100%" },
+              }}
+            >
               <Select
                 value={selectedScheduleId}
                 onChange={(e) => setSelectedScheduleId(e.target.value)}
                 displayEmpty
+                sx={{
+                  "& .MuiSelect-select": {
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  },
+                }}
               >
                 {displaySchedules.length ? null : <MenuItem value="">No schedules</MenuItem>}
                 {displaySchedules.map((s) => (
@@ -230,7 +276,6 @@ export default function ExamProctorMonitorTab() {
                 ))}
               </Select>
             </FormControl>
-
           </Stack>
         </CardContent>
       </Card>
@@ -377,7 +422,7 @@ export default function ExamProctorMonitorTab() {
         <DialogContent>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 1.25 }}>
             <TextField size="small" label="Attempt ID" value={logDialogAttemptId} InputProps={{ readOnly: true }} fullWidth />
-            <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 220 } }}>
+            <FormControl size="small" sx={{ width: { xs: "100%", sm: 180 }, minWidth: { sm: 160 }, flexShrink: 0 }}>
               <Select value={logFilter} onChange={(e) => setLogFilter(e.target.value)}>
                 <MenuItem value="all">All events</MenuItem>
                 {[...new Set((logRows || []).map((r) => String(r?.event_type || "")).filter(Boolean))].map((ev) => (
