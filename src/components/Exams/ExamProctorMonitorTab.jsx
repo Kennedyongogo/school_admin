@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -44,6 +45,7 @@ const formatMaybeIso = (iso) => {
 };
 
 export default function ExamProctorMonitorTab() {
+  const navigate = useNavigate();
   const [date, setDate] = useState(toDateIso(new Date()));
   const [statusMode, setStatusMode] = useState("active"); // active | all
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -249,9 +251,48 @@ export default function ExamProctorMonitorTab() {
         <Alert severity="error">{monitorError}</Alert>
       ) : null}
 
+      {selectedSchedule ? (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Typography variant="body2" sx={{ mb: selectedSchedule.proctoring_mode === "live_monitor" ? 1 : 0 }}>
+            This panel shows <strong>activity signals</strong> (started/submitted, tab switches, warnings). For{" "}
+            <strong>live video</strong>, open the LiveKit invigilation room — same system as online classes (admit students
+            from the waiting room, then monitor their cameras).
+          </Typography>
+        </Alert>
+      ) : null}
+
+      {selectedSchedule?.proctoring_mode === "live_monitor" || selectedSchedule?.meeting_id ? (
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }}>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={() => navigate(`/exam-schedule/${selectedSchedule.id}/live`)}
+            sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark }, alignSelf: "flex-start" }}
+          >
+            Open LiveKit invigilation room
+          </Button>
+          {selectedSchedule.meeting_host_url &&
+          !String(selectedSchedule.meeting_host_url).includes("/exam-schedule/") ? (
+            <Button
+              variant="outlined"
+              size="small"
+              href={String(selectedSchedule.meeting_host_url)}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ alignSelf: "flex-start" }}
+            >
+              Legacy external link
+            </Button>
+          ) : null}
+        </Stack>
+      ) : null}
+
       {!monitorLoading && monitor ? (
         <Box>
           <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
+            {selectedSchedule?.proctoring_mode ? (
+              <Chip label={`Mode: ${selectedSchedule.proctoring_mode}`} size="small" color="primary" variant="outlined" />
+            ) : null}
             <Chip label={`Total: ${summary.total}`} size="small" />
             <Chip label={`Not started: ${summary.not_started}`} size="small" color="default" />
             <Chip label={`In progress: ${summary.in_progress}`} size="small" color="warning" />

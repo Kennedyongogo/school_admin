@@ -53,6 +53,72 @@ const authHeaders = (token) => ({
   Authorization: `Bearer ${token}`,
 });
 
+const fileUploadFieldDefaults = () => ({
+  upload_accept_images: true,
+  upload_accept_pdf: true,
+  upload_accept_doc: false,
+  upload_max_files: 1,
+  upload_max_size_mb: 10,
+  upload_hint: "",
+});
+
+const fileUploadFieldsFromOptions = (q) => {
+  const o = q?.options && typeof q.options === "object" && !Array.isArray(q.options) ? q.options : {};
+  const accept = Array.isArray(o.accept) ? o.accept : [];
+  return {
+    upload_accept_images: accept.length === 0 || accept.some((a) => String(a).startsWith("image/")),
+    upload_accept_pdf: accept.length === 0 || accept.includes("application/pdf"),
+    upload_accept_doc: accept.some((a) => String(a).includes("word") || String(a).includes("document")),
+    upload_max_files: Number(o.max_files) || 1,
+    upload_max_size_mb: Number(o.max_size_mb) || 10,
+    upload_hint: o.upload_hint || "",
+  };
+};
+
+const renderSubmissionAnswerContent = (a) => {
+  if (a?.answer_text && String(a.answer_text).trim()) {
+    return a.answer_text;
+  }
+  const json = a?.answer_json;
+  if (json && typeof json === "object" && Array.isArray(json.files) && json.files.length) {
+    return (
+      <Stack spacing={0.25} component="span">
+        {json.files.map((f, i) => (
+          <Typography key={`${a.id || i}-file`} variant="body2" component="span" display="block">
+            <Box
+              component="a"
+              href={f.url?.startsWith("/") ? f.url : `/${f.url || ""}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {f.name || f.url || `File ${i + 1}`}
+            </Box>
+          </Typography>
+        ))}
+      </Stack>
+    );
+  }
+  if (json != null) return JSON.stringify(json);
+  return "—";
+};
+
+const buildFileUploadOptionsPayload = (q) => {
+  const accept = [];
+  if (q.upload_accept_images) accept.push("image/*");
+  if (q.upload_accept_pdf) accept.push("application/pdf");
+  if (q.upload_accept_doc) {
+    accept.push("application/msword");
+    accept.push("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+  }
+  if (!accept.length) accept.push("image/*", "application/pdf");
+  return {
+    accept,
+    max_files: Math.min(5, Math.max(1, Number(q.upload_max_files) || 1)),
+    max_size_mb: Math.min(25, Math.max(1, Number(q.upload_max_size_mb) || 10)),
+    upload_hint: String(q.upload_hint || "").trim(),
+  };
+};
+
 const emptyQuestion = (index = 1) => ({
   key: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
   question_text: "",
@@ -67,6 +133,7 @@ const emptyQuestion = (index = 1) => ({
   canvas_w: 520,
   canvas_h: 26,
   canvas_page: 0,
+  ...fileUploadFieldDefaults(),
   diagram_data: "",
   diagram_hotspots: [{ id: `hs-${Date.now()}-1`, x: 50, y: 50, prompt: "", correct_answer: "" }],
   diagram_canvas_x: 40,
@@ -734,6 +801,31 @@ export default function ExamsTab() {
         </Stack>
       );
     }
+    if (q.question_type === "file_upload") {
+      const opts = buildFileUploadOptionsPayload(q);
+      const types = [];
+      if (opts.accept.some((a) => a.startsWith("image/"))) types.push("images");
+      if (opts.accept.includes("application/pdf")) types.push("PDF");
+      if (opts.accept.some((a) => a.includes("word"))) types.push("Word");
+      return (
+        <Box
+          sx={{
+            border: "1px dashed #9ca3af",
+            borderRadius: 1,
+            p: 1,
+            bgcolor: "#f9fafb",
+            minHeight: 48,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Typography sx={{ fontSize: 11, color: "text.secondary", textAlign: "center" }}>
+            Upload: {types.join(", ") || "files"} · max {opts.max_files} · {opts.max_size_mb} MB
+          </Typography>
+        </Box>
+      );
+    }
     if (q.question_type === "true_false") {
       return (
         <RadioGroup row value="">
@@ -768,6 +860,8 @@ export default function ExamsTab() {
         }, {});
       } else if (q.question_type === "multi_select") {
         initialAnswers[qKey] = [];
+      } else if (q.question_type === "file_upload") {
+        initialAnswers[qKey] = { files: [] };
       } else {
         initialAnswers[qKey] = "";
       }
@@ -1035,6 +1129,7 @@ export default function ExamsTab() {
             diagram_canvas_page: Number.isFinite(Number(q?.options?.diagram_position?.page))
               ? Number(q.options.diagram_position.page)
               : 0,
+            ...fileUploadFieldsFromOptions(q),
           }))
         : [emptyQuestion(1)]
     );
@@ -1234,6 +1329,8 @@ export default function ExamsTab() {
               correct_answer: String(hs.correct_answer || "").trim(),
             })),
           }
+        : q.question_type === "file_upload"
+        ? buildFileUploadOptionsPayload(q)
         : null,
     }));
     if (payloadQuestions.some((q) => !q.question_text)) {
@@ -1836,6 +1933,7 @@ ${imageParts}--${boundary}--`;
                               <MenuItem value="number">Number</MenuItem>
                               <MenuItem value="essay">Essay</MenuItem>
                               <MenuItem value="diagram_label">Diagram labeling</MenuItem>
+                              <MenuItem value="file_upload">File upload (image / document)</MenuItem>
                             </Select>
                             <TextField
                               fullWidth
@@ -1897,6 +1995,117 @@ ${imageParts}--${boundary}--`;
                                   setQuestions((prev) => prev.map((x) => (x.key === q.key ? { ...x, options_text: e.target.value } : x)))
                                 }
                               />
+                            ) : null}
+                            {q.question_type === "file_upload" ? (
+                              <Stack spacing={1.5}>
+                                <Alert severity="info" sx={{ py: 0.5 }}>
+                                  Students upload files here during the exam. Works with strict auto monitoring — uploads are
+                                  not blocked by proctoring rules.
+                                </Alert>
+                                <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                                  Allowed file types
+                                </Typography>
+                                <Stack direction="row" flexWrap="wrap" gap={1}>
+                                  <FormControlLabel
+                                    control={
+                                      <Checkbox
+                                        size="small"
+                                        checked={Boolean(q.upload_accept_images)}
+                                        onChange={(e) =>
+                                          setQuestions((prev) =>
+                                            prev.map((x) =>
+                                              x.key === q.key ? { ...x, upload_accept_images: e.target.checked } : x
+                                            )
+                                          )
+                                        }
+                                      />
+                                    }
+                                    label="Images"
+                                  />
+                                  <FormControlLabel
+                                    control={
+                                      <Checkbox
+                                        size="small"
+                                        checked={Boolean(q.upload_accept_pdf)}
+                                        onChange={(e) =>
+                                          setQuestions((prev) =>
+                                            prev.map((x) =>
+                                              x.key === q.key ? { ...x, upload_accept_pdf: e.target.checked } : x
+                                            )
+                                          )
+                                        }
+                                      />
+                                    }
+                                    label="PDF"
+                                  />
+                                  <FormControlLabel
+                                    control={
+                                      <Checkbox
+                                        size="small"
+                                        checked={Boolean(q.upload_accept_doc)}
+                                        onChange={(e) =>
+                                          setQuestions((prev) =>
+                                            prev.map((x) =>
+                                              x.key === q.key ? { ...x, upload_accept_doc: e.target.checked } : x
+                                            )
+                                          )
+                                        }
+                                      />
+                                    }
+                                    label="Word (.doc / .docx)"
+                                  />
+                                </Stack>
+                                <TextField
+                                  fullWidth
+                                  label="Max files per student"
+                                  type="number"
+                                  inputProps={{ min: 1, max: 5 }}
+                                  value={q.upload_max_files}
+                                  onChange={(e) =>
+                                    setQuestions((prev) =>
+                                      prev.map((x) =>
+                                        x.key === q.key
+                                          ? { ...x, upload_max_files: Math.min(5, Math.max(1, Number(e.target.value) || 1)) }
+                                          : x
+                                      )
+                                    )
+                                  }
+                                />
+                                <TextField
+                                  fullWidth
+                                  label="Max file size (MB)"
+                                  type="number"
+                                  inputProps={{ min: 1, max: 25 }}
+                                  value={q.upload_max_size_mb}
+                                  onChange={(e) =>
+                                    setQuestions((prev) =>
+                                      prev.map((x) =>
+                                        x.key === q.key
+                                          ? {
+                                              ...x,
+                                              upload_max_size_mb: Math.min(25, Math.max(1, Number(e.target.value) || 10)),
+                                            }
+                                          : x
+                                      )
+                                    )
+                                  }
+                                />
+                                <TextField
+                                  fullWidth
+                                  label="Upload instructions (shown to students)"
+                                  multiline
+                                  minRows={2}
+                                  value={q.upload_hint}
+                                  onChange={(e) =>
+                                    setQuestions((prev) =>
+                                      prev.map((x) => (x.key === q.key ? { ...x, upload_hint: e.target.value } : x))
+                                    )
+                                  }
+                                />
+                                <Typography variant="caption" color="text.secondary">
+                                  Marking is manual for file uploads (no auto correct answer).
+                                </Typography>
+                              </Stack>
                             ) : null}
                             {q.question_type === "diagram_label" ? (
                               <Stack spacing={1}>
@@ -2474,7 +2683,11 @@ ${imageParts}--${boundary}--`;
                           width: Number(q.canvas_w || 520),
                           height: Math.max(
                             Number(q.canvas_h || 26),
-                            ["multiple_choice", "multi_select", "true_false"].includes(String(q.question_type || "")) ? 74 : 26
+                            ["multiple_choice", "multi_select", "true_false"].includes(String(q.question_type || ""))
+                          ? 74
+                          : q.question_type === "file_upload"
+                          ? 72
+                          : 26
                           ),
                           border: "1px dashed #dc2626",
                           bgcolor: "rgba(255,255,255,0.95)",
@@ -2594,7 +2807,6 @@ ${imageParts}--${boundary}--`;
                   <TableCell>Template</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Duration</TableCell>
-                  <TableCell>Questions</TableCell>
                   <TableCell align="right">Action</TableCell>
                 </TableRow>
               </TableHead>
@@ -2606,7 +2818,6 @@ ${imageParts}--${boundary}--`;
                     <TableCell>{r.template?.name || templateMap.get(String(r.template_id))?.name || "-"}</TableCell>
                     <TableCell>{r.status || "draft"}</TableCell>
                     <TableCell>{r.duration_minutes} min</TableCell>
-                    <TableCell>{Array.isArray(r.questions) ? r.questions.length : 0}</TableCell>
                     <TableCell align="right">
                       <IconButton size="small" onClick={() => setViewRow(r)}>
                         <VisibilityIcon fontSize="small" />
@@ -2703,16 +2914,25 @@ ${imageParts}--${boundary}--`;
                       {Array.isArray(s.answers) && s.answers.length ? (
                         <Box sx={{ maxHeight: 180, overflow: "auto", border: "1px solid #eee", borderRadius: 1, p: 1 }}>
                           <Stack spacing={0.75}>
-                            {s.answers.map((a) => (
+                            {s.answers.map((a) => {
+                              const answerContent = renderSubmissionAnswerContent(a);
+                              return (
                               <Box key={a.id}>
                                 <Typography variant="caption" sx={{ fontWeight: 700 }}>
                                   {a.order_number || "Q"}: {a.question_text}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-wrap" }}>
-                                  {a.answer_text || (a.answer_json != null ? JSON.stringify(a.answer_json) : "—")}
-                                </Typography>
+                                <Box sx={{ color: "text.secondary" }}>
+                                  {typeof answerContent === "string" ? (
+                                    <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                                      {answerContent}
+                                    </Typography>
+                                  ) : (
+                                    answerContent
+                                  )}
+                                </Box>
                               </Box>
-                            ))}
+                              );
+                            })}
                           </Stack>
                         </Box>
                       ) : (
@@ -2837,7 +3057,11 @@ ${imageParts}--${boundary}--`;
                       width: Number(q.page_w || 520),
                       height: Math.max(
                         Number(q.canvas_h || 26),
-                        ["multiple_choice", "multi_select", "true_false"].includes(String(q.question_type || "")) ? 74 : 26
+                        ["multiple_choice", "multi_select", "true_false"].includes(String(q.question_type || ""))
+                          ? 74
+                          : q.question_type === "file_upload"
+                          ? 72
+                          : 26
                       ),
                       px: 1,
                       py: 0.35,
@@ -2993,6 +3217,31 @@ ${imageParts}--${boundary}--`;
                               })}
                             </Stack>
                           ) : null}
+                          {q.question_type === "file_upload" ? (
+                            <Stack spacing={1}>
+                              {q?.options?.upload_hint ? (
+                                <Typography variant="body2" color="text.secondary">
+                                  {q.options.upload_hint}
+                                </Typography>
+                              ) : null}
+                              <Typography variant="caption" color="text.secondary">
+                                Preview only — students upload files in the live exam (works with strict monitoring).
+                              </Typography>
+                              <Box
+                                sx={{
+                                  border: "1px dashed #9ca3af",
+                                  borderRadius: 1,
+                                  p: 1.5,
+                                  bgcolor: "#f9fafb",
+                                  textAlign: "center",
+                                }}
+                              >
+                                <Typography variant="body2" color="text.secondary">
+                                  Choose file (disabled in admin preview)
+                                </Typography>
+                              </Box>
+                            </Stack>
+                          ) : null}
                         </Box>
                       );
                     })}
@@ -3006,7 +3255,10 @@ ${imageParts}--${boundary}--`;
             onClick={() => {
               const attempted = Object.values(simulateAnswers || {}).filter((v) => {
                 if (Array.isArray(v)) return v.length > 0;
-                if (v && typeof v === "object") return Object.values(v).some((x) => String(x || "").trim());
+                if (v && typeof v === "object") {
+                  if (Array.isArray(v.files)) return v.files.length > 0;
+                  return Object.values(v).some((x) => String(x || "").trim());
+                }
                 return String(v || "").trim().length > 0;
               }).length;
               void Swal.fire({

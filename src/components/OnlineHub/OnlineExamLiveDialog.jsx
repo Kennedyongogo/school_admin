@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -47,6 +48,7 @@ const uniqueEmails = (rows) => {
 };
 
 export default function OnlineExamLiveDialog({ open, onClose, examScheduleId, subtitle, onLinksReady }) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
   const [row, setRow] = useState(null);
@@ -101,7 +103,7 @@ export default function OnlineExamLiveDialog({ open, onClose, examScheduleId, su
         const res = await fetch(`/api/exam-schedules/${examScheduleId}/live-session/initiate`, {
           method: "POST",
           headers: headers(token),
-          body: JSON.stringify({}),
+          body: JSON.stringify({ prefer_livekit: true }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.success) throw new Error(data.message || "Could not prepare meeting links");
@@ -223,6 +225,10 @@ export default function OnlineExamLiveDialog({ open, onClose, examScheduleId, su
 
   const join = row?.meeting_join_url?.trim?.() ? String(row.meeting_join_url).trim() : "";
   const host = row?.meeting_host_url?.trim?.() ? String(row.meeting_host_url).trim() : join;
+  const isLiveKit =
+    String(row?.meeting_provider || "").toLowerCase() === "livekit" ||
+    (row?.meeting_id && String(row.meeting_id).startsWith("ex-")) ||
+    (host && host.includes("/exam-schedule/"));
   const attendance = trackPayload?.attendance_rows ?? [];
   const recordings = trackPayload?.recordings ?? [];
   const inviteEmails = uniqueEmails(roster);
@@ -320,56 +326,91 @@ export default function OnlineExamLiveDialog({ open, onClose, examScheduleId, su
                 </>
               )}
             </Stack>
-            <Divider />
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-              Host / start here (invigilator)
-            </Typography>
-            <TextField
-              size="small"
-              fullWidth
-              label="Host URL"
-              value={host}
-              InputProps={{
-                readOnly: true,
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton size="small" aria-label="Copy host URL" onClick={() => copy(host)}>
-                      <ContentCopyOutlinedIcon fontSize="small" />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-              <Button variant="contained" href={host || "#"} target="_self" disabled={!host}>
-                Open host link here
-              </Button>
-              <Button variant="outlined" startIcon={<OpenInNewRoundedIcon />} href={host || "#"} target="_blank" disabled={!host}>
-                Open host link in new tab
-              </Button>
-            </Stack>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-              Student join link
-            </Typography>
-            <TextField
-              size="small"
-              fullWidth
-              label="Join URL"
-              value={join}
-              InputProps={{
-                readOnly: true,
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton size="small" aria-label="Copy join URL" onClick={() => copy(join)}>
-                      <ContentCopyOutlinedIcon fontSize="small" />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <Typography variant="body2" color="text.secondary">
-              Rooms use free <strong>Jitsi Meet</strong> by default (no API keys). To disable Jitsi and use only manual URLs, set <code>JITSI_DISABLED=1</code> and <code>ONLINE_MEETING_DEFAULT_JOIN_URL</code> on API.
-            </Typography>
+            {isLiveKit ? (
+              <>
+                <Alert severity="success" sx={{ mb: 1 }}>
+                  This exam uses <strong>LiveKit</strong> (same as online classes). Use the button below — do not use
+                  external Jitsi links for this schedule.
+                </Alert>
+                {examScheduleId ? (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="large"
+                    onClick={() => {
+                      onClose();
+                      navigate(`/exam-schedule/${examScheduleId}/live`);
+                    }}
+                    sx={{ alignSelf: "flex-start", fontWeight: 800, mb: 1 }}
+                  >
+                    Open LiveKit invigilation room
+                  </Button>
+                ) : null}
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                  Student portal path: {join || "—"}
+                </Typography>
+              </>
+            ) : (
+              <>
+                <Divider />
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                  Host / start here (invigilator)
+                </Typography>
+                <TextField
+                  size="small"
+                  fullWidth
+                  label="Host URL"
+                  value={host}
+                  InputProps={{
+                    readOnly: true,
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton size="small" aria-label="Copy host URL" onClick={() => copy(host)}>
+                          <ContentCopyOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                  <Button variant="contained" href={host || "#"} target="_self" disabled={!host}>
+                    Open host link here
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<OpenInNewRoundedIcon />}
+                    href={host || "#"}
+                    target="_blank"
+                    disabled={!host}
+                  >
+                    Open host link in new tab
+                  </Button>
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                  Student join link
+                </Typography>
+                <TextField
+                  size="small"
+                  fullWidth
+                  label="Join URL"
+                  value={join}
+                  InputProps={{
+                    readOnly: true,
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton size="small" aria-label="Copy join URL" onClick={() => copy(join)}>
+                          <ContentCopyOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  External meeting (Jitsi). Set <code>ONLINE_MEETING_PLATFORM=livekit</code> and LiveKit env vars on the
+                  API to use LiveKit like online classes.
+                </Typography>
+              </>
+            )}
             <Divider sx={{ my: 1 }} />
             <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
               Notify class (system — student portal bell)

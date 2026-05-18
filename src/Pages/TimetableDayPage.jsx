@@ -633,6 +633,11 @@ export default function TimetableDayPage() {
   };
 
   const openExamLinks = (row) => {
+    if (!row?.id) return;
+    navigate(`/exam-schedule/${row.id}/live`);
+  };
+
+  const openExamLinksDialog = (row) => {
     setExamLinksRow(row);
     setExamLinksOpen(true);
   };
@@ -1165,14 +1170,12 @@ export default function TimetableDayPage() {
                   </Typography>
                 ) : (
                   <TableContainer sx={{ borderRadius: 1, border: `1px solid ${primaryLight}`, overflowX: "auto" }}>
-                    <Table size="small" sx={{ minWidth: 960 }}>
+                    <Table size="small" sx={{ minWidth: 720 }}>
                       <TableHead>
                         <TableRow sx={{ bgcolor: `${primaryRed}12` }}>
                           <TableCell width={52}>No.</TableCell>
                           <TableCell>Exam</TableCell>
-                          <TableCell>Curriculum</TableCell>
                           <TableCell>Class</TableCell>
-                          <TableCell>Term</TableCell>
                           <TableCell>Teacher</TableCell>
                           <TableCell>Time</TableCell>
                           <TableCell>Status</TableCell>
@@ -1185,9 +1188,7 @@ export default function TimetableDayPage() {
                           <TableRow key={row.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
                             <TableCell>{idx + 1}</TableCell>
                             <TableCell>{row.exam?.title || "—"}</TableCell>
-                            <TableCell>{row.curriculum?.name || "—"}</TableCell>
                             <TableCell>{row.curriculum_class?.name || "—"}</TableCell>
-                            <TableCell>{row.curriculum_class_level?.name || "—"}</TableCell>
                             <TableCell>{row.teacher ? teacherLabel(row.teacher) : "—"}</TableCell>
                             <TableCell>
                               {row.start_time && row.end_time
@@ -1210,11 +1211,11 @@ export default function TimetableDayPage() {
                                     </IconButton>
                                   </span>
                                 </Tooltip>
-                                <Tooltip title="Meeting links / go live">
+                                <Tooltip title="Open LiveKit invigilation room (admit students, monitor cameras)">
                                   <span>
                                     <IconButton
                                       size="small"
-                                      aria-label="Manage exam links"
+                                      aria-label="Open LiveKit invigilation room"
                                       onClick={() => openExamLinks(row)}
                                       sx={{ color: primaryDark }}
                                     >
@@ -1533,6 +1534,30 @@ export default function TimetableDayPage() {
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, py: 2, bgcolor: "#fff", borderTop: `1px solid ${primaryLight}` }}>
+            {examViewRow?.id ? (
+              <>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    const row = examViewRow;
+                    setExamViewRow(null);
+                    openExamLinks(row);
+                  }}
+                >
+                  Open LiveKit room
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    const row = examViewRow;
+                    setExamViewRow(null);
+                    openExamLinksDialog(row);
+                  }}
+                >
+                  Notify class
+                </Button>
+              </>
+            ) : null}
             <Button variant="contained" onClick={() => setExamViewRow(null)} sx={{ bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }}>
               Close
             </Button>

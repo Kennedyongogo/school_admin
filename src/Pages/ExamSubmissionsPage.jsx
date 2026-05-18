@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import { ArrowBack as ArrowBackIcon, ExpandLess as ExpandLessIcon, ExpandMore as ExpandMoreIcon } from "@mui/icons-material";
 import Swal from "sweetalert2";
+import ExamSubmissionPaperView from "../components/Exams/ExamSubmissionPaperView";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
@@ -39,12 +40,6 @@ const fullMainBleedSx = (theme) => ({
   background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
 });
 
-const formatAnswer = (a) => {
-  if (a?.answer_text && String(a.answer_text).trim()) return a.answer_text;
-  if (a?.answer_json != null) return JSON.stringify(a.answer_json);
-  return "—";
-};
-
 export default function ExamSubmissionsPage() {
   const { examId } = useParams();
   const navigate = useNavigate();
@@ -54,6 +49,7 @@ export default function ExamSubmissionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [examInfo, setExamInfo] = useState(null);
+  const [fullExam, setFullExam] = useState(null);
   const [rows, setRows] = useState([]);
   const [expandedById, setExpandedById] = useState({});
   const [markInputs, setMarkInputs] = useState({});
@@ -76,13 +72,22 @@ export default function ExamSubmissionsPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/exams/${examId}/submissions?status=submitted&page=${page}&limit=${rowsPerPage}`, {
-        headers: authHeaders(token),
-      });
+      const [res, examRes] = await Promise.all([
+        fetch(`/api/exams/${examId}/submissions?status=submitted&page=${page}&limit=${rowsPerPage}`, {
+          headers: authHeaders(token),
+        }),
+        fetch(`/api/exams/${examId}`, { headers: authHeaders(token) }),
+      ]);
       const data = await res.json().catch(() => ({}));
+      const examJson = await examRes.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.message || "Could not load submissions.");
       const exam = data?.data?.exam || null;
       const submissions = Array.isArray(data?.data?.submissions) ? data.data.submissions : [];
+      if (examRes.ok && examJson.success) {
+        setFullExam(examJson.data || null);
+      } else {
+        setFullExam(null);
+      }
       const pg = data?.data?.pagination || {};
       setExamInfo(exam);
       setRows(submissions);
@@ -266,8 +271,13 @@ export default function ExamSubmissionsPage() {
                 <Card key={s.id} variant="outlined" sx={{ width: "100%" }}>
                   <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
                     <Stack spacing={1}>
-                      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1} alignItems={{ md: "center" }}>
-                        <Box>
+                      <Stack
+                        direction={{ xs: "column", lg: "row" }}
+                        justifyContent="space-between"
+                        spacing={1}
+                        alignItems={{ lg: "center" }}
+                      >
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
                           <Typography sx={{ fontWeight: 800 }}>
                             {idx + 1 + (pagination.page - 1) * pagination.limit}. {s.student?.user?.full_name || s.student?.user?.username || "Student"}
                           </Typography>
@@ -276,41 +286,104 @@ export default function ExamSubmissionsPage() {
                             {s.submitted_at ? new Date(s.submitted_at).toLocaleString() : "—"}
                           </Typography>
                         </Box>
-                         <Stack direction="row" spacing={1} alignItems="center">
-                           <TextField
-                             size="small"
-                             label="Total score"
-                             type="number"
-                             value={(s.answers || []).reduce((sum, a) => sum + Number(answerMarks[a.id] || 0), 0)}
-                             disabled
-                             sx={{ width: 170 }}
-                           />
-                           {(() => {
-                             const alreadyMarked = (s.answers || []).some(a => a.marks_obtained !== null);
-                             const hasResult = s?.marking?.grade != null;
-                             return (
-                               <>
-                                 <Button
-                                   variant="contained"
-                                   onClick={() => void saveQuestionMarks(s.id)}
-                                   disabled={markSavingId === s.id || s.status !== "submitted"}
-                                   sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark } }}
-                                 >
-                                   {markSavingId === s.id ? "Saving..." : alreadyMarked ? "Update marks" : "Save marks"}
-                                 </Button>
-                                 <Button
-                                   variant="outlined"
-                                   onClick={() => void gradeExamSubmission(s.id)}
-                                   disabled={gradingId === s.id || s.status !== "submitted" || !alreadyMarked}
-                                   sx={{ ml: 1, borderColor: accent, color: accent, "&:hover": { bgcolor: accentLight } }}
-                                 >
-                                   {gradingId === s.id ? <CircularProgress size={20} /> : hasResult ? "Update grade" : "Grade exam"}
-                                 </Button>
-                               </>
-                             );
-                           })()}
-                          <IconButton onClick={() => setExpandedById((prev) => ({ ...prev, [s.id]: !prev[s.id] }))}>
-                            <ExpandLessIcon />
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          alignItems="center"
+                          flexWrap="nowrap"
+                          sx={{
+                            flexShrink: 0,
+                            width: { xs: "100%", lg: "auto" },
+                            overflowX: "auto",
+                            pb: { xs: 0.25, lg: 0 },
+                          }}
+                        >
+                          {(() => {
+                            const alreadyMarked = (s.answers || []).some((a) => a.marks_obtained !== null);
+                            const hasResult = s?.marking?.grade != null;
+                            const toolbarControlSx = {
+                              width: 156,
+                              minWidth: 156,
+                              maxWidth: 156,
+                              height: 40,
+                              minHeight: 40,
+                              flexShrink: 0,
+                              boxSizing: "border-box",
+                            };
+                            const actionBtnSx = {
+                              ...toolbarControlSx,
+                              whiteSpace: "nowrap",
+                              px: 1,
+                              textTransform: "none",
+                              fontWeight: 700,
+                              fontSize: "0.8125rem",
+                              lineHeight: 1.2,
+                            };
+                            return (
+                              <>
+                                <TextField
+                                  size="small"
+                                  label="Total score"
+                                  type="number"
+                                  value={(s.answers || []).reduce((sum, a) => sum + Number(answerMarks[a.id] || 0), 0)}
+                                  disabled
+                                  sx={{
+                                    ...toolbarControlSx,
+                                    "& .MuiInputBase-root": {
+                                      height: 40,
+                                    },
+                                    "& .MuiInputLabel-root": {
+                                      whiteSpace: "nowrap",
+                                      maxWidth: "calc(100% + 24px)",
+                                    },
+                                    "& .MuiOutlinedInput-notchedOutline legend": {
+                                      maxWidth: "100%",
+                                    },
+                                  }}
+                                />
+                                <Button
+                                  variant="contained"
+                                  size="small"
+                                  onClick={() => void saveQuestionMarks(s.id)}
+                                  disabled={markSavingId === s.id || s.status !== "submitted"}
+                                  sx={{
+                                    ...actionBtnSx,
+                                    bgcolor: accent,
+                                    "&:hover": { bgcolor: accentDark },
+                                  }}
+                                >
+                                  {markSavingId === s.id ? "Saving…" : alreadyMarked ? "Update marks" : "Save marks"}
+                                </Button>
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  onClick={() => void gradeExamSubmission(s.id)}
+                                  disabled={gradingId === s.id || s.status !== "submitted" || !alreadyMarked}
+                                  sx={{
+                                    ...actionBtnSx,
+                                    borderColor: accent,
+                                    color: accent,
+                                    "&:hover": { bgcolor: accentLight },
+                                  }}
+                                >
+                                  {gradingId === s.id ? (
+                                    <CircularProgress size={18} sx={{ color: accent }} />
+                                  ) : hasResult ? (
+                                    "Update grade"
+                                  ) : (
+                                    "Grade exam"
+                                  )}
+                                </Button>
+                              </>
+                            );
+                          })()}
+                          <IconButton
+                            size="small"
+                            onClick={() => setExpandedById((prev) => ({ ...prev, [s.id]: !prev[s.id] }))}
+                            aria-label={isExpanded ? "Collapse submission" : "Expand submission"}
+                            sx={{ flexShrink: 0 }}
+                          >
+                            {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                           </IconButton>
                         </Stack>
                       </Stack>
@@ -335,43 +408,26 @@ export default function ExamSubmissionsPage() {
                         );
                       })()}
                       {isExpanded ? (
-                        <Box sx={{ border: "1px solid #eee", borderRadius: 1, p: 1.25 }}>
-                           {Array.isArray(s.answers) && s.answers.length ? (
-                             <Stack spacing={1}>
-                               {(() => {
-                                 const answersMap = new Map();
-      s.answers.forEach(a => {
-        const key = a.question ? a.question.id : a.id;
-        if (!answersMap.has(key)) answersMap.set(key, a);
-      });
-                                 return Array.from(answersMap.values()).sort((a, b) => (a.order_number || 0) - (b.order_number || 0)).map((a) => (
-                                 <Box key={a.question ? a.question.id : a.id} sx={{ pb: 0.75, borderBottom: "1px dashed #eee" }}>
-                                  <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                                    {a.order_number || "Q"}: {a.question_text} ({a.question_marks} marks)
-                                  </Typography>
-                                  <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                                    {formatAnswer(a)}
-                                  </Typography>
-                                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 0.5 }}>
-                                      <TextField
-                                        size="small"
-                                        label="Marks obtained"
-                                        type="number"
-                                        value={answerMarks[a.id] ?? ""}
-                                        onChange={(e) => setAnswerMarks((prev) => ({ ...prev, [a.id]: e.target.value }))}
-                                        sx={{ width: 120 }}
-                                        inputProps={{ min: 0, step: 0.01 }}
-                                      />
-                                      <Typography variant="caption">/ {a.question_marks}</Typography>
-                                    </Stack>
-                                </Box>
-                                ));
-                              })()}
-                             </Stack>
-                            ) : (
-                              <Typography variant="body2" color="text.secondary">No answers captured.</Typography>
-                            )}
-                         </Box>
+                        <Box sx={{ border: "1px solid #eee", borderRadius: 1, p: 1.25, bgcolor: "#fafafa" }}>
+                          {fullExam ? (
+                            <ExamSubmissionPaperView
+                              exam={fullExam}
+                              answers={s.answers}
+                              answerMarks={answerMarks}
+                              onAnswerMarksChange={(answerId, value) =>
+                                setAnswerMarks((prev) => ({ ...prev, [answerId]: value }))
+                              }
+                            />
+                          ) : Array.isArray(s.answers) && s.answers.length ? (
+                            <Alert severity="warning" sx={{ mb: 1 }}>
+                              Could not load exam layout. Refresh the page or check your connection.
+                            </Alert>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">
+                              No answers captured.
+                            </Typography>
+                          )}
+                        </Box>
                       ) : null}
                     </Stack>
                   </CardContent>

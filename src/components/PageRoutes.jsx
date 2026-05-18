@@ -58,6 +58,7 @@ import OnlineScheduledLessonsPage from "../Pages/OnlineScheduledLessonsPage";
 import OnlineScheduledExamsPage from "../Pages/OnlineScheduledExamsPage";
 import OnlineScheduledSessionsPage from "../Pages/OnlineScheduledSessionsPage";
 import LiveClassRoomPage from "../Pages/LiveClassRoomPage";
+import ExamLiveRoomPage from "../Pages/ExamLiveRoomPage";
 import EventLiveRoomPage from "../Pages/EventLiveRoomPage";
 import AdminMeetingLiveRoomPage from "../Pages/AdminMeetingLiveRoomPage";
 import ExamManagementPage from "../Pages/ExamManagementPage";
@@ -182,6 +183,7 @@ function PageRoutes() {
             <Route path="elimu-plus-online/meetings" element={<OnlineScheduledSessionsPage />} />
             <Route path="elimu-plus-online" element={<ElimuPlusOnlineHub />} />
             <Route path="live-class/:liveClassId" element={<LiveClassRoomPage />} />
+            <Route path="exam-schedule/:scheduleId/live" element={<ExamLiveRoomPage />} />
             <Route path="live/event/:eventId" element={<EventLiveRoomPage />} />
             <Route path="live/meeting/:meetingId" element={<AdminMeetingLiveRoomPage />} />
             <Route path="marketplace" element={<Marketplace />} />
