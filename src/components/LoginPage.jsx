@@ -155,7 +155,7 @@ export default function LoginPage() {
         localStorage.setItem("token", data.data.token);
         localStorage.setItem("userRole", authed.role);
         localStorage.setItem("user", JSON.stringify(authed));
-        setTimeout(() => navigate("/analytics"), 1500);
+        setTimeout(() => navigate("/dashboard"), 1500);
       } else {
         Swal.fire({
           icon: "error",

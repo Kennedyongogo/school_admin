@@ -64,6 +64,8 @@ import ExamManagementPage from "../Pages/ExamManagementPage";
 import ExamSubmissionsPage from "../Pages/ExamSubmissionsPage";
 import AccountingDashboardPage from "../Pages/AccountingDashboardPage";
 import HRPage from "../Pages/HRPage";
+import ElimuPlusDashboardPage from "../Pages/ElimuPlusDashboardPage";
+import HRParentCreate from "./HR/HRParentCreate";
 import TrainingEventCreate from "./TrainingOpportunities/TrainingEvents/TrainingEventCreate";
 import TrainingEventEdit from "./TrainingOpportunities/TrainingEvents/TrainingEventEdit";
 import TrainingEventView from "./TrainingOpportunities/TrainingEvents/TrainingEventView";
@@ -109,9 +111,10 @@ function PageRoutes() {
           <BrandPageLoader />
         ) : (
           <Routes>
-            <Route path="home" element={<Navigate to="/analytics" replace />} />
-            <Route path="dashboard" element={<Navigate to="/analytics" replace />} />
+            <Route path="home" element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<ElimuPlusDashboardPage />} />
             <Route path="hr" element={<HRPage />} />
+            <Route path="hr/parents/create" element={<HRParentCreate />} />
             <Route path="accounting" element={<AccountingDashboardPage />} />
             <Route path="accounting/fee-structures/create" element={<CurriculumFeeStructureCreate />} />
             <Route path="exam" element={<ExamManagementPage />} />

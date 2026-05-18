@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -13,12 +14,14 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   Tabs,
   TextField,
   Typography,
 } from "@mui/material";
+import { Add as AddIcon } from "@mui/icons-material";
 import BadgeIcon from "@mui/icons-material/Badge";
 import SchoolIcon from "@mui/icons-material/School";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
@@ -26,9 +29,33 @@ import RadioButtonUncheckedRoundedIcon from "@mui/icons-material/RadioButtonUnch
 import DownloadIcon from "@mui/icons-material/Download";
 import HRAdmissionsTab from "../components/HR/HRAdmissionsTab";
 import HRNewsEventsTab from "../components/HR/HRNewsEventsTab";
+import HRParentsTab from "../components/HR/HRParentsTab";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
+
+const HR_TAB_BANNER = [
+  {
+    title: "Admissions",
+    description: "Review and manage student admission applications and their status.",
+  },
+  {
+    title: "Attendance",
+    description: "Track teacher and student attendance from timetable lessons and exams.",
+  },
+  {
+    title: "News & Events",
+    description: "Publish news and school events for parents, students, and staff.",
+  },
+  {
+    title: "Parents",
+    description: "Create parent profiles linked to students. The parent user account is kept when a profile is removed.",
+  },
+  {
+    title: "Leave & Payroll",
+    description: "Leave requests, payroll, and HR policies — coming soon.",
+  },
+];
 
 const fullMainBleedSx = (theme) => ({
   width: `calc(100% + ${theme.spacing(6)})`,
@@ -39,6 +66,28 @@ const fullMainBleedSx = (theme) => ({
   marginBottom: "1px",
   boxSizing: "border-box",
 });
+
+/** Lessons attendance only — keeps wide tables inside the card without stretching the page. */
+const lessonsAttendanceContainSx = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  width: "100%",
+  minWidth: 0,
+  overflow: "hidden",
+};
+
+const lessonsTableContainerSx = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  overflowX: "auto",
+  WebkitOverflowScrolling: "touch",
+};
+
+const lessonsTableSx = {
+  width: "100%",
+  tableLayout: "fixed",
+};
 
 function todayIso() {
   const d = new Date();
@@ -62,20 +111,44 @@ function formatLessonSlot(lessonDate, startsAt, endsAt) {
   return "—";
 }
 
+function fmtDateTime(value) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+}
+
 function escapeCsv(value) {
   const raw = value == null ? "" : String(value);
   if (/[",\n]/.test(raw)) return `"${raw.replace(/"/g, '""')}"`;
   return raw;
 }
 
+const PARENTS_TAB_INDEX = 3;
+
 export default function HRPage() {
-  const [tab, setTab] = useState(0);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [tab, setTab] = useState(() => (typeof location.state?.tab === "number" ? location.state.tab : 0));
   const [scope, setScope] = useState("lessons");
   const [date, setDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [teachers, setTeachers] = useState([]);
   const [students, setStudents] = useState([]);
+
+  useEffect(() => {
+    if (typeof location.state?.tab === "number") {
+      setTab(location.state.tab);
+    }
+  }, [location.state?.tab]);
 
   const load = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -218,12 +291,41 @@ export default function HRPage() {
         <Typography variant="overline" sx={{ letterSpacing: 1 }}>
           Human Resources
         </Typography>
-        <Typography variant="h6" sx={{ fontWeight: 800 }}>
-          HR Dashboard
-        </Typography>
-        <Typography variant="body2" sx={{ opacity: 0.9 }}>
-          Track teacher and student attendance from timetable lessons.
-        </Typography>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          justifyContent="space-between"
+          spacing={1.5}
+          sx={{ mt: 0.25 }}
+        >
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+              {HR_TAB_BANNER[tab]?.title ?? "HR Dashboard"}
+            </Typography>
+            <Typography variant="body2" sx={{ opacity: 0.9, maxWidth: { xs: "100%", sm: 720 }, mt: 0.25 }}>
+              {HR_TAB_BANNER[tab]?.description ?? "Human resources management."}
+            </Typography>
+          </Box>
+          {tab === PARENTS_TAB_INDEX ? (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => navigate("/hr/parents/create")}
+              sx={{
+                flexShrink: 0,
+                alignSelf: { xs: "stretch", sm: "center" },
+                textTransform: "none",
+                fontWeight: 700,
+                bgcolor: "#fff",
+                color: accentDark,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                "&:hover": { bgcolor: "#fef2f2", color: accentDark },
+              }}
+            >
+              Create parent profile
+            </Button>
+          ) : null}
+        </Stack>
       </Box>
 
       <Box sx={{ px: { xs: 2, sm: 3 }, pb: 4, pt: { xs: 1.25, sm: 1.5 } }}>
@@ -240,7 +342,7 @@ export default function HRPage() {
               <Tab label="Admissions" />
               <Tab label="Attendance" />
               <Tab label="News & Events" />
-              <Tab label="Parent & Student" />
+              <Tab label="Parents" />
               <Tab label="Leave & Payroll (coming soon)" />
             </Tabs>
         </Paper>
@@ -347,106 +449,204 @@ export default function HRPage() {
               </Box>
             ) : (
               <>
-                <Paper elevation={0} sx={{ border: "1px solid #fecaca", borderRadius: 2, overflow: "hidden" }}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    border: "1px solid #fecaca",
+                    borderRadius: 2,
+                    overflow: "hidden",
+                    ...(scope === "lessons" ? lessonsAttendanceContainSx : {}),
+                  }}
+                >
                   <Box sx={{ px: 2, py: 1.25, borderBottom: "1px solid #fecaca", bgcolor: "#fff7f7" }}>
                     <Typography sx={{ fontWeight: 800 }}>Teachers</Typography>
                   </Box>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>No.</TableCell>
-                        <TableCell>Curriculum</TableCell>
-                        <TableCell>Class</TableCell>
-                        <TableCell>{scope === "exams" ? "Exam" : "Subject"}</TableCell>
-                        <TableCell>Teacher</TableCell>
-                        <TableCell>Time</TableCell>
-                        <TableCell align="center">Attendance</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {teachers.map((r, idx) => (
-                        <TableRow key={r.lesson_id || idx} hover>
-                          <TableCell>{idx + 1}</TableCell>
-                          <TableCell>{r.curriculum?.name || "—"}</TableCell>
-                          <TableCell>{r.curriculum_class?.name || "—"}</TableCell>
-                          <TableCell>{scope === "exams" ? r.exam?.title || "—" : r.subject?.name || "—"}</TableCell>
-                          <TableCell>{r.teacher?.user?.full_name || r.teacher?.user?.username || "Unassigned"}</TableCell>
-                          <TableCell>
-                            {formatLessonSlot(r.lesson_date, r.starts_at, r.ends_at)}
-                          </TableCell>
-                          <TableCell align="center">
-                            <Chip
-                              size="small"
-                              label={r.teacher_attended ? "Attended" : "Pending"}
-                              color={r.teacher_attended ? "success" : "default"}
-                              icon={r.teacher_attended ? <CheckCircleRoundedIcon fontSize="small" /> : <RadioButtonUncheckedRoundedIcon fontSize="small" />}
-                            />
-                          </TableCell>
+                  {scope === "lessons" ? (
+                    <TableContainer sx={lessonsTableContainerSx}>
+                      <Table size="small" sx={lessonsTableSx}>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>No.</TableCell>
+                            <TableCell>Curriculum</TableCell>
+                            <TableCell>Class</TableCell>
+                            <TableCell>Subject</TableCell>
+                            <TableCell>Teacher</TableCell>
+                            <TableCell>Time</TableCell>
+                            <TableCell align="center">Attendance</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {teachers.map((r, idx) => (
+                            <TableRow key={r.lesson_id || idx} hover>
+                              <TableCell>{idx + 1}</TableCell>
+                              <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {r.curriculum?.name || "—"}
+                              </TableCell>
+                              <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {r.curriculum_class?.name || "—"}
+                              </TableCell>
+                              <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {r.subject?.name || "—"}
+                              </TableCell>
+                              <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {r.teacher?.user?.full_name || r.teacher?.user?.username || "Unassigned"}
+                              </TableCell>
+                              <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {formatLessonSlot(r.lesson_date, r.starts_at, r.ends_at)}
+                              </TableCell>
+                              <TableCell align="center">
+                                <Chip
+                                  size="small"
+                                  label={r.teacher_attended ? "Attended" : "Pending"}
+                                  color={r.teacher_attended ? "success" : "default"}
+                                  icon={r.teacher_attended ? <CheckCircleRoundedIcon fontSize="small" /> : <RadioButtonUncheckedRoundedIcon fontSize="small" />}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  ) : (
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>No.</TableCell>
+                          <TableCell>Curriculum</TableCell>
+                          <TableCell>Class</TableCell>
+                          <TableCell>Exam</TableCell>
+                          <TableCell>Teacher</TableCell>
+                          <TableCell>Time</TableCell>
+                          <TableCell align="center">Attendance</TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHead>
+                      <TableBody>
+                        {teachers.map((r, idx) => (
+                          <TableRow key={r.lesson_id || idx} hover>
+                            <TableCell>{idx + 1}</TableCell>
+                            <TableCell>{r.curriculum?.name || "—"}</TableCell>
+                            <TableCell>{r.curriculum_class?.name || "—"}</TableCell>
+                            <TableCell>{r.exam?.title || "—"}</TableCell>
+                            <TableCell>{r.teacher?.user?.full_name || r.teacher?.user?.username || "Unassigned"}</TableCell>
+                            <TableCell>{formatLessonSlot(r.lesson_date, r.starts_at, r.ends_at)}</TableCell>
+                            <TableCell align="center">
+                              <Chip
+                                size="small"
+                                label={r.teacher_attended ? "Attended" : "Pending"}
+                                color={r.teacher_attended ? "success" : "default"}
+                                icon={r.teacher_attended ? <CheckCircleRoundedIcon fontSize="small" /> : <RadioButtonUncheckedRoundedIcon fontSize="small" />}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </Paper>
 
-                <Paper elevation={0} sx={{ border: "1px solid #fecaca", borderRadius: 2, overflow: "hidden" }}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    border: "1px solid #fecaca",
+                    borderRadius: 2,
+                    overflow: "hidden",
+                    ...(scope === "lessons" ? lessonsAttendanceContainSx : {}),
+                  }}
+                >
                   <Box sx={{ px: 2, py: 1.25, borderBottom: "1px solid #fecaca", bgcolor: "#fff7f7" }}>
                     <Typography sx={{ fontWeight: 800 }}>Students</Typography>
                   </Box>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>No.</TableCell>
-                        <TableCell>Student</TableCell>
-                        <TableCell>Admission</TableCell>
-                        <TableCell>{scope === "exams" ? "Exam" : "Subject"}</TableCell>
-                        <TableCell>Class</TableCell>
-                        <TableCell>Joined</TableCell>
-                        {scope === "lessons" ? <TableCell>Left</TableCell> : null}
-                        {scope === "lessons" ? <TableCell>Minutes</TableCell> : null}
-                        <TableCell align="center">Attendance</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {students.map((r, idx) => (
-                        <TableRow key={r.attendance_id || idx} hover>
-                          <TableCell>{idx + 1}</TableCell>
-                          <TableCell>{r.student?.user?.full_name || r.student?.user?.username || "—"}</TableCell>
-                          <TableCell>{r.student?.admission_number || "—"}</TableCell>
-                          <TableCell>{scope === "exams" ? r.exam_schedule?.exam?.title || "—" : r.lesson?.curriculum_subject?.name || "—"}</TableCell>
-                          <TableCell>
-                            {scope === "exams"
-                              ? r.exam_schedule?.curriculum_class?.name || "—"
-                              : r.lesson?.timetable?.curriculum_class?.name || "—"}
-                          </TableCell>
-                          <TableCell sx={{ whiteSpace: "nowrap" }}>
-                            {r.join_time ? new Date(r.join_time).toLocaleString() : "—"}
-                          </TableCell>
-                          {scope === "lessons" ? (
-                            <TableCell sx={{ whiteSpace: "nowrap" }}>
-                              {r.leave_time ? new Date(r.leave_time).toLocaleString() : r.join_time ? "In class" : "—"}
-                            </TableCell>
-                          ) : null}
-                          {scope === "lessons" ? (
-                            <TableCell>
-                              {r.duration_minutes != null
-                                ? r.duration_minutes
-                                : r.join_time && !r.leave_time
-                                ? `${Math.max(0, Math.round((Date.now() - new Date(r.join_time)) / 60000))} (ongoing)`
-                                : "—"}
-                            </TableCell>
-                          ) : null}
-                          <TableCell align="center">
-                            <Chip
-                              size="small"
-                              label={r.status || "Pending"}
-                              color={r.status === "Attended" ? "success" : "default"}
-                              icon={r.status === "Attended" ? <CheckCircleRoundedIcon fontSize="small" /> : <RadioButtonUncheckedRoundedIcon fontSize="small" />}
-                            />
-                          </TableCell>
+                  {scope === "lessons" ? (
+                    <TableContainer sx={lessonsTableContainerSx}>
+                      <Table size="small" sx={lessonsTableSx}>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>No.</TableCell>
+                            <TableCell>Student</TableCell>
+                            <TableCell>Admission</TableCell>
+                            <TableCell>Subject</TableCell>
+                            <TableCell>Class</TableCell>
+                            <TableCell>Joined</TableCell>
+                            <TableCell>Left</TableCell>
+                            <TableCell>Minutes</TableCell>
+                            <TableCell align="center">Attendance</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {students.map((r, idx) => (
+                            <TableRow key={r.attendance_id || idx} hover>
+                              <TableCell>{idx + 1}</TableCell>
+                              <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {r.student?.user?.full_name || r.student?.user?.username || "—"}
+                              </TableCell>
+                              <TableCell>{r.student?.admission_number || "—"}</TableCell>
+                              <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {r.lesson?.curriculum_subject?.name || "—"}
+                              </TableCell>
+                              <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {r.lesson?.timetable?.curriculum_class?.name || "—"}
+                              </TableCell>
+                              <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {fmtDateTime(r.join_time)}
+                              </TableCell>
+                              <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {r.leave_time ? fmtDateTime(r.leave_time) : r.join_time ? "In class" : "—"}
+                              </TableCell>
+                              <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {r.duration_minutes != null
+                                  ? r.duration_minutes
+                                  : r.join_time && !r.leave_time
+                                  ? `${Math.max(0, Math.round((Date.now() - new Date(r.join_time)) / 60000))} (ongoing)`
+                                  : "—"}
+                              </TableCell>
+                              <TableCell align="center">
+                                <Chip
+                                  size="small"
+                                  label={r.status || "Pending"}
+                                  color={r.status === "Attended" ? "success" : "default"}
+                                  icon={r.status === "Attended" ? <CheckCircleRoundedIcon fontSize="small" /> : <RadioButtonUncheckedRoundedIcon fontSize="small" />}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  ) : (
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>No.</TableCell>
+                          <TableCell>Student</TableCell>
+                          <TableCell>Admission</TableCell>
+                          <TableCell>Exam</TableCell>
+                          <TableCell>Class</TableCell>
+                          <TableCell>Joined</TableCell>
+                          <TableCell align="center">Attendance</TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHead>
+                      <TableBody>
+                        {students.map((r, idx) => (
+                          <TableRow key={r.attendance_id || idx} hover>
+                            <TableCell>{idx + 1}</TableCell>
+                            <TableCell>{r.student?.user?.full_name || r.student?.user?.username || "—"}</TableCell>
+                            <TableCell>{r.student?.admission_number || "—"}</TableCell>
+                            <TableCell>{r.exam_schedule?.exam?.title || "—"}</TableCell>
+                            <TableCell>{r.exam_schedule?.curriculum_class?.name || "—"}</TableCell>
+                            <TableCell>{fmtDateTime(r.join_time)}</TableCell>
+                            <TableCell align="center">
+                              <Chip
+                                size="small"
+                                label={r.status || "Pending"}
+                                color={r.status === "Attended" ? "success" : "default"}
+                                icon={r.status === "Attended" ? <CheckCircleRoundedIcon fontSize="small" /> : <RadioButtonUncheckedRoundedIcon fontSize="small" />}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </Paper>
               </>
             )}
@@ -454,7 +654,7 @@ export default function HRPage() {
         ) : tab === 2 ? (
           <HRNewsEventsTab />
         ) : tab === 3 ? (
-          <Alert severity="info">Parent & Student relationships and management features can be added here.</Alert>
+          <HRParentsTab />
         ) : (
           <Alert severity="info">Leave, payroll, and HR policies tabs can be added next.</Alert>
         )}
