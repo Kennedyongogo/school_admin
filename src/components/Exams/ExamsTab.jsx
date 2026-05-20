@@ -138,7 +138,7 @@ const PROCTORING_MODE_OPTIONS = [
       "No live room to manage. Check who sat the exam and review activity or submissions afterwards. Simplest option to set up.",
     rules: [
       "No live video room",
-      "Tab switching allowed",
+      "Tab switches recorded (allowed, not blocked)",
       "Exam activity recorded",
       "Webcam not required",
     ],

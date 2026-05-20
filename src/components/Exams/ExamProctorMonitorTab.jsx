@@ -332,8 +332,8 @@ export default function ExamProctorMonitorTab() {
             </Typography>
           ) : (
             <Typography variant="body2">
-              <strong>Monitored mode:</strong> tab switching is allowed; you still see when students start and submit, plus any
-              logged events.
+              <strong>Monitored mode:</strong> tab switches are recorded in the Tab count column (students are not blocked). You
+              still see when students start and submit, plus session logs.
             </Typography>
           )}
           <Typography variant="body2" sx={{ mt: 1 }}>
