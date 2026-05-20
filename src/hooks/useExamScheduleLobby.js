@@ -15,7 +15,7 @@ export function useExamScheduleLobby({ examScheduleId, token, socket, isTeacher,
   const [lobby, setLobby] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
-  const base = (path) => `/api/school-portal/exam-schedule/${encodeURIComponent(examScheduleId)}${path}`;
+  const base = (path) => `/api/school-portal/exam/${encodeURIComponent(examScheduleId)}${path}`;
 
   const loadLobby = useCallback(async () => {
     if (!examScheduleId || !token || !isTeacher) return null;
@@ -144,7 +144,7 @@ export function useExamScheduleLobby({ examScheduleId, token, socket, isTeacher,
         if (next === "admitted") setError("");
       }
     };
-    const joinRoom = () => socket.emit("join:exam-schedule", examScheduleId);
+    const joinRoom = () => socket.emit("join:exam", examScheduleId);
     if (socket.connected) joinRoom();
     socket.on("connect", joinRoom);
     socket.on("exam-lobby:update", onLobbyUpdate);
@@ -153,7 +153,7 @@ export function useExamScheduleLobby({ examScheduleId, token, socket, isTeacher,
       socket.off("connect", joinRoom);
       socket.off("exam-lobby:update", onLobbyUpdate);
       socket.off("exam-lobby:status", onLobbyStatus);
-      socket.emit("leave:exam-schedule", examScheduleId);
+      socket.emit("leave:exam", examScheduleId);
     };
   }, [socket, examScheduleId, isTeacher]);
 

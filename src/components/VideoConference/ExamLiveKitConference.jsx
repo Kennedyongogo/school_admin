@@ -15,7 +15,7 @@ const authHeaders = (token) => ({
 });
 
 async function fetchExamLiveKitToken(examScheduleId, token) {
-  const res = await fetch(`/api/school-portal/exam-schedule/${encodeURIComponent(examScheduleId)}/livekit-token`, {
+  const res = await fetch(`/api/school-portal/exam/${encodeURIComponent(examScheduleId)}/livekit-token`, {
     method: "POST",
     headers: authHeaders(token),
   });
@@ -68,12 +68,12 @@ export default function ExamLiveKitConference({ token, examScheduleId, examTitle
 
   useEffect(() => {
     if (!socket || !examScheduleId) return undefined;
-    const joinRoom = () => socket.emit("join:exam-schedule", examScheduleId);
+    const joinRoom = () => socket.emit("join:exam", examScheduleId);
     if (socket.connected) joinRoom();
     socket.on("connect", joinRoom);
     return () => {
       socket.off("connect", joinRoom);
-      socket.emit("leave:exam-schedule", examScheduleId);
+      socket.emit("leave:exam", examScheduleId);
     };
   }, [socket, examScheduleId]);
 

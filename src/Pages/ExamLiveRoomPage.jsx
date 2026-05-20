@@ -11,7 +11,8 @@ const authHeaders = (token) => ({
 });
 
 export default function ExamLiveRoomPage() {
-  const { scheduleId } = useParams();
+  const { scheduleId, examId } = useParams();
+  const id = examId || scheduleId;
   const navigate = useNavigate();
   const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
   const [loading, setLoading] = useState(true);
@@ -20,7 +21,7 @@ export default function ExamLiveRoomPage() {
   const [initiating, setInitiating] = useState(false);
 
   const ensureLiveSession = async () => {
-    const res = await fetch(`/api/exam-schedules/${encodeURIComponent(scheduleId)}/live-session/initiate`, {
+    const res = await fetch(`/api/exams/${encodeURIComponent(id)}/live-session/initiate`, {
       method: "POST",
       headers: authHeaders(token),
       body: JSON.stringify({}),
@@ -41,7 +42,7 @@ export default function ExamLiveRoomPage() {
       setError("");
       try {
         let row = null;
-        const roomRes = await fetch(`/api/school-portal/exam-schedule/${encodeURIComponent(scheduleId)}`, {
+        const roomRes = await fetch(`/api/school-portal/exam/${encodeURIComponent(id)}`, {
           headers: authHeaders(token),
         });
         const roomData = await roomRes.json().catch(() => ({}));
@@ -50,7 +51,7 @@ export default function ExamLiveRoomPage() {
         if (!row?.meeting_id || row?.video_mode !== "livekit") {
           setInitiating(true);
           await ensureLiveSession();
-          const again = await fetch(`/api/school-portal/exam-schedule/${encodeURIComponent(scheduleId)}`, {
+          const again = await fetch(`/api/school-portal/exam/${encodeURIComponent(id)}`, {
             headers: authHeaders(token),
           });
           const againData = await again.json().catch(() => ({}));
@@ -74,7 +75,7 @@ export default function ExamLiveRoomPage() {
     return () => {
       cancelled = true;
     };
-  }, [scheduleId, navigate, token]);
+  }, [id, navigate, token]);
 
   if (loading || initiating) {
     return (
@@ -111,7 +112,7 @@ export default function ExamLiveRoomPage() {
       <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         <ExamLiveKitConference
           token={token}
-          examScheduleId={scheduleId}
+          examScheduleId={id}
           examTitle={room?.exam_title}
           mediaMode={room?.media_mode || "video"}
           onLeave={() => navigate(-1)}

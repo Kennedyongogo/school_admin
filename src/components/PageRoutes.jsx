@@ -183,6 +183,7 @@ function PageRoutes() {
             <Route path="elimu-plus-online/meetings" element={<OnlineScheduledSessionsPage />} />
             <Route path="elimu-plus-online" element={<ElimuPlusOnlineHub />} />
             <Route path="live-class/:liveClassId" element={<LiveClassRoomPage />} />
+            <Route path="exam/:examId/live" element={<ExamLiveRoomPage />} />
             <Route path="exam-schedule/:scheduleId/live" element={<ExamLiveRoomPage />} />
             <Route path="live/event/:eventId" element={<EventLiveRoomPage />} />
             <Route path="live/meeting/:meetingId" element={<AdminMeetingLiveRoomPage />} />

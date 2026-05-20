@@ -113,7 +113,7 @@ export default function OnlineScheduledSessionsPage() {
       const q = `from=${encodeURIComponent(todayIso)}&days=42&limit=60`;
       const [lessonsRes, examsRes, meetingsRes] = await Promise.all([
         fetch(`/api/curricula/timetable-lessons/online-upcoming?${q}`, { headers: authHeaders(token) }),
-        fetch(`/api/exam-schedules/online-upcoming?${q}`, { headers: authHeaders(token) }),
+        fetch(`/api/exams/online-upcoming?${q}`, { headers: authHeaders(token) }),
         fetch(`/api/admin-meetings?${q}`, { headers: authHeaders(token) }),
       ]);
       const [lessonsJson, examsJson, meetingsJson] = await Promise.all([

@@ -77,7 +77,7 @@ export default function OnlineExamLiveDialog({ open, onClose, examScheduleId, su
     setTrackErr(null);
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(`/api/exam-schedules/${examScheduleId}/live-tracking`, {
+      const res = await fetch(`/api/exams/${examScheduleId}/live-tracking`, {
         headers: headers(token),
       });
       const data = await res.json().catch(() => ({}));
@@ -100,7 +100,7 @@ export default function OnlineExamLiveDialog({ open, onClose, examScheduleId, su
       setRow(null);
       const token = localStorage.getItem("token");
       try {
-        const res = await fetch(`/api/exam-schedules/${examScheduleId}/live-session/initiate`, {
+        const res = await fetch(`/api/exams/${examScheduleId}/live-session/initiate`, {
           method: "POST",
           headers: headers(token),
           body: JSON.stringify({ prefer_livekit: true }),
@@ -173,7 +173,7 @@ export default function OnlineExamLiveDialog({ open, onClose, examScheduleId, su
     setNotifyFeedback(null);
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(`/api/exam-schedules/${examScheduleId}/notify-class`, {
+      const res = await fetch(`/api/exams/${examScheduleId}/notify-class`, {
         method: "POST",
         headers: headers(token),
         body: JSON.stringify({ note: notifyNote.trim() ? notifyNote.trim().slice(0, 2000) : undefined }),
@@ -205,7 +205,7 @@ export default function OnlineExamLiveDialog({ open, onClose, examScheduleId, su
         const n = parseInt(ds, 10);
         if (Number.isFinite(n) && n >= 0) body.duration_seconds = n;
       }
-      const res = await fetch(`/api/exam-schedules/${examScheduleId}/live-recording`, {
+      const res = await fetch(`/api/exams/${examScheduleId}/live-recording`, {
         method: "POST",
         headers: headers(token),
         body: JSON.stringify(body),
@@ -339,7 +339,7 @@ export default function OnlineExamLiveDialog({ open, onClose, examScheduleId, su
                     size="large"
                     onClick={() => {
                       onClose();
-                      navigate(`/exam-schedule/${examScheduleId}/live`);
+                      navigate(`/exam/${examScheduleId}/live`);
                     }}
                     sx={{ alignSelf: "flex-start", fontWeight: 800, mb: 1 }}
                   >

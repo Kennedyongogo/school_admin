@@ -14,6 +14,7 @@ import {
   DialogTitle,
   FormControlLabel,
   IconButton,
+  ListItemText,
   MenuItem,
   Radio,
   RadioGroup,
@@ -38,14 +39,177 @@ import {
   Visibility as VisibilityIcon,
   PublishedWithChanges as PublishedWithChangesIcon,
   FactCheck as FactCheckIcon,
-  ContentCopy as ContentCopyIcon,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import dayjs from "dayjs";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { TimePicker } from "@mui/x-date-pickers/TimePicker";
+import { renderTimeViewClock } from "@mui/x-date-pickers/timeViewRenderers";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
+
+const scheduleTimeFieldSx = {
+  width: "100%",
+  "& .MuiOutlinedInput-root": {
+    borderRadius: 2,
+    "& fieldset": { borderColor: "#FECACA" },
+    "&:hover fieldset": { borderColor: accent },
+    "&.Mui-focused fieldset": { borderColor: accent },
+  },
+};
+
+function defaultScheduleStartTime() {
+  return dayjs().hour(8).minute(0).second(0).millisecond(0);
+}
+
+function defaultScheduleEndTime() {
+  return dayjs().hour(10).minute(0).second(0).millisecond(0);
+}
+
+function parseScheduleTime(val) {
+  if (val == null || val === "") return null;
+  if (dayjs.isDayjs(val) && val.isValid()) return val;
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+    const d = dayjs(s);
+    return d.isValid() ? d : null;
+  }
+  if (s.length === 5) return dayjs(`1970-01-01T${s}:00`);
+  const d = dayjs(`1970-01-01T${s}`);
+  return d.isValid() ? d : null;
+}
+
+function formatScheduleTimeForApi(value) {
+  if (!value || !dayjs.isDayjs(value) || !value.isValid()) return "";
+  return value.format("HH:mm:ss");
+}
+
+/** Three proctoring modes — webcam and tab-switch rules are fixed per mode (backend applies the same). */
+const PROCTORING_MODE_OPTIONS = [
+  {
+    id: "live_monitor",
+    label: "Live invigilation (video room)",
+    summary: "Like an exam hall on camera — you admit each student before they see the paper.",
+    bestFor:
+      "High-stakes exams, mocks, or finals where you want to see students live and control who starts the paper.",
+    studentExperience:
+      "At exam time they open the exam, join a waiting lobby with webcam on, and wait until you admit them. Only after admission can they open and answer the questions.",
+    teacherExperience:
+      "Open the live invigilation / proctor screen for this exam. Watch the lobby, admit students one by one (or in batches), and monitor them while they write. You can also use the online exam hub during the sitting.",
+    rules: [
+      "Webcam required",
+      "Students cannot open the paper until admitted",
+      "Tab switching blocked",
+      "Live video invigilation room used",
+    ],
+    alertSeverity: "info",
+  },
+  {
+    id: "strict_auto",
+    label: "Strict online exam (no video room)",
+    summary: "Students work in the portal only; leaving the exam tab can end their attempt.",
+    bestFor:
+      "Timed class tests or homework-style exams where you need strong integrity but do not want to run a live video room.",
+    studentExperience:
+      "They open the exam in the student portal and answer online. If they switch to another browser tab or window, the system treats it as a rule break and may warn or close the exam automatically.",
+    teacherExperience:
+      "No waiting lobby or live admit step. Review submissions and proctoring logs after the session. Use this when you do not need to see students on camera in real time.",
+    rules: [
+      "No live video room",
+      "Tab switching blocked",
+      "Rule breaks can auto-close the exam",
+      "Webcam not required",
+    ],
+    alertSeverity: "warning",
+  },
+  {
+    id: "record_only",
+    label: "Monitored online exam (light supervision)",
+    summary: "Students work in the portal; activity is logged, but tab switching is allowed.",
+    bestFor:
+      "Practice tests, formative quizzes, or lower-stakes checks where you want a record of who sat the exam without strict tab locking.",
+    studentExperience:
+      "They open the exam in the portal and complete it online. They may switch tabs (for example to check notes if you allow it). The system still records attempt activity for your review.",
+    teacherExperience:
+      "No live room to manage. Check who sat the exam and review activity or submissions afterwards. Simplest option to set up.",
+    rules: [
+      "No live video room",
+      "Tab switching allowed",
+      "Exam activity recorded",
+      "Webcam not required",
+    ],
+    alertSeverity: "success",
+  },
+];
+
+function ProctoringModeSelector({ value, onChange }) {
+  const selected = PROCTORING_MODE_OPTIONS.find((o) => o.id === value) || PROCTORING_MODE_OPTIONS[2];
+  return (
+    <Stack spacing={2}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: accentDark }}>
+        How students take this exam
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        Pick the supervision style that matches your exam. Webcam and tab-switch rules are applied automatically — you
+        do not set them separately.
+      </Typography>
+      <Select fullWidth value={value} onChange={(e) => onChange(e.target.value)}>
+        {PROCTORING_MODE_OPTIONS.map((opt) => (
+          <MenuItem key={opt.id} value={opt.id}>
+            <ListItemText primary={opt.label} secondary={opt.summary} primaryTypographyProps={{ fontWeight: 600 }} />
+          </MenuItem>
+        ))}
+      </Select>
+      <Alert severity={selected.alertSeverity} sx={{ borderRadius: 2, "& .MuiAlert-message": { width: "100%" } }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>
+          {selected.label}
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 1.5 }}>
+          {selected.summary}
+        </Typography>
+        <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", display: "block", mb: 0.25 }}>
+          Best for
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 1.25 }}>
+          {selected.bestFor}
+        </Typography>
+        <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", display: "block", mb: 0.25 }}>
+          What the student does
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 1.25 }}>
+          {selected.studentExperience}
+        </Typography>
+        <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", display: "block", mb: 0.25 }}>
+          What you do as teacher
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 1.25 }}>
+          {selected.teacherExperience}
+        </Typography>
+        <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", display: "block", mb: 0.25 }}>
+          Rules enforced automatically
+        </Typography>
+        <Box component="ul" sx={{ m: 0, pl: 2.25 }}>
+          {selected.rules.map((rule) => (
+            <Typography component="li" variant="body2" key={rule}>
+              {rule}
+            </Typography>
+          ))}
+        </Box>
+      </Alert>
+    </Stack>
+  );
+}
+
+function proctoringModeFromExam(row) {
+  const m = String(row?.proctoring_mode || "").trim();
+  if (m === "live_monitor" || m === "strict_auto" || m === "record_only") return m;
+  if (m === "none" || !m) return "record_only";
+  return "record_only";
+}
 
 const authHeaders = (token) => ({
   "Content-Type": "application/json",
@@ -626,17 +790,26 @@ export default function ExamsTab() {
   const [instructionLines, setInstructionLines] = useState([""]);
   const [totalMarks, setTotalMarks] = useState(0);
   const [passingMarks, setPassingMarks] = useState(0);
-  const [requiresWebcam, setRequiresWebcam] = useState(false);
-  const [preventTabSwitch, setPreventTabSwitch] = useState(true);
   const [allowRetake, setAllowRetake] = useState(false);
   const [maxAttempts, setMaxAttempts] = useState(1);
   const [status, setStatus] = useState("draft");
+  const [scheduleEnabled, setScheduleEnabled] = useState(true);
+  const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [scheduleStartTime, setScheduleStartTime] = useState(() => defaultScheduleStartTime());
+  const [scheduleEndTime, setScheduleEndTime] = useState(() => defaultScheduleEndTime());
+  const [teacherId, setTeacherId] = useState("");
+  const [sessionStatus, setSessionStatus] = useState("scheduled");
+  const [scheduleIsActive, setScheduleIsActive] = useState(true);
+  const [proctoringMode, setProctoringMode] = useState("record_only");
+  const [allowLateJoinMinutes, setAllowLateJoinMinutes] = useState(10);
+  const [lookupTeachers, setLookupTeachers] = useState([]);
   const [examLayout, setExamLayout] = useState(defaultExamLayout);
   const [questions, setQuestions] = useState([emptyQuestion(1)]);
   const [editingId, setEditingId] = useState(null);
   const [currentTemplatePage, setCurrentTemplatePage] = useState(0);
   const [templatePagesForExam, setTemplatePagesForExam] = useState([{ id: "page-1", elements: [] }]);
   const [saving, setSaving] = useState(false);
+  const [examDetailLoading, setExamDetailLoading] = useState(false);
   const [viewRow, setViewRow] = useState(null);
   const [statusEditRow, setStatusEditRow] = useState(null);
   const [statusEditValue, setStatusEditValue] = useState("draft");
@@ -847,26 +1020,65 @@ export default function ExamsTab() {
     return null;
   };
 
-  const openStudentPreview = (row) => {
-    setSimulateRow(row);
-    const initialAnswers = {};
-    (Array.isArray(row?.questions) ? row.questions : []).forEach((q, idx) => {
-      const qKey = String(q.id || q.key || idx + 1);
-      if (q.question_type === "diagram_label") {
-        const hotspots = Array.isArray(q?.options?.hotspots) ? q.options.hotspots : [];
-        initialAnswers[qKey] = hotspots.reduce((acc, hs, hsIdx) => {
-          acc[String(hs.id || hsIdx + 1)] = "";
-          return acc;
-        }, {});
-      } else if (q.question_type === "multi_select") {
-        initialAnswers[qKey] = [];
-      } else if (q.question_type === "file_upload") {
-        initialAnswers[qKey] = { files: [] };
-      } else {
-        initialAnswers[qKey] = "";
-      }
-    });
-    setSimulateAnswers(initialAnswers);
+  const loadExamDetail = async (examId) => {
+    const token = localStorage.getItem("token");
+    if (!token) throw new Error("Please sign in again.");
+    const res = await fetch(`/api/exams/${examId}`, { headers: authHeaders(token) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) throw new Error(data.message || "Could not load exam.");
+    return data.data;
+  };
+
+  const openStudentPreview = async (row) => {
+    if (!row?.id) return;
+    setExamDetailLoading(true);
+    try {
+      const full = await loadExamDetail(row.id);
+      setSimulateRow(full);
+      const initialAnswers = {};
+      (Array.isArray(full?.questions) ? full.questions : []).forEach((q, idx) => {
+        const qKey = String(q.id || q.key || idx + 1);
+        if (q.question_type === "diagram_label") {
+          const hotspots = Array.isArray(q?.options?.hotspots) ? q.options.hotspots : [];
+          initialAnswers[qKey] = hotspots.reduce((acc, hs, hsIdx) => {
+            acc[String(hs.id || hsIdx + 1)] = "";
+            return acc;
+          }, {});
+        } else if (q.question_type === "multi_select") {
+          initialAnswers[qKey] = [];
+        } else if (q.question_type === "file_upload") {
+          initialAnswers[qKey] = { files: [] };
+        } else {
+          initialAnswers[qKey] = "";
+        }
+      });
+      setSimulateAnswers(initialAnswers);
+    } catch (e) {
+      await Swal.fire({
+        icon: "error",
+        title: "Preview unavailable",
+        text: e.message || "Could not load exam questions.",
+      });
+    } finally {
+      setExamDetailLoading(false);
+    }
+  };
+
+  const openViewExam = async (row) => {
+    if (!row?.id) return;
+    setExamDetailLoading(true);
+    try {
+      const full = await loadExamDetail(row.id);
+      setViewRow(full);
+    } catch (e) {
+      await Swal.fire({
+        icon: "error",
+        title: "Preview unavailable",
+        text: e.message || "Could not load exam.",
+      });
+    } finally {
+      setExamDetailLoading(false);
+    }
   };
 
   const load = async () => {
@@ -879,7 +1091,7 @@ export default function ExamsTab() {
     setLoading(true);
     setError("");
     try {
-      const [examRes, tplRes, profileRes, currRes, classRes, subjRes, semRes] = await Promise.all([
+      const [examRes, tplRes, profileRes, currRes, classRes, subjRes, semRes, teachRes] = await Promise.all([
         fetch("/api/exams?page=1&limit=200", { headers: authHeaders(token) }),
         fetch("/api/exam-templates?page=1&limit=200", { headers: authHeaders(token) }),
         fetch("/api/school-profile/admin", { headers: authHeaders(token) }),
@@ -887,8 +1099,9 @@ export default function ExamsTab() {
         fetch("/api/curricula/all-classes", { headers: authHeaders(token) }),
         fetch("/api/curricula/all-subjects", { headers: authHeaders(token) }),
         fetch("/api/curricula/all-class-levels", { headers: authHeaders(token) }),
+        fetch("/api/teachers?page=1&limit=500", { headers: authHeaders(token) }),
       ]);
-      const [examJson, tplJson, profileJson, currJson, classJson, subjJson, semJson] = await Promise.all([
+      const [examJson, tplJson, profileJson, currJson, classJson, subjJson, semJson, teachJson] = await Promise.all([
         examRes.json().catch(() => ({})),
         tplRes.json().catch(() => ({})),
         profileRes.json().catch(() => ({})),
@@ -896,6 +1109,7 @@ export default function ExamsTab() {
         classRes.json().catch(() => ({})),
         subjRes.json().catch(() => ({})),
         semRes.json().catch(() => ({})),
+        teachRes.json().catch(() => ({})),
       ]);
       if (!examRes.ok || !examJson.success) throw new Error(examJson.message || "Could not load exams");
       if (!tplRes.ok || !tplJson.success) throw new Error(tplJson.message || "Could not load templates");
@@ -906,6 +1120,7 @@ export default function ExamsTab() {
       setCurriculumClasses(Array.isArray(classJson.data) ? classJson.data : []);
       setCurriculumSubjects(Array.isArray(subjJson.data) ? subjJson.data : []);
       setCurriculumClassLevels(Array.isArray(semJson.data) ? semJson.data : []);
+      setLookupTeachers(teachRes.ok && teachJson.success && Array.isArray(teachJson.data) ? teachJson.data : []);
     } catch (e) {
       setRows([]);
       setError(e.message || "Failed loading exams.");
@@ -1034,11 +1249,18 @@ export default function ExamsTab() {
     setInstructionLines([""]);
     setTotalMarks(0);
     setPassingMarks(0);
-    setRequiresWebcam(false);
-    setPreventTabSwitch(true);
     setAllowRetake(false);
     setMaxAttempts(1);
     setStatus("draft");
+    setScheduleEnabled(true);
+    setScheduleDate(new Date().toISOString().slice(0, 10));
+    setScheduleStartTime(defaultScheduleStartTime());
+    setScheduleEndTime(defaultScheduleEndTime());
+    setTeacherId("");
+    setSessionStatus("scheduled");
+    setScheduleIsActive(true);
+    setProctoringMode("record_only");
+    setAllowLateJoinMinutes(10);
     setExamLayout(defaultExamLayout());
     setTemplatePagesForExam([{ id: "page-1", elements: [] }]);
     setQuestions([emptyQuestion(1)]);
@@ -1054,7 +1276,7 @@ export default function ExamsTab() {
     return lines.length ? lines : [""];
   };
 
-  const startEditExam = (row) => {
+  const applyExamToForm = (row) => {
     setEditingId(row.id);
     setMode("create");
     setName(row.title || "");
@@ -1067,11 +1289,26 @@ export default function ExamsTab() {
     setInstructionLines(parseInstructionLines(row.instructions));
     setTotalMarks(Number(row.total_marks) || 0);
     setPassingMarks(Number(row.passing_marks) || 0);
-    setRequiresWebcam(Boolean(row.requires_webcam));
-    setPreventTabSwitch(row.prevent_tab_switch === undefined ? true : Boolean(row.prevent_tab_switch));
+    setProctoringMode(proctoringModeFromExam(row));
     setAllowRetake(Boolean(row.allow_retake));
     setMaxAttempts(Number(row.max_attempts) || 1);
     setStatus(row.status || "draft");
+    setScheduleEnabled(Boolean(row.start_time));
+    if (row.start_time) {
+      const st = dayjs(row.start_time);
+      if (st.isValid()) {
+        setScheduleDate(st.format("YYYY-MM-DD"));
+        setScheduleStartTime(st);
+      }
+    }
+    if (row.end_time) {
+      const et = dayjs(row.end_time);
+      if (et.isValid()) setScheduleEndTime(et);
+    }
+    setTeacherId(row.teacher_id || "");
+    setSessionStatus(row.session_status || "scheduled");
+    setScheduleIsActive(row.is_active !== false);
+    setAllowLateJoinMinutes(Number(row.allow_late_join_minutes ?? 10));
     const layout = row.exam_layout_json && typeof row.exam_layout_json === "object" ? row.exam_layout_json : {};
     const base = defaultExamLayout();
     setExamLayout({
@@ -1095,7 +1332,9 @@ export default function ExamsTab() {
       }))
     );
     setCurrentTemplatePage(0);
-    const qs = Array.isArray(row.questions) ? row.questions : [];
+    const qs = Array.isArray(row.questions)
+      ? [...row.questions].sort((a, b) => (Number(a.order_number) || 0) - (Number(b.order_number) || 0))
+      : [];
     setQuestions(
       qs.length
         ? qs.map((q, idx) => ({
@@ -1133,6 +1372,23 @@ export default function ExamsTab() {
           }))
         : [emptyQuestion(1)]
     );
+  };
+
+  const startEditExam = async (row) => {
+    if (!row?.id) return;
+    setExamDetailLoading(true);
+    try {
+      const full = await loadExamDetail(row.id);
+      applyExamToForm(full);
+    } catch (e) {
+      await Swal.fire({
+        icon: "error",
+        title: "Could not open exam",
+        text: e.message || "Failed to load exam questions.",
+      });
+    } finally {
+      setExamDetailLoading(false);
+    }
   };
 
   const openStatusDialog = (row) => {
@@ -1337,6 +1593,16 @@ export default function ExamsTab() {
       await Swal.fire({ icon: "error", title: "Question required", text: "Every question must have text." });
       return;
     }
+    const startStr = formatScheduleTimeForApi(scheduleStartTime);
+    const endStr = formatScheduleTimeForApi(scheduleEndTime);
+    if (scheduleEnabled && (!scheduleDate || !startStr || !endStr)) {
+      await Swal.fire({
+        icon: "error",
+        title: "Schedule incomplete",
+        text: "Please set exam date, start time, and end time.",
+      });
+      return;
+    }
     setSaving(true);
     try {
       const isEdit = Boolean(editingId);
@@ -1353,14 +1619,24 @@ export default function ExamsTab() {
           duration_minutes: Number(duration),
           total_marks: Number(totalMarks) || 0,
           passing_marks: Number(passingMarks) || 0,
-          requires_webcam: Boolean(requiresWebcam),
-          prevent_tab_switch: Boolean(preventTabSwitch),
+          proctoring_mode: proctoringMode,
           allow_retake: Boolean(allowRetake),
           max_attempts: allowRetake ? Math.max(1, Number(maxAttempts) || 1) : 1,
           ...(isEdit ? {} : { status }),
           instructions: instructions || null,
           exam_layout_json: { ...examLayout, template_pages_override: selectedTemplatePages },
           questions: payloadQuestions,
+          ...(scheduleEnabled && scheduleDate && startStr && endStr
+            ? {
+                teacher_id: teacherId || null,
+                start_time: `${scheduleDate}T${startStr}`,
+                end_time: `${scheduleDate}T${endStr}`,
+                timezone: "Africa/Nairobi",
+                session_status: sessionStatus || "scheduled",
+                is_active: scheduleIsActive,
+                allow_late_join_minutes: Number(allowLateJoinMinutes) || 10,
+              }
+            : { session_status: null }),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -1542,33 +1818,6 @@ export default function ExamsTab() {
       timer: 1200,
       showConfirmButton: false,
     });
-  };
-
-  const duplicateExam = async (row) => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-    try {
-      const res = await fetch(`/api/exams/${row.id}/duplicate`, {
-        method: "POST",
-        headers: authHeaders(token),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.message || "Could not duplicate exam.");
-      await load();
-      await Swal.fire({
-        icon: "success",
-        title: "Exam duplicated",
-        text: `${row.title || row.name || "Exam"} copied to a new draft.`,
-        timer: 1200,
-        showConfirmButton: false,
-      });
-    } catch (e) {
-      await Swal.fire({
-        icon: "error",
-        title: "Duplicate failed",
-        text: e.message || "Could not duplicate exam.",
-      });
-    }
   };
 
   const downloadExamPdf = async () => {
@@ -1767,6 +2016,7 @@ ${imageParts}--${boundary}--`;
 
   if (mode === "create") {
     return (
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
       <Stack spacing={2}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ width: "100%" }}>
           <Typography sx={{ fontWeight: 800 }}>{editingId ? "Edit exam" : "Create exam"}</Typography>
@@ -1829,6 +2079,135 @@ ${imageParts}--${boundary}--`;
                  ))}
                </Select>
               <TextField fullWidth label="Duration (minutes)" type="number" value={duration} onChange={(e) => setDuration(e.target.value)} />
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: accentDark, pt: 1 }}>
+                Schedule (optional)
+              </Typography>
+              <FormControlLabel
+                control={<Checkbox checked={scheduleEnabled} onChange={(e) => setScheduleEnabled(e.target.checked)} />}
+                label="Schedule this exam for a class sitting"
+              />
+              {scheduleEnabled ? (
+                <Stack spacing={2}>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                    <TextField
+                      fullWidth
+                      label="Exam date"
+                      type="date"
+                      value={scheduleDate}
+                      onChange={(e) => setScheduleDate(e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                    <TimePicker
+                      label="Start time"
+                      ampm
+                      value={scheduleStartTime}
+                      onChange={(v) => setScheduleStartTime(v)}
+                      viewRenderers={{
+                        hours: renderTimeViewClock,
+                        minutes: renderTimeViewClock,
+                      }}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          required: scheduleEnabled,
+                          sx: scheduleTimeFieldSx,
+                        },
+                      }}
+                    />
+                    <TimePicker
+                      label="End time"
+                      ampm
+                      value={scheduleEndTime}
+                      onChange={(v) => setScheduleEndTime(v)}
+                      viewRenderers={{
+                        hours: renderTimeViewClock,
+                        minutes: renderTimeViewClock,
+                      }}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          required: scheduleEnabled,
+                          sx: scheduleTimeFieldSx,
+                        },
+                      }}
+                    />
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">
+                    Tap a time field to open the clock dial, then pick hour, minute, and AM or PM.
+                  </Typography>
+                  <Select
+                    fullWidth
+                    displayEmpty
+                    value={teacherId}
+                    onChange={(e) => setTeacherId(e.target.value)}
+                  >
+                    <MenuItem value="">
+                      <em>Select invigilator / teacher</em>
+                    </MenuItem>
+                    {lookupTeachers.map((t) => (
+                      <MenuItem key={t.id} value={t.id}>
+                        {t.user?.full_name || t.user?.username || "Teacher"}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                    <Select fullWidth value={sessionStatus} onChange={(e) => setSessionStatus(e.target.value)}>
+                      <MenuItem value="scheduled">Scheduled</MenuItem>
+                      <MenuItem value="live">Live</MenuItem>
+                      <MenuItem value="completed">Completed</MenuItem>
+                      <MenuItem value="cancelled">Cancelled</MenuItem>
+                    </Select>
+                    <Select
+                      fullWidth
+                      value={scheduleIsActive ? "true" : "false"}
+                      onChange={(e) => setScheduleIsActive(e.target.value === "true")}
+                    >
+                      <MenuItem value="true">Active — yes</MenuItem>
+                      <MenuItem value="false">Active — no</MenuItem>
+                    </Select>
+                  </Stack>
+                  <ProctoringModeSelector value={proctoringMode} onChange={setProctoringMode} />
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Allow late join (minutes)"
+                    value={allowLateJoinMinutes}
+                    onChange={(e) => setAllowLateJoinMinutes(e.target.value)}
+                    inputProps={{ min: 0, max: 120 }}
+                  />
+                </Stack>
+              ) : null}
+              {!scheduleEnabled ? (
+                <ProctoringModeSelector value={proctoringMode} onChange={setProctoringMode} />
+              ) : null}
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: accentDark, pt: 1 }}>
+                Attempts
+              </Typography>
+              <Stack spacing={2}>
+                <Select
+                  fullWidth
+                  value={allowRetake ? "yes" : "no"}
+                  onChange={(e) => {
+                    const on = e.target.value === "yes";
+                    setAllowRetake(on);
+                    if (!on) setMaxAttempts(1);
+                  }}
+                >
+                  <MenuItem value="no">Allow retake — No (one attempt)</MenuItem>
+                  <MenuItem value="yes">Allow retake — Yes</MenuItem>
+                </Select>
+                {allowRetake ? (
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Maximum attempts"
+                    value={maxAttempts}
+                    onChange={(e) => setMaxAttempts(Math.max(1, Number(e.target.value) || 1))}
+                    inputProps={{ min: 1, max: 10 }}
+                    helperText="How many times a student may submit this exam."
+                  />
+                ) : null}
+              </Stack>
               <Stack spacing={1}>
                 <Typography sx={{ fontWeight: 700 }}>Instructions</Typography>
                 {instructionLines.map((line, idx) => (
@@ -1867,26 +2246,6 @@ ${imageParts}--${boundary}--`;
                   <MenuItem value="archived">Archived</MenuItem>
                 </Select>
               ) : null}
-              <FormControlLabel
-                control={<Switch checked={requiresWebcam} onChange={(e) => setRequiresWebcam(e.target.checked)} />}
-                label="Require webcam"
-              />
-              <FormControlLabel
-                control={<Switch checked={preventTabSwitch} onChange={(e) => setPreventTabSwitch(e.target.checked)} />}
-                label="Prevent tab switch"
-              />
-              <FormControlLabel
-                control={<Switch checked={allowRetake} onChange={(e) => setAllowRetake(e.target.checked)} />}
-                label="Allow retake"
-              />
-              <TextField
-                fullWidth
-                label="Max attempts"
-                type="number"
-                value={maxAttempts}
-                onChange={(e) => setMaxAttempts(e.target.value)}
-                disabled={!allowRetake}
-              />
               <Stack direction={{ xs: "column", xl: "row" }} spacing={2} alignItems="flex-start">
                 <Box sx={{ width: { xs: "100%", xl: 520 }, flexShrink: 0 }}>
                   <Typography sx={{ fontWeight: 800, mt: 1, mb: 1 }}>Questions</Typography>
@@ -2781,6 +3140,7 @@ ${imageParts}--${boundary}--`;
           </CardContent>
         </Card>
       </Stack>
+      </LocalizationProvider>
     );
   }
 
@@ -2819,17 +3179,19 @@ ${imageParts}--${boundary}--`;
                     <TableCell>{r.status || "draft"}</TableCell>
                     <TableCell>{r.duration_minutes} min</TableCell>
                     <TableCell align="right">
-                      <IconButton size="small" onClick={() => setViewRow(r)}>
+                      <IconButton size="small" disabled={examDetailLoading} onClick={() => void openViewExam(r)}>
                         <VisibilityIcon fontSize="small" />
                       </IconButton>
-                      <IconButton size="small" title="Student preview test" onClick={() => openStudentPreview(r)}>
+                      <IconButton
+                        size="small"
+                        title="Student preview test"
+                        disabled={examDetailLoading}
+                        onClick={() => void openStudentPreview(r)}
+                      >
                         <PlayCircleOutlineIcon fontSize="small" />
                       </IconButton>
-                      <IconButton size="small" onClick={() => startEditExam(r)}>
+                      <IconButton size="small" disabled={examDetailLoading} onClick={() => void startEditExam(r)}>
                         <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" title="Duplicate exam" onClick={() => void duplicateExam(r)}>
-                        <ContentCopyIcon fontSize="small" />
                       </IconButton>
                       <IconButton
                         size="small"

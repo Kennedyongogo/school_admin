@@ -212,9 +212,7 @@ export default function TimetableDayPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromSearch = searchParams.get("tab");
-  const [tab, setTab] = useState(() =>
-    tabFromSearch === "exams" ? 1 : tabFromSearch === "meetings" ? 2 : 0
-  );
+  const [tab, setTab] = useState(() => (tabFromSearch === "meetings" ? 1 : 0));
   const [meetingCreateSignal, setMeetingCreateSignal] = useState(0);
   const [lessons, setLessons] = useState([]);
   const [lessonsLoading, setLessonsLoading] = useState(true);
@@ -302,15 +300,14 @@ export default function TimetableDayPage() {
 
   useEffect(() => {
     const tParam = searchParams.get("tab");
-    const t = tParam === "exams" ? 1 : tParam === "meetings" ? 2 : 0;
+    const t = tParam === "meetings" ? 1 : 0;
     setTab(t);
   }, [isoDate, searchParams]);
 
   const handleTabChange = (_, v) => {
     setTab(v);
     const next = new URLSearchParams(searchParams);
-    if (v === 1) next.set("tab", "exams");
-    else if (v === 2) next.set("tab", "meetings");
+    if (v === 1) next.set("tab", "meetings");
     else next.delete("tab");
     setSearchParams(next, { replace: true });
   };
@@ -441,10 +438,6 @@ export default function TimetableDayPage() {
   useEffect(() => {
     if (parsed) loadLessons();
   }, [parsed, loadLessons]);
-
-  useEffect(() => {
-    if (parsed && tab === 1) loadExamSchedules();
-  }, [parsed, tab, loadExamSchedules]);
 
   useEffect(() => {
     if (!editLesson) return;
@@ -920,10 +913,8 @@ export default function TimetableDayPage() {
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.92, mt: 0.5 }}>
                   {tab === 1
-                    ? "Exam schedules for this date. Use Create exam schedule or open meeting links when live."
-                    : tab === 2
-                      ? "Staff meetings for this date. You admit participants when they join from Elimu Plus Online."
-                      : "Lessons for this date are listed below with pagination. Mark teacher attendance when editing a lesson."}
+                    ? "Staff meetings for this date. You admit participants when they join from Elimu Plus Online."
+                    : "Lessons for this date are listed below with pagination. Mark teacher attendance when editing a lesson. Schedule exams from Exam management."}
                 </Typography>
               </Box>
             </Stack>
@@ -932,8 +923,6 @@ export default function TimetableDayPage() {
               size="medium"
               onClick={() => {
                 if (tab === 1) {
-                  void openCreateExamSchedule();
-                } else if (tab === 2) {
                   setMeetingCreateSignal((n) => n + 1);
                 } else {
                   navigate(`/timetable/create?date=${isoDate}`);
@@ -949,7 +938,7 @@ export default function TimetableDayPage() {
                 "&:hover": { bgcolor: "rgba(255,255,255,0.92)" },
               }}
             >
-              {tab === 1 ? "Create exam schedule" : tab === 2 ? "Schedule staff meeting" : "Create lesson timetable"}
+              {tab === 1 ? "Schedule staff meeting" : "Create lesson timetable"}
             </Button>
           </Stack>
         </Box>
@@ -977,7 +966,6 @@ export default function TimetableDayPage() {
               }}
             >
               <Tab label="Lessons" />
-              <Tab label="Exams" />
               <Tab label="Staff meetings" />
             </Tabs>
 
@@ -1155,109 +1143,6 @@ export default function TimetableDayPage() {
               </TabPanel>
 
               <TabPanel value={tab} index={1}>
-                {examSchedulesError && (
-                  <Alert severity="error" sx={{ mb: 2 }} onClose={() => setExamSchedulesError(null)}>
-                    {examSchedulesError}
-                  </Alert>
-                )}
-                {examSchedulesLoading ? (
-                  <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
-                    <CircularProgress sx={{ color: primaryRed }} size={36} />
-                  </Box>
-                ) : examSchedules.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    No exam schedules for this date yet. Use <strong>Create exam schedule</strong> to add one.
-                  </Typography>
-                ) : (
-                  <TableContainer sx={{ borderRadius: 1, border: `1px solid ${primaryLight}`, overflowX: "auto" }}>
-                    <Table size="small" sx={{ minWidth: 720 }}>
-                      <TableHead>
-                        <TableRow sx={{ bgcolor: `${primaryRed}12` }}>
-                          <TableCell width={52}>No.</TableCell>
-                          <TableCell>Exam</TableCell>
-                          <TableCell>Class</TableCell>
-                          <TableCell>Teacher</TableCell>
-                          <TableCell>Time</TableCell>
-                          <TableCell>Status</TableCell>
-                          <TableCell>Proctoring</TableCell>
-                          <TableCell align="center">Action</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {examSchedules.map((row, idx) => (
-                          <TableRow key={row.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
-                            <TableCell>{idx + 1}</TableCell>
-                            <TableCell>{row.exam?.title || "—"}</TableCell>
-                            <TableCell>{row.curriculum_class?.name || "—"}</TableCell>
-                            <TableCell>{row.teacher ? teacherLabel(row.teacher) : "—"}</TableCell>
-                            <TableCell>
-                              {row.start_time && row.end_time
-                                ? `${format(new Date(row.start_time), "HH:mm")} – ${format(new Date(row.end_time), "HH:mm")}`
-                                : "—"}
-                            </TableCell>
-                            <TableCell>{row.status || "—"}</TableCell>
-                            <TableCell>{row.proctoring_mode || "none"}</TableCell>
-                            <TableCell align="center">
-                              <Stack direction="row" spacing={0.25} justifyContent="center" alignItems="center">
-                                <Tooltip title="View">
-                                  <span>
-                                    <IconButton
-                                      size="small"
-                                      aria-label="View exam schedule"
-                                      onClick={() => setExamViewRow(row)}
-                                      sx={{ color: primaryDark }}
-                                    >
-                                      <VisibilityOutlinedIcon fontSize="small" />
-                                    </IconButton>
-                                  </span>
-                                </Tooltip>
-                                <Tooltip title="Open LiveKit invigilation room (admit students, monitor cameras)">
-                                  <span>
-                                    <IconButton
-                                      size="small"
-                                      aria-label="Open LiveKit invigilation room"
-                                      onClick={() => openExamLinks(row)}
-                                      sx={{ color: primaryDark }}
-                                    >
-                                      <VideocamOutlinedIcon fontSize="small" />
-                                    </IconButton>
-                                  </span>
-                                </Tooltip>
-                                <Tooltip title="Edit">
-                                  <span>
-                                    <IconButton
-                                      size="small"
-                                      aria-label="Edit exam schedule"
-                                      onClick={() => openEditExamSchedule(row)}
-                                      sx={{ color: primaryDark }}
-                                    >
-                                      <EditOutlinedIcon fontSize="small" />
-                                    </IconButton>
-                                  </span>
-                                </Tooltip>
-                                <Tooltip title="Delete">
-                                  <span>
-                                    <IconButton
-                                      size="small"
-                                      aria-label="Delete exam schedule"
-                                      onClick={() => setExamDeleteRow(row)}
-                                      sx={{ color: primaryRed }}
-                                    >
-                                      <DeleteOutlineIcon fontSize="small" />
-                                    </IconButton>
-                                  </span>
-                                </Tooltip>
-                              </Stack>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                )}
-              </TabPanel>
-
-              <TabPanel value={tab} index={2}>
                 <TimetableDayMeetingsPanel isoDate={isoDate} openCreateSignal={meetingCreateSignal} />
               </TabPanel>
             </Box>

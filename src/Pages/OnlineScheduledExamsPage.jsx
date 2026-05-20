@@ -50,7 +50,7 @@ export default function OnlineScheduledExamsPage() {
     setLoading(true);
     try {
       const q = `from=${encodeURIComponent(todayIso)}&days=42&limit=60`;
-      const res = await fetch(`/api/exam-schedules/online-upcoming?${q}`, {
+      const res = await fetch(`/api/exams/online-upcoming?${q}`, {
         headers: authHeaders(token),
       });
       const data = await res.json().catch(() => ({}));
@@ -101,7 +101,7 @@ export default function OnlineScheduledExamsPage() {
 
     void (async () => {
       try {
-        const res = await fetch(`/api/exam-schedules/${scheduleId}/initiate-online`, {
+        const res = await fetch(`/api/exams/${scheduleId}/initiate-online`, {
           method: "POST",
           headers: authHeaders(token),
           body: JSON.stringify({}),

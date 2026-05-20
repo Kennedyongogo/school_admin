@@ -44,6 +44,25 @@ const formatMaybeIso = (iso) => {
   return dt.toLocaleString();
 };
 
+/** Modes tracked on this tab (activity signals). Live invigilation uses LiveKit instead. */
+const ACTIVITY_PROCTORING_MODES = ["record_only", "strict_auto"];
+
+const PROCTORING_MODE_LABELS = {
+  record_only: "Monitored online exam",
+  strict_auto: "Strict online exam",
+  live_monitor: "Live invigilation",
+};
+
+const sessionStatusOf = (row) => String(row?.session_status || "").trim();
+
+const isActiveSession = (row) => {
+  const ss = sessionStatusOf(row);
+  if (ss === "cancelled") return false;
+  if (ss === "scheduled" || ss === "live") return true;
+  if (!ss && row?.start_time) return true;
+  return false;
+};
+
 export default function ExamProctorMonitorTab() {
   const navigate = useNavigate();
   const [date, setDate] = useState(toDateIso(new Date()));
@@ -56,8 +75,11 @@ export default function ExamProctorMonitorTab() {
 
   const displaySchedules = useMemo(() => {
     const rows = Array.isArray(schedules) ? schedules : [];
-    if (statusMode === "all") return rows.filter((r) => r.status !== "cancelled");
-    return rows.filter((r) => r.status === "scheduled" || r.status === "live");
+    const activityOnly = rows.filter((r) => ACTIVITY_PROCTORING_MODES.includes(String(r.proctoring_mode || "")));
+    if (statusMode === "all") {
+      return activityOnly.filter((r) => sessionStatusOf(r) !== "cancelled");
+    }
+    return activityOnly.filter((r) => isActiveSession(r));
   }, [schedules, statusMode]);
 
   const [selectedScheduleId, setSelectedScheduleId] = useState("");
@@ -86,7 +108,7 @@ export default function ExamProctorMonitorTab() {
     setSchedulesError("");
     try {
       const res = await fetch(
-        `/api/exam-schedules?date=${encodeURIComponent(date)}&is_active=true`,
+        `/api/exams?date=${encodeURIComponent(date)}&is_active=true`,
         { headers: authHeaders(token) }
       );
       const data = await res.json().catch(() => ({}));
@@ -124,7 +146,7 @@ export default function ExamProctorMonitorTab() {
       setMonitorError("");
     }
     try {
-      const res = await fetch(`/api/exam-schedules/${encodeURIComponent(scheduleId)}/proctor-monitor`, {
+      const res = await fetch(`/api/exams/${encodeURIComponent(scheduleId)}/proctor-monitor`, {
         headers: authHeaders(token),
       });
       const data = await res.json().catch(() => ({}));
@@ -270,8 +292,9 @@ export default function ExamProctorMonitorTab() {
                 {displaySchedules.length ? null : <MenuItem value="">No schedules</MenuItem>}
                 {displaySchedules.map((s) => (
                   <MenuItem key={s.id} value={s.id}>
-                    {s.exam?.title || "Exam"} · {s.curriculum_class?.name || s.curriculum_class_level?.name || "Class"}{" "}
-                    · {s.status}
+                    {s.title || s.exam?.title || "Exam"} · {s.curriculum_class?.name || s.curriculum_class_level?.name || "Class"}{" "}
+                    · {PROCTORING_MODE_LABELS[s.proctoring_mode] || s.proctoring_mode || "Exam"} ·{" "}
+                    {sessionStatusOf(s) || "scheduled"}
                   </MenuItem>
                 ))}
               </Select>
@@ -298,45 +321,51 @@ export default function ExamProctorMonitorTab() {
 
       {selectedSchedule ? (
         <Alert severity="info" sx={{ mb: 2 }}>
-          <Typography variant="body2" sx={{ mb: selectedSchedule.proctoring_mode === "live_monitor" ? 1 : 0 }}>
-            This panel shows <strong>activity signals</strong> (started/submitted, tab switches, warnings). For{" "}
-            <strong>live video</strong>, open the LiveKit invigilation room — same system as online classes (admit students
-            from the waiting room, then monitor their cameras).
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            <strong>Activity monitor</strong> — for <strong>Monitored</strong> and <strong>Strict</strong> online exams only
+            (no webcam). Shows who opened the paper, tab switches, warnings, and session logs. Refreshes every 8 seconds.
+          </Typography>
+          {selectedSchedule.proctoring_mode === "strict_auto" ? (
+            <Typography variant="body2">
+              <strong>Strict mode:</strong> tab switching is blocked; violations appear here and may auto-close a student&apos;s
+              exam.
+            </Typography>
+          ) : (
+            <Typography variant="body2">
+              <strong>Monitored mode:</strong> tab switching is allowed; you still see when students start and submit, plus any
+              logged events.
+            </Typography>
+          )}
+          <Typography variant="body2" sx={{ mt: 1 }}>
+            Exams set to <strong>Live invigilation</strong> are not listed here — use{" "}
+            <strong>Elimu Plus Online → Online exams</strong> or the LiveKit invigilation room for video and admitting students.
           </Typography>
         </Alert>
       ) : null}
 
-      {selectedSchedule?.proctoring_mode === "live_monitor" || selectedSchedule?.meeting_id ? (
+      {monitorError && String(monitorError).includes("LiveKit") ? (
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }}>
           <Button
             variant="contained"
             size="small"
-            onClick={() => navigate(`/exam-schedule/${selectedSchedule.id}/live`)}
+            onClick={() => navigate(`/exam/${selectedScheduleId}/live`)}
             sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark }, alignSelf: "flex-start" }}
           >
             Open LiveKit invigilation room
           </Button>
-          {selectedSchedule.meeting_host_url &&
-          !String(selectedSchedule.meeting_host_url).includes("/exam-schedule/") ? (
-            <Button
-              variant="outlined"
-              size="small"
-              href={String(selectedSchedule.meeting_host_url)}
-              target="_blank"
-              rel="noopener noreferrer"
-              sx={{ alignSelf: "flex-start" }}
-            >
-              Legacy external link
-            </Button>
-          ) : null}
         </Stack>
       ) : null}
 
       {!monitorLoading && monitor ? (
         <Box>
           <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
-            {selectedSchedule?.proctoring_mode ? (
-              <Chip label={`Mode: ${selectedSchedule.proctoring_mode}`} size="small" color="primary" variant="outlined" />
+            {monitor?.proctoring_mode_label || selectedSchedule?.proctoring_mode ? (
+              <Chip
+                label={`Mode: ${monitor?.proctoring_mode_label || PROCTORING_MODE_LABELS[selectedSchedule.proctoring_mode] || selectedSchedule.proctoring_mode}`}
+                size="small"
+                color="primary"
+                variant="outlined"
+              />
             ) : null}
             <Chip label={`Total: ${summary.total}`} size="small" />
             <Chip label={`Not started: ${summary.not_started}`} size="small" color="default" />
@@ -378,10 +407,24 @@ export default function ExamProctorMonitorTab() {
                           <Chip size="small" label={String(status).split("_").join(" ")} color={chipColor} />
                           <Chip size="small" label={`Tab: ${r.tab_switch_count ?? 0}`} variant="outlined" />
                           <Chip size="small" label={`Warnings: ${r.warning_count ?? 0}`} variant="outlined" />
+                          <Chip
+                            size="small"
+                            label={`Events: ${r.session_log_count ?? (r.session_logs?.length ?? 0)}`}
+                            variant="outlined"
+                          />
+                          {r.paper_submitted ? (
+                            <Chip size="small" label="Paper submitted" color="success" variant="outlined" />
+                          ) : null}
                         </Stack>
-                        <Typography variant="caption" color="text.secondary">
-                          Webcam: {r.webcam_enabled ? "On" : "Off"}
-                        </Typography>
+                        {selectedSchedule?.proctoring_mode === "live_monitor" ? (
+                          <Typography variant="caption" color="text.secondary">
+                            Webcam: {r.webcam_enabled ? "On" : "Off"}
+                          </Typography>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">
+                            Monitoring: activity log (no webcam on this mode)
+                          </Typography>
+                        )}
                         {r.cancellation_reason ? (
                           <Typography variant="caption" color="error.main">
                             Closed reason: {String(r.cancellation_reason)}
@@ -394,10 +437,10 @@ export default function ExamProctorMonitorTab() {
                           size="small"
                           variant="text"
                           sx={{ alignSelf: "flex-start", px: 0 }}
-                          disabled={!r?.attempt?.id}
+                          disabled={!r?.attempt?.id && !(r.session_log_count > 0)}
                           onClick={() => void openSessionLog(r)}
                         >
-                          View session log
+                          View session log ({r.session_log_count ?? 0})
                         </Button>
                       </Stack>
                     </CardContent>
@@ -411,9 +454,16 @@ export default function ExamProctorMonitorTab() {
         </Box>
       ) : null}
 
-      {!monitorLoading && !monitor && !schedulesLoading ? (
+      {!schedulesLoading && !displaySchedules.length && schedules.length > 0 ? (
+        <Alert severity="warning" sx={{ mt: 2 }}>
+          No <strong>Monitored</strong> or <strong>Strict</strong> exams on this date. Live invigilation exams appear under
+          Online exams / LiveKit — not on this tab.
+        </Alert>
+      ) : null}
+
+      {!monitorLoading && !monitor && !schedulesLoading && displaySchedules.length ? (
         <Alert severity="info" sx={{ mt: 2 }}>
-          Pick an exam schedule to open proctor monitor.
+          Pick an exam above to open the activity monitor.
         </Alert>
       ) : null}
 
