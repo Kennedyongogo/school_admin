@@ -82,18 +82,18 @@ export default defineConfig({
     },
     proxy: {
       "/api": {
-        target: "http://localhost:4000",
+        target: process.env.VITE_API_PROXY_TARGET || "http://localhost:4000",
         changeOrigin: true,
         secure: false,
       },
       "/socket.io": {
-        target: "http://localhost:4000",
+        target: process.env.VITE_API_PROXY_TARGET || "http://localhost:4000",
         changeOrigin: true,
         secure: false,
         ws: true,
       },
       "/uploads": {
-        target: "http://localhost:4000",
+        target: process.env.VITE_API_PROXY_TARGET || "http://localhost:4000",
         changeOrigin: true,
         secure: false,
       },

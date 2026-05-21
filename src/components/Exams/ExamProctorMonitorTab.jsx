@@ -208,18 +208,46 @@ export default function ExamProctorMonitorTab() {
     }
   };
 
+  const selectEllipsisSx = {
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    "& .MuiSelect-select": {
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+      display: "block",
+    },
+  };
+
   return (
-    <Box sx={{ px: { xs: 0.5, sm: 0 }, py: 1 }}>
-      <Card elevation={0} sx={{ border: "1px solid #FEE2E2", mb: 2 }}>
-        <CardContent>
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            alignItems={{ md: "center" }}
-            spacing={1.25}
+    <Box
+      sx={{
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        overflow: "hidden",
+        boxSizing: "border-box",
+        py: 1,
+      }}
+    >
+      <Card
+        elevation={0}
+        sx={{ border: "1px solid #FEE2E2", mb: 2, maxWidth: "100%", overflow: "hidden" }}
+      >
+        <CardContent sx={{ "&:last-child": { pb: 2 }, maxWidth: "100%", overflow: "hidden" }}>
+          <Box
             sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                sm: "repeat(2, minmax(0, 1fr))",
+                lg: "132px 168px 128px minmax(0, 1fr)",
+              },
+              gap: 1.25,
               width: "100%",
-              flexWrap: { xs: "wrap", md: "nowrap" },
-              overflowX: { md: "auto" },
+              maxWidth: "100%",
+              minWidth: 0,
             }}
           >
             <TextField
@@ -228,36 +256,15 @@ export default function ExamProctorMonitorTab() {
               label="Date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              sx={{
-                width: { xs: "100%", md: 150 },
-                minWidth: { md: 150 },
-                maxWidth: { md: 150 },
-                flexShrink: 0,
-              }}
+              sx={{ width: "100%", minWidth: 0, maxWidth: "100%" }}
             />
-            <FormControl
-              size="small"
-              sx={{
-                width: { xs: "100%", md: 188 },
-                minWidth: { md: 188 },
-                maxWidth: { md: 188 },
-                flexShrink: 0,
-              }}
-            >
+            <FormControl size="small" sx={{ width: "100%", minWidth: 0, maxWidth: "100%", ...selectEllipsisSx }}>
               <Select value={statusMode} onChange={(e) => setStatusMode(e.target.value)} displayEmpty>
                 <MenuItem value="active">Active only</MenuItem>
                 <MenuItem value="all">All (not cancelled)</MenuItem>
               </Select>
             </FormControl>
-            <FormControl
-              size="small"
-              sx={{
-                width: { xs: "100%", md: 142 },
-                minWidth: { md: 142 },
-                maxWidth: { md: 142 },
-                flexShrink: 0,
-              }}
-            >
+            <FormControl size="small" sx={{ width: "100%", minWidth: 0, maxWidth: "100%", ...selectEllipsisSx }}>
               <Select
                 value={autoRefresh ? "on" : "off"}
                 onChange={(e) => setAutoRefresh(e.target.value === "on")}
@@ -267,27 +274,20 @@ export default function ExamProctorMonitorTab() {
                 <MenuItem value="off">Refresh: Off</MenuItem>
               </Select>
             </FormControl>
-
             <FormControl
               size="small"
               sx={{
-                width: { xs: "100%", md: "auto" },
-                flex: { md: 1 },
-                minWidth: { md: 140 },
-                maxWidth: { md: "100%" },
+                width: "100%",
+                minWidth: 0,
+                maxWidth: "100%",
+                gridColumn: { xs: "1 / -1", sm: "1 / -1", lg: "auto" },
+                ...selectEllipsisSx,
               }}
             >
               <Select
                 value={selectedScheduleId}
                 onChange={(e) => setSelectedScheduleId(e.target.value)}
                 displayEmpty
-                sx={{
-                  "& .MuiSelect-select": {
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  },
-                }}
               >
                 {displaySchedules.length ? null : <MenuItem value="">No schedules</MenuItem>}
                 {displaySchedules.map((s) => (
@@ -299,7 +299,7 @@ export default function ExamProctorMonitorTab() {
                 ))}
               </Select>
             </FormControl>
-          </Stack>
+          </Box>
         </CardContent>
       </Card>
 
@@ -319,30 +319,6 @@ export default function ExamProctorMonitorTab() {
         <Alert severity="error">{monitorError}</Alert>
       ) : null}
 
-      {selectedSchedule ? (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          <Typography variant="body2" sx={{ mb: 1 }}>
-            <strong>Activity monitor</strong> — for <strong>Monitored</strong> and <strong>Strict</strong> online exams only
-            (no webcam). Shows who opened the paper, tab switches, warnings, and session logs. Refreshes every 8 seconds.
-          </Typography>
-          {selectedSchedule.proctoring_mode === "strict_auto" ? (
-            <Typography variant="body2">
-              <strong>Strict mode:</strong> tab switching is blocked; violations appear here and may auto-close a student&apos;s
-              exam.
-            </Typography>
-          ) : (
-            <Typography variant="body2">
-              <strong>Monitored mode:</strong> tab switches are recorded in the Tab count column (students are not blocked). You
-              still see when students start and submit, plus session logs.
-            </Typography>
-          )}
-          <Typography variant="body2" sx={{ mt: 1 }}>
-            Exams set to <strong>Live invigilation</strong> are not listed here — use{" "}
-            <strong>Elimu Plus Online → Online exams</strong> or the LiveKit invigilation room for video and admitting students.
-          </Typography>
-        </Alert>
-      ) : null}
-
       {monitorError && String(monitorError).includes("LiveKit") ? (
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }}>
           <Button
@@ -357,14 +333,21 @@ export default function ExamProctorMonitorTab() {
       ) : null}
 
       {!monitorLoading && monitor ? (
-        <Box>
-          <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
+        <Box sx={{ width: "100%", maxWidth: "100%", minWidth: 0, overflow: "hidden" }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            flexWrap="wrap"
+            sx={{ mb: 2, width: "100%", maxWidth: "100%", minWidth: 0 }}
+          >
             {monitor?.proctoring_mode_label || selectedSchedule?.proctoring_mode ? (
               <Chip
                 label={`Mode: ${monitor?.proctoring_mode_label || PROCTORING_MODE_LABELS[selectedSchedule.proctoring_mode] || selectedSchedule.proctoring_mode}`}
                 size="small"
                 color="primary"
                 variant="outlined"
+                sx={{ maxWidth: "100%", "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" } }}
               />
             ) : null}
             <Chip label={`Total: ${summary.total}`} size="small" />
@@ -372,7 +355,14 @@ export default function ExamProctorMonitorTab() {
             <Chip label={`In progress: ${summary.in_progress}`} size="small" color="warning" />
             <Chip label={`Submitted: ${summary.submitted}`} size="small" color="success" />
             {monitorRefreshing ? <Chip label="Updating..." size="small" variant="outlined" /> : null}
-            {lastUpdatedAt ? <Chip label={`Updated: ${formatMaybeIso(lastUpdatedAt)}`} size="small" variant="outlined" /> : null}
+            {lastUpdatedAt ? (
+              <Chip
+                label={`Updated: ${formatMaybeIso(lastUpdatedAt)}`}
+                size="small"
+                variant="outlined"
+                sx={{ maxWidth: { xs: "100%", sm: 280 }, "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" } }}
+              />
+            ) : null}
           </Stack>
 
           <Divider sx={{ mb: 2 }} />
@@ -381,8 +371,11 @@ export default function ExamProctorMonitorTab() {
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 100%), 1fr))",
                 gap: 1.25,
+                width: "100%",
+                maxWidth: "100%",
+                minWidth: 0,
               }}
             >
               {rosterRows.map((r, idx) => {
@@ -455,14 +448,14 @@ export default function ExamProctorMonitorTab() {
       ) : null}
 
       {!schedulesLoading && !displaySchedules.length && schedules.length > 0 ? (
-        <Alert severity="warning" sx={{ mt: 2 }}>
+        <Alert severity="warning" sx={{ mt: 2, maxWidth: "100%", "& .MuiAlert-message": { minWidth: 0, wordBreak: "break-word" } }}>
           No <strong>Monitored</strong> or <strong>Strict</strong> exams on this date. Live invigilation exams appear under
           Online exams / LiveKit — not on this tab.
         </Alert>
       ) : null}
 
       {!monitorLoading && !monitor && !schedulesLoading && displaySchedules.length ? (
-        <Alert severity="info" sx={{ mt: 2 }}>
+        <Alert severity="info" sx={{ mt: 2, maxWidth: "100%", "& .MuiAlert-message": { minWidth: 0 } }}>
           Pick an exam above to open the activity monitor.
         </Alert>
       ) : null}

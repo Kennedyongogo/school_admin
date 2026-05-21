@@ -29,10 +29,12 @@ function deviceErrorMessage(kind, error) {
 }
 
 /** Mic / camera / leave bar below the video area (not inside the LiveKit tile). */
-export default function LiveKitMediaControls({ onRequestLeave, onLeave }) {
-  const room = useRoomContext();
-  const connectionState = useConnectionState(room);
-  const mediaReady = connectionState === ConnectionState.Connected;
+export default function LiveKitMediaControls({ onRequestLeave, onLeave, room: roomOverride }) {
+  const roomFromContext = useRoomContext();
+  const room = roomOverride ?? roomFromContext;
+  const connectionState = useConnectionState();
+  const mediaReady =
+    connectionState === ConnectionState.Connected || connectionState === ConnectionState.Reconnecting;
 
   const onMicError = React.useCallback((error) => {
     alert(deviceErrorMessage("Microphone", error));
@@ -64,22 +66,32 @@ export default function LiveKitMediaControls({ onRequestLeave, onLeave }) {
 
   const handleLeave = () => {
     onRequestLeave?.();
-    try {
-      room?.disconnect(true);
-    } catch (_) {
-      /* disconnect may throw if already disconnected */
-    }
     onLeave?.();
+  };
+
+  const connectingReason =
+    connectionState === ConnectionState.Connecting
+      ? "Connecting to video…"
+      : connectionState === ConnectionState.Disconnected
+        ? "Not connected to video"
+        : undefined;
+
+  const stripDisabled = (props) => {
+    if (!props) return props;
+    const { disabled: _d, ...rest } = props;
+    return rest;
   };
 
   return (
     <Controls
       micOn={micOn}
       camOn={camOn}
-      micButtonProps={micButtonProps}
-      camButtonProps={camButtonProps}
+      micButtonProps={stripDisabled(micButtonProps)}
+      camButtonProps={stripDisabled(camButtonProps)}
       mediaDisabled={!mediaReady || micPending || camPending}
-      mediaDisabledReason={!mediaReady ? "Connecting to video…" : undefined}
+      mediaDisabledReason={
+        connectingReason || (micPending || camPending ? "Updating media…" : undefined)
+      }
       onLeave={handleLeave}
     />
   );

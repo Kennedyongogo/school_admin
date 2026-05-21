@@ -83,7 +83,6 @@ export default function Settings({ user }) {
     newPassword: false,
     confirmPassword: false,
   });
-
   const applyUserToForm = useCallback((u) => {
     if (!u) return;
     setForm({

@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Alert, Box, Button, CircularProgress, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, IconButton, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExamLiveKitConference from "../components/VideoConference/ExamLiveKitConference";
 
@@ -9,6 +9,15 @@ const authHeaders = (token) => ({
   "Content-Type": "application/json",
   ...(token ? { Authorization: `Bearer ${token}` } : {}),
 });
+
+function needsLiveKitSetup(row) {
+  if (!row?.uses_live_invigilation) return false;
+  const platform = String(row?.platform || row?.meeting_provider || "").toLowerCase();
+  if (platform === "google_meet" || platform === "googlemeet" || platform === "meet") return true;
+  const join = String(row?.meeting_join_url || row?.meet_join_url || "").trim();
+  if (join.includes("meet.google.com")) return true;
+  return row?.video_mode !== "livekit" || !row?.meeting_id;
+}
 
 export default function ExamLiveRoomPage() {
   const { scheduleId, examId } = useParams();
@@ -19,15 +28,29 @@ export default function ExamLiveRoomPage() {
   const [error, setError] = useState("");
   const [room, setRoom] = useState(null);
   const [initiating, setInitiating] = useState(false);
+  const leaveLiveRoomRef = useRef(null);
+
+  const loadRoom = async () => {
+    const roomRes = await fetch(`/api/school-portal/exam/${encodeURIComponent(id)}`, {
+      headers: authHeaders(token),
+    });
+    const roomData = await roomRes.json().catch(() => ({}));
+    if (!roomRes.ok || !roomData.success) {
+      throw new Error(roomData.message || "Could not load exam room.");
+    }
+    return roomData.data;
+  };
 
   const ensureLiveSession = async () => {
     const res = await fetch(`/api/exams/${encodeURIComponent(id)}/live-session/initiate`, {
       method: "POST",
       headers: authHeaders(token),
-      body: JSON.stringify({}),
+      body: JSON.stringify({ prefer_livekit: true }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success) throw new Error(data.message || "Could not start exam session.");
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || "Could not start LiveKit exam session.");
+    }
     return data.data;
   };
 
@@ -41,26 +64,17 @@ export default function ExamLiveRoomPage() {
       setLoading(true);
       setError("");
       try {
-        let row = null;
-        const roomRes = await fetch(`/api/school-portal/exam/${encodeURIComponent(id)}`, {
-          headers: authHeaders(token),
-        });
-        const roomData = await roomRes.json().catch(() => ({}));
-        if (roomRes.ok && roomData.success) row = roomData.data;
-
-        if (!row?.meeting_id || row?.video_mode !== "livekit") {
+        let row = await loadRoom();
+        if (needsLiveKitSetup(row)) {
           setInitiating(true);
           await ensureLiveSession();
-          const again = await fetch(`/api/school-portal/exam/${encodeURIComponent(id)}`, {
-            headers: authHeaders(token),
-          });
-          const againData = await again.json().catch(() => ({}));
-          if (!again.ok || !againData.success) throw new Error(againData.message || "Could not load exam room.");
-          row = againData.data;
+          row = await loadRoom();
         }
         if (cancelled) return;
-        if (row?.video_mode !== "livekit") {
-          throw new Error("LiveKit is not configured for this exam. Set ONLINE_MEETING_PLATFORM=livekit on the server.");
+        if (row?.uses_live_invigilation && (row?.video_mode !== "livekit" || !row?.meeting_id)) {
+          throw new Error(
+            "LiveKit room was not prepared. In Exams, open this exam again after saving it as Live invigilation with LiveKit configured on the API."
+          );
         }
         setRoom(row);
       } catch (e) {
@@ -79,19 +93,36 @@ export default function ExamLiveRoomPage() {
 
   if (loading || initiating) {
     return (
-      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 2 }}>
+      <Box
+        sx={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 1300,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 2,
+          bgcolor: "#0b1220",
+        }}
+      >
         <CircularProgress />
-        <Typography color="text.secondary">{initiating ? "Starting LiveKit exam session…" : "Loading…"}</Typography>
+        <Typography color="text.secondary">
+          {initiating ? "Preparing LiveKit exam room…" : "Loading…"}
+        </Typography>
       </Box>
     );
   }
 
   if (error) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: 3, maxWidth: 560 }}>
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
+        <Button variant="outlined" onClick={() => navigate("/exams")} sx={{ mr: 1 }}>
+          Back to exams
+        </Button>
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
           Back
         </Button>
@@ -100,24 +131,47 @@ export default function ExamLiveRoomPage() {
   }
 
   return (
-    <Box sx={{ mx: -3, mt: -3, mb: -3, height: "calc(100vh - 72px)", display: "flex", flexDirection: "column" }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, py: 1, bgcolor: "background.paper", borderBottom: 1, borderColor: "divider" }}>
-        <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>
-          Back
-        </Button>
-        <Typography variant="subtitle1" sx={{ fontWeight: 700, flex: 1 }}>
-          Exam invigilation · {room?.exam_title || "Exam"}
-        </Typography>
-      </Stack>
-      <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-        <ExamLiveKitConference
-          token={token}
-          examScheduleId={id}
-          examTitle={room?.exam_title}
-          mediaMode={room?.media_mode || "video"}
-          onLeave={() => navigate(-1)}
-        />
-      </Box>
+    <Box
+      sx={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1300,
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+        bgcolor: "#0b1220",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <IconButton
+        size="small"
+        onClick={() => {
+          if (leaveLiveRoomRef.current) leaveLiveRoomRef.current();
+          else navigate(-1);
+        }}
+        aria-label="Back"
+        sx={{
+          position: "absolute",
+          top: 12,
+          left: 12,
+          zIndex: 30,
+          bgcolor: "rgba(0,0,0,0.55)",
+          color: "#fff",
+          "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
+        }}
+      >
+        <ArrowBackIcon fontSize="small" />
+      </IconButton>
+      <ExamLiveKitConference
+        token={token}
+        examScheduleId={id}
+        mediaMode={room?.media_mode || "video"}
+        onRegisterLeave={(fn) => {
+          leaveLiveRoomRef.current = fn;
+        }}
+        onLeave={() => navigate(-1)}
+      />
     </Box>
   );
 }

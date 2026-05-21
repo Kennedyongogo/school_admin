@@ -27,6 +27,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import {
@@ -36,6 +37,7 @@ import {
   Edit as EditIcon,
   PlayCircleOutline as PlayCircleOutlineIcon,
   UploadFile as UploadFileIcon,
+  VideocamOutlined as VideocamOutlinedIcon,
   Visibility as VisibilityIcon,
   PublishedWithChanges as PublishedWithChangesIcon,
   FactCheck as FactCheckIcon,
@@ -209,6 +211,11 @@ function proctoringModeFromExam(row) {
   if (m === "live_monitor" || m === "strict_auto" || m === "record_only") return m;
   if (m === "none" || !m) return "record_only";
   return "record_only";
+}
+
+/** Live invigilation uses the LiveKit room (admit students), not the Proctor monitor tab. */
+function examUsesLiveInvigilationRoom(row) {
+  return proctoringModeFromExam(row) === "live_monitor";
 }
 
 const authHeaders = (token) => ({
@@ -3190,6 +3197,17 @@ ${imageParts}--${boundary}--`;
                       >
                         <PlayCircleOutlineIcon fontSize="small" />
                       </IconButton>
+                      {examUsesLiveInvigilationRoom(r) ? (
+                        <Tooltip title="Open LiveKit invigilation room (admit students)">
+                          <IconButton
+                            size="small"
+                            onClick={() => navigate(`/exam/${encodeURIComponent(r.id)}/live`)}
+                            sx={{ color: accent }}
+                          >
+                            <VideocamOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      ) : null}
                       <IconButton size="small" disabled={examDetailLoading} onClick={() => void startEditExam(r)}>
                         <EditIcon fontSize="small" />
                       </IconButton>

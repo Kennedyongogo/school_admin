@@ -103,11 +103,10 @@ const defaultOverallForm = () => ({
   id: "",
   curriculum_id: "",
   curriculum_class_id: "",
-  min_score: "0",
-  max_score: "100",
+  range_from: "0",
+  range_to: "50",
   overall_grade: "",
   remarks: "",
-  points: "",
   is_pass: "",
   sort_order: "0",
   is_active: true,
@@ -302,11 +301,10 @@ const CurriculumGradingSystemTab = forwardRef(function CurriculumGradingSystemTa
       const payload = {
         curriculum_id: overallForm.curriculum_id,
         curriculum_class_id: overallForm.curriculum_class_id,
-        min_score: Number(overallForm.min_score),
-        max_score: Number(overallForm.max_score),
+        range_from: Number(overallForm.range_from),
+        range_to: Number(overallForm.range_to),
         overall_grade: overallForm.overall_grade.trim(),
         remarks: overallForm.remarks.trim() || null,
-        points: overallForm.points === "" ? null : Number(overallForm.points),
         is_pass: overallForm.is_pass === "" ? null : overallForm.is_pass === "true",
         sort_order: Number(overallForm.sort_order || 0),
         is_active: Boolean(overallForm.is_active),
@@ -463,7 +461,7 @@ const CurriculumGradingSystemTab = forwardRef(function CurriculumGradingSystemTa
                 <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1}>
                   <Box>
                     <Typography sx={{ fontWeight: 800 }}>
-                      {row.overall_grade} ({row.min_score} - {row.max_score}{row.points != null ? ` · ${row.points} pts` : ""})
+                      {row.overall_grade}: total marks {row.min_score} – {row.max_score}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       {row.curriculum?.name || "Curriculum"} | {row.curriculum_class?.name || "Class"} | Active: {row.is_active ? "Yes" : "No"}
@@ -483,11 +481,10 @@ const CurriculumGradingSystemTab = forwardRef(function CurriculumGradingSystemTa
                             id: row.id,
                             curriculum_id: row.curriculum_id || "",
                             curriculum_class_id: row.curriculum_class_id || "",
-                            min_score: String(row.min_score ?? 0),
-                            max_score: String(row.max_score ?? 100),
+                            range_from: String(row.min_score ?? 0),
+                            range_to: String(row.max_score ?? 0),
                             overall_grade: row.overall_grade || "",
                             remarks: row.remarks || "",
-                            points: row.points == null ? "" : String(row.points),
                             is_pass: row.is_pass == null ? "" : String(Boolean(row.is_pass)),
                             sort_order: String(row.sort_order ?? 0),
                             is_active: row.is_active !== false,
@@ -583,14 +580,35 @@ const CurriculumGradingSystemTab = forwardRef(function CurriculumGradingSystemTa
                 ))}
               </Select>
             </FormControl>
+            <Typography variant="caption" color="text.secondary">
+              When report card totals fall in this range (sum of selected exam marks), students receive this overall grade.
+            </Typography>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-              <TextField label="Min score" type="number" size="small" fullWidth value={overallForm.min_score} onChange={(e) => setOverallForm((f) => ({ ...f, min_score: e.target.value }))} />
-              <TextField label="Max score" type="number" size="small" fullWidth value={overallForm.max_score} onChange={(e) => setOverallForm((f) => ({ ...f, max_score: e.target.value }))} />
+              <TextField
+                label="Range from"
+                type="number"
+                size="small"
+                fullWidth
+                value={overallForm.range_from}
+                onChange={(e) => setOverallForm((f) => ({ ...f, range_from: e.target.value }))}
+              />
+              <TextField
+                label="Range to"
+                type="number"
+                size="small"
+                fullWidth
+                value={overallForm.range_to}
+                onChange={(e) => setOverallForm((f) => ({ ...f, range_to: e.target.value }))}
+              />
             </Stack>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-              <TextField label="Overall grade" size="small" fullWidth value={overallForm.overall_grade} onChange={(e) => setOverallForm((f) => ({ ...f, overall_grade: e.target.value }))} />
-              <TextField label="Points (optional)" type="number" size="small" fullWidth value={overallForm.points} onChange={(e) => setOverallForm((f) => ({ ...f, points: e.target.value }))} />
-            </Stack>
+            <TextField
+              label="Overall grade"
+              size="small"
+              fullWidth
+              placeholder="e.g. A, B+, Pass"
+              value={overallForm.overall_grade}
+              onChange={(e) => setOverallForm((f) => ({ ...f, overall_grade: e.target.value }))}
+            />
             <TextField label="Remarks" size="small" fullWidth multiline minRows={2} value={overallForm.remarks} onChange={(e) => setOverallForm((f) => ({ ...f, remarks: e.target.value }))} />
           </Stack>
         </DialogContent>

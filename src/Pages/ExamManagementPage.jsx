@@ -6,6 +6,7 @@ import AddIcon from "@mui/icons-material/Add";
 import ExamTemplatesTab from "../components/Exams/ExamTemplatesTab";
 import ExamsTab from "../components/Exams/ExamsTab";
 import ExamProctorMonitorTab from "../components/Exams/ExamProctorMonitorTab";
+import ExamReportCardsTab from "../components/Exams/ExamReportCardsTab";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
@@ -108,9 +109,18 @@ export default function ExamManagementPage() {
           <Tab label="Exam templates" />
           <Tab label="Exam" />
           <Tab label="Proctor monitor" />
+          <Tab label="Report cards" />
         </Tabs>
 
-        {tab === 0 ? <ExamTemplatesTab /> : tab === 1 ? <ExamsTab /> : <ExamProctorMonitorTab />}
+        {tab === 0 ? (
+          <ExamTemplatesTab />
+        ) : tab === 1 ? (
+          <ExamsTab />
+        ) : tab === 2 ? (
+          <ExamProctorMonitorTab />
+        ) : (
+          <ExamReportCardsTab />
+        )}
       </Box>
     </Box>
   );

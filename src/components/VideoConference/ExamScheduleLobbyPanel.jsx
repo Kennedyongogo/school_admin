@@ -51,7 +51,14 @@ function useLiveClock(intervalMs = 15000) {
   return now;
 }
 
-export default function ExamScheduleLobbyPanel({ examScheduleId, token, socket, embedded = false, stacked = false }) {
+export default function ExamScheduleLobbyPanel({
+  examScheduleId,
+  token,
+  socket,
+  embedded = false,
+  stacked = false,
+  compact = false,
+}) {
   const [tab, setTab] = useState(0);
   useLiveClock(15000);
   const { loading, error, lobby, busyId, loadLobby, admit, deny, admitAll } = useExamScheduleLobby({
@@ -80,11 +87,11 @@ export default function ExamScheduleLobbyPanel({ examScheduleId, token, socket, 
       sx={{
         width: stacked || embedded ? "100%" : { xs: "100%", md: "min(300px, 30vw)" },
         flex: stacked ? "0 0 auto" : "1 1 auto",
-        height: stacked ? "auto" : "100%",
+        height: compact ? "100%" : stacked ? "auto" : "100%",
         display: "flex",
         flexDirection: "column",
-        minHeight: stacked ? 0 : 0,
-        overflow: stacked ? "visible" : "hidden",
+        minHeight: 0,
+        overflow: "hidden",
         ...rosterSurfaceSx,
       }}
     >
@@ -101,9 +108,11 @@ export default function ExamScheduleLobbyPanel({ examScheduleId, token, socket, 
             <RefreshRoundedIcon fontSize="small" />
           </Button>
         </Stack>
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-          Admit students before they join video. Same flow as online classes.
-        </Typography>
+        {compact ? null : (
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+            Admit students before they join video.
+          </Typography>
+        )}
         <Stack direction="row" spacing={0.75} sx={{ mt: 1 }}>
           <Chip size="small" label={`Waiting ${stats.waiting ?? 0}`} />
           <Chip size="small" label={`In room ${stats.in_room ?? 0}`} color="success" variant="outlined" />
@@ -130,7 +139,14 @@ export default function ExamScheduleLobbyPanel({ examScheduleId, token, socket, 
           <Tab key={t.label} label={t.label} value={i} sx={{ minHeight: 40, fontSize: "0.72rem" }} />
         ))}
       </Tabs>
-      <Box sx={{ flex: stacked ? "0 0 auto" : 1, minHeight: stacked ? 280 : 0, maxHeight: stacked ? 420 : "none", overflowY: "auto" }}>
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          maxHeight: compact ? "none" : stacked ? 420 : "none",
+          overflowY: "auto",
+        }}
+      >
         {loading && !lobby ? (
           <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
             <CircularProgress size={28} />
