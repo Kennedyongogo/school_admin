@@ -421,17 +421,16 @@ export default function ExamReportCardsTab() {
               </Box>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
-        <Grid item xs={12} lg={9} sx={{ order: { xs: 1, lg: 2 } }}>
-          <Card elevation={0} sx={{ border: `1px solid ${accentLight}`, borderRadius: 2 }}>
+        <Box sx={{ flex: { xs: "1 1 auto", lg: "1 1 0%" }, minWidth: 0, width: { xs: "100%", lg: "auto" } }}>
+          <Card elevation={0} sx={{ border: `1px solid ${accentLight}`, borderRadius: 2, height: "100%" }}>
             <CardContent>
               <Typography variant="subtitle1" sx={{ fontWeight: 800, color: accentDark, mb: 2 }}>
                 Build report card
               </Typography>
               <Stack spacing={1.5}>
-                <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-                  <FormControl size="small" sx={{ flex: 1, minWidth: 0 }}>
+                  <FormControl size="small" fullWidth>
                     <InputLabel>Curriculum</InputLabel>
                     <Select
                       label="Curriculum"
@@ -451,7 +450,7 @@ export default function ExamReportCardsTab() {
                       ))}
                     </Select>
                   </FormControl>
-                  <FormControl size="small" sx={{ flex: 1, minWidth: 0 }}>
+                  <FormControl size="small" fullWidth>
                     <InputLabel>Class</InputLabel>
                     <Select
                       label="Class"
@@ -470,9 +469,7 @@ export default function ExamReportCardsTab() {
                       ))}
                     </Select>
                   </FormControl>
-                </Stack>
-                <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-                  <FormControl size="small" sx={{ flex: 1, minWidth: 160 }}>
+                  <FormControl size="small" fullWidth>
                     <InputLabel>Level (optional)</InputLabel>
                     <Select label="Level (optional)" value={levelId} onChange={(e) => setLevelId(e.target.value)}>
                       <MenuItem value="">—</MenuItem>
@@ -483,7 +480,7 @@ export default function ExamReportCardsTab() {
                       ))}
                     </Select>
                   </FormControl>
-                  <FormControl size="small" sx={{ flex: 2, minWidth: 0 }}>
+                  <FormControl size="small" fullWidth>
                     <InputLabel>Student</InputLabel>
                     <Select label="Student" value={studentId} onChange={(e) => setStudentId(e.target.value)}>
                       <MenuItem value="">Select</MenuItem>
@@ -494,7 +491,6 @@ export default function ExamReportCardsTab() {
                       ))}
                     </Select>
                   </FormControl>
-                </Stack>
                 <TextField
                   size="small"
                   label="Report title (optional)"
@@ -558,18 +554,20 @@ export default function ExamReportCardsTab() {
                       </Alert>
                     ) : null}
 
-                    <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ pt: 0.5 }}>
+                    <Stack spacing={1} sx={{ pt: 0.5 }}>
                       <Button
                         variant="outlined"
+                        fullWidth
                         startIcon={<VisibilityOutlinedIcon />}
                         disabled={busy || !examIdsArray.length}
                         onClick={() => void runPreview()}
                         sx={{ borderColor: accent, color: accentDark }}
                       >
-                        Preview & overall grade
+                        Preview
                       </Button>
                       <Button
                         variant="contained"
+                        fullWidth
                         startIcon={<SaveOutlinedIcon />}
                         disabled={busy || !preview}
                         onClick={() => void saveReportCard()}
@@ -583,9 +581,8 @@ export default function ExamReportCardsTab() {
               </Stack>
             </CardContent>
           </Card>
-
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
         </>
       )}
     </Stack>
