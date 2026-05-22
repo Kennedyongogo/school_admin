@@ -16,6 +16,8 @@ import {
 import { ArrowBack as ArrowBackIcon, ExpandLess as ExpandLessIcon, ExpandMore as ExpandMoreIcon } from "@mui/icons-material";
 import Swal from "sweetalert2";
 import ExamSubmissionPaperView from "../components/Exams/ExamSubmissionPaperView";
+import ExamPdfSubmissionView from "../components/Exams/ExamPdfSubmissionView";
+import { isPdfFormExamRow } from "../components/Exams/examPdfAdminUtils";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
@@ -66,6 +68,11 @@ export default function ExamSubmissionsPage() {
     [examInfo?.title, examTitleFromState, examId]
   );
 
+  const isPdfFormExam = useMemo(
+    () => isPdfFormExamRow(examInfo || fullExam),
+    [examInfo, fullExam]
+  );
+
   const load = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token || !examId) return;
@@ -99,8 +106,18 @@ export default function ExamSubmissionsPage() {
       });
       const nextInputs = {};
       const nextAnswerMarks = {};
+      const pdfExam = isPdfFormExamRow(exam);
       submissions.forEach((s) => {
-        nextInputs[s.id] = s?.marking?.total_score != null ? String(s.marking.total_score) : "";
+        if (pdfExam) {
+          nextInputs[s.id] =
+            s?.marking?.total_score != null
+              ? String(s.marking.total_score)
+              : s.pdf_auto_score != null
+                ? String(s.pdf_auto_score)
+                : "";
+        } else {
+          nextInputs[s.id] = s?.marking?.total_score != null ? String(s.marking.total_score) : "";
+        }
         (s.answers || []).forEach((a) => {
           nextAnswerMarks[a.id] = a.marks_obtained != null ? String(a.marks_obtained) : "";
         });
@@ -123,6 +140,33 @@ export default function ExamSubmissionsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const saveSubmissionMark = async (submissionId) => {
+    const token = localStorage.getItem("token");
+    if (!token || !examId) return;
+    const raw = markInputs[submissionId];
+    const score = Number(raw);
+    if (!Number.isFinite(score) || score < 0) {
+      await Swal.fire({ icon: "error", title: "Invalid mark", text: "Enter a valid non-negative score." });
+      return;
+    }
+    setMarkSavingId(submissionId);
+    try {
+      const res = await fetch(`/api/exams/${examId}/submissions/${submissionId}/mark`, {
+        method: "PUT",
+        headers: authHeaders(token),
+        body: JSON.stringify({ total_score: score }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.message || "Could not save mark.");
+      await load();
+      await Swal.fire({ icon: "success", title: "Mark saved", timer: 900, showConfirmButton: false });
+    } catch (e) {
+      await Swal.fire({ icon: "error", title: "Marking failed", text: e.message || "Could not save mark." });
+    } finally {
+      setMarkSavingId("");
+    }
+  };
 
   const saveQuestionMarks = async (submissionId) => {
     const token = localStorage.getItem("token");
@@ -166,7 +210,11 @@ export default function ExamSubmissionsPage() {
     if (!token || !examId) return;
     const submission = rows.find(s => s.id === submissionId);
     if (!submission) return;
-    const hasMarks = (submission.answers || []).some(a => a.marks_obtained !== null);
+    const hasMarks = isPdfFormExam
+      ? submission?.marking?.total_score != null ||
+        submission.pdf_auto_score != null ||
+        Number.isFinite(Number(markInputs[submissionId]))
+      : (submission.answers || []).some((a) => a.marks_obtained !== null);
     if (!hasMarks) {
       await Swal.fire({ icon: "warning", title: "Marks required", text: "Please save marks first before grading." });
       return;
@@ -299,7 +347,9 @@ export default function ExamSubmissionsPage() {
                           }}
                         >
                           {(() => {
-                            const alreadyMarked = (s.answers || []).some((a) => a.marks_obtained !== null);
+                            const alreadyMarked = isPdfFormExam
+                              ? s?.marking?.total_score != null || s.pdf_auto_score != null
+                              : (s.answers || []).some((a) => a.marks_obtained !== null);
                             const hasResult = s?.marking?.grade != null;
                             const toolbarControlSx = {
                               width: 156,
@@ -325,8 +375,17 @@ export default function ExamSubmissionsPage() {
                                   size="small"
                                   label="Total score"
                                   type="number"
-                                  value={(s.answers || []).reduce((sum, a) => sum + Number(answerMarks[a.id] || 0), 0)}
-                                  disabled
+                                  value={
+                                    isPdfFormExam
+                                      ? markInputs[s.id] ?? ""
+                                      : (s.answers || []).reduce((sum, a) => sum + Number(answerMarks[a.id] || 0), 0)
+                                  }
+                                  onChange={
+                                    isPdfFormExam
+                                      ? (e) => setMarkInputs((prev) => ({ ...prev, [s.id]: e.target.value }))
+                                      : undefined
+                                  }
+                                  disabled={!isPdfFormExam}
                                   sx={{
                                     ...toolbarControlSx,
                                     "& .MuiInputBase-root": {
@@ -344,7 +403,9 @@ export default function ExamSubmissionsPage() {
                                 <Button
                                   variant="contained"
                                   size="small"
-                                  onClick={() => void saveQuestionMarks(s.id)}
+                                  onClick={() =>
+                                    void (isPdfFormExam ? saveSubmissionMark(s.id) : saveQuestionMarks(s.id))
+                                  }
                                   disabled={markSavingId === s.id || s.status !== "submitted"}
                                   sx={{
                                     ...actionBtnSx,
@@ -352,7 +413,15 @@ export default function ExamSubmissionsPage() {
                                     "&:hover": { bgcolor: accentDark },
                                   }}
                                 >
-                                  {markSavingId === s.id ? "Saving…" : alreadyMarked ? "Update marks" : "Save marks"}
+                                  {markSavingId === s.id
+                                    ? "Saving…"
+                                    : isPdfFormExam
+                                      ? alreadyMarked
+                                        ? "Update mark"
+                                        : "Save mark"
+                                      : alreadyMarked
+                                        ? "Update marks"
+                                        : "Save marks"}
                                 </Button>
                                 <Button
                                   variant="outlined"
@@ -387,10 +456,27 @@ export default function ExamSubmissionsPage() {
                           </IconButton>
                         </Stack>
                       </Stack>
+                      {s.pdf_auto_score != null && isPdfFormExam ? (
+                        <Typography variant="body2" color="text.secondary">
+                          Auto-score: {s.pdf_auto_score}
+                          {examInfo?.total_marks ? ` / ${examInfo.total_marks}` : ""}
+                        </Typography>
+                      ) : null}
                       {(() => {
-                        const totalMarksObtained = s.answers.reduce((sum, a) => sum + (a.marks_obtained || 0), 0);
-                        const hasMarks = s.answers.some(a => a.marks_obtained != null);
-                        const total = s.marking?.total_score != null ? s.marking.total_score : (hasMarks ? totalMarksObtained : null);
+                        const totalMarksObtained = (s.answers || []).reduce(
+                          (sum, a) => sum + (a.marks_obtained || 0),
+                          0
+                        );
+                        const hasMarks = (s.answers || []).some((a) => a.marks_obtained != null);
+                        const total = isPdfFormExam
+                          ? s.marking?.total_score != null
+                            ? s.marking.total_score
+                            : null
+                          : s.marking?.total_score != null
+                            ? s.marking.total_score
+                            : hasMarks
+                              ? totalMarksObtained
+                              : null;
                         if (total == null) return null;
                         const percentage = examInfo?.total_marks ? ((total / examInfo.total_marks) * 100).toFixed(2) : 0;
                         if (s.marking?.grade) {
@@ -409,7 +495,17 @@ export default function ExamSubmissionsPage() {
                       })()}
                       {isExpanded ? (
                         <Box sx={{ border: "1px solid #eee", borderRadius: 1, p: 1.25, bgcolor: "#fafafa" }}>
-                          {fullExam ? (
+                          {isPdfFormExam ? (
+                            fullExam ? (
+                              <ExamPdfSubmissionView exam={fullExam} submission={s} />
+                            ) : s.pdf_answers_json && typeof s.pdf_answers_json === "object" ? (
+                              <ExamPdfSubmissionView exam={examInfo || { id: examId }} submission={s} />
+                            ) : (
+                              <Alert severity="warning">
+                                Could not load exam PDF details. Refresh the page.
+                              </Alert>
+                            )
+                          ) : fullExam ? (
                             <ExamSubmissionPaperView
                               exam={fullExam}
                               answers={s.answers}

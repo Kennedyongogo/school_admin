@@ -988,7 +988,7 @@ export default function TimetableDayPage() {
                 ) : (
                   <>
                     <TableContainer sx={{ borderRadius: 1, border: `1px solid ${primaryLight}`, overflowX: "auto" }}>
-                      <Table size="small" sx={{ minWidth: 960 }}>
+                      <Table size="small" sx={{ minWidth: 720 }}>
                         <TableHead>
                           <TableRow sx={{ bgcolor: `${primaryRed}12` }}>
                             <TableCell width={52}>No.</TableCell>
@@ -996,9 +996,6 @@ export default function TimetableDayPage() {
                             <TableCell>Class</TableCell>
                             <TableCell>Term</TableCell>
                             <TableCell>Subject</TableCell>
-                            <TableCell align="center">Delivery</TableCell>
-                            <TableCell>Teacher</TableCell>
-                            <TableCell>Time</TableCell>
                             <TableCell align="center">Attendance</TableCell>
                             <TableCell align="center">Action</TableCell>
                           </TableRow>
@@ -1020,21 +1017,6 @@ export default function TimetableDayPage() {
                                 <TableCell>{cc ? `${cc.name}${cc.code ? ` (${cc.code})` : ""}` : "—"}</TableCell>
                                 <TableCell>{term?.name || "—"}</TableCell>
                                 <TableCell>{row.curriculum_subject?.name || "—"}</TableCell>
-                                <TableCell align="center">
-                                  <Chip
-                                    size="small"
-                                    label={onlineLesson ? "Online" : "Physical"}
-                                    variant="outlined"
-                                    sx={{
-                                      fontWeight: 700,
-                                      borderColor: onlineLesson ? "rgba(139,115,85,0.45)" : "#d1d5db",
-                                      color: onlineLesson ? "#5c4a38" : "text.secondary",
-                                      bgcolor: onlineLesson ? "rgba(237,226,209,0.45)" : "transparent",
-                                    }}
-                                  />
-                                </TableCell>
-                                <TableCell>{row.teacher ? teacherLabel(row.teacher) : "—"}</TableCell>
-                                <TableCell>{formatTimeRange(row.starts_at, row.ends_at)}</TableCell>
                                 <TableCell align="center">
                                   <Chip
                                     size="small"

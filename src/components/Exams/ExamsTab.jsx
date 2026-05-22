@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Alert,
@@ -7,6 +7,7 @@ import {
   Card,
   CardContent,
   Checkbox,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -43,6 +44,8 @@ import {
   FactCheck as FactCheckIcon,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
+import ExamPdfFormPanel from "./ExamPdfFormPanel";
+import { fetchExamPdfBlobUrl, isPdfFormExamRow } from "./examPdfAdminUtils";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import dayjs from "dayjs";
@@ -246,7 +249,28 @@ const fileUploadFieldsFromOptions = (q) => {
   };
 };
 
-const renderSubmissionAnswerContent = (a) => {
+const renderSubmissionAnswerContent = (a, submission) => {
+  if (submission?.pdf_answers_json && typeof submission.pdf_answers_json === "object") {
+    return (
+      <Stack spacing={0.5} component="span">
+        {Object.entries(submission.pdf_answers_json).map(([k, v]) => (
+          <Typography key={k} variant="body2" component="span" display="block">
+            <strong>{k}:</strong> {typeof v === "boolean" ? (v ? "Yes" : "No") : Array.isArray(v) ? v.join(", ") : String(v ?? "")}
+          </Typography>
+        ))}
+        {submission.pdf_completed_file_path ? (
+          <Box
+            component="a"
+            href={`/${submission.pdf_completed_file_path}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Download completed PDF
+          </Box>
+        ) : null}
+      </Stack>
+    );
+  }
   if (a?.answer_text && String(a.answer_text).trim()) {
     return a.answer_text;
   }
@@ -834,6 +858,12 @@ export default function ExamsTab() {
   const [questionGenCount, setQuestionGenCount] = useState(10);
   const [ocrRawText, setOcrRawText] = useState("");
   const [ocrParsedBlocks, setOcrParsedBlocks] = useState([]);
+  const [deliveryMode, setDeliveryMode] = useState("questions");
+  const [pdfAnswerKey, setPdfAnswerKey] = useState({});
+  const [pdfFieldSchema, setPdfFieldSchema] = useState([]);
+  const [pdfTemplatePath, setPdfTemplatePath] = useState("");
+  const [pendingPdfFile, setPendingPdfFile] = useState(null);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
   const questionDocInputRef = useRef(null);
   const questionCanvasRef = useRef(null);
   const questionDragRef = useRef(null);
@@ -942,6 +972,28 @@ export default function ExamsTab() {
   const previewPages = useMemo(() => buildPreviewPages(viewRow), [viewRow, schoolProfile]);
   const simulatePages = useMemo(() => buildPreviewPages(simulateRow), [simulateRow, schoolProfile]);
 
+  const revokePdfPreviewUrl = useCallback(() => {
+    setPdfPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return "";
+    });
+  }, []);
+
+  const loadPdfPreviewForExam = async (exam) => {
+    if (!exam?.id || !isPdfFormExamRow(exam) || !exam.pdf_template_path) {
+      revokePdfPreviewUrl();
+      return;
+    }
+    const token = localStorage.getItem("token");
+    const url = await fetchExamPdfBlobUrl(exam.id, token);
+    setPdfPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return url;
+    });
+  };
+
+  useEffect(() => () => revokePdfPreviewUrl(), [revokePdfPreviewUrl]);
+
   const parseQuestionOptions = (q) => {
     if (Array.isArray(q?.options)) return q.options.map((o) => String(o || "").trim()).filter(Boolean);
     if (typeof q?.options === "string") return q.options.split(",").map((o) => o.trim()).filter(Boolean);
@@ -1042,6 +1094,16 @@ export default function ExamsTab() {
     try {
       const full = await loadExamDetail(row.id);
       setSimulateRow(full);
+      if (isPdfFormExamRow(full)) {
+        await loadPdfPreviewForExam(full);
+        const initialAnswers = {};
+        (Array.isArray(full.pdf_field_schema_json) ? full.pdf_field_schema_json : []).forEach((f) => {
+          if (f?.name) initialAnswers[f.name] = f.type === "CheckBox" ? false : "";
+        });
+        setSimulateAnswers(initialAnswers);
+        return;
+      }
+      revokePdfPreviewUrl();
       const initialAnswers = {};
       (Array.isArray(full?.questions) ? full.questions : []).forEach((q, idx) => {
         const qKey = String(q.id || q.key || idx + 1);
@@ -1077,6 +1139,11 @@ export default function ExamsTab() {
     try {
       const full = await loadExamDetail(row.id);
       setViewRow(full);
+      if (isPdfFormExamRow(full)) {
+        await loadPdfPreviewForExam(full);
+      } else {
+        revokePdfPreviewUrl();
+      }
     } catch (e) {
       await Swal.fire({
         icon: "error",
@@ -1086,6 +1153,17 @@ export default function ExamsTab() {
     } finally {
       setExamDetailLoading(false);
     }
+  };
+
+  const closeViewExam = () => {
+    revokePdfPreviewUrl();
+    setViewRow(null);
+  };
+
+  const closeSimulateExam = () => {
+    revokePdfPreviewUrl();
+    setSimulateRow(null);
+    setSimulateAnswers({});
   };
 
   const load = async () => {
@@ -1273,6 +1351,11 @@ export default function ExamsTab() {
     setQuestions([emptyQuestion(1)]);
     setOcrRawText("");
     setOcrParsedBlocks([]);
+    setDeliveryMode("questions");
+    setPdfAnswerKey({});
+    setPdfFieldSchema([]);
+    setPdfTemplatePath("");
+    setPendingPdfFile(null);
   };
 
   const parseInstructionLines = (raw) => {
@@ -1316,6 +1399,16 @@ export default function ExamsTab() {
     setSessionStatus(row.session_status || "scheduled");
     setScheduleIsActive(row.is_active !== false);
     setAllowLateJoinMinutes(Number(row.allow_late_join_minutes ?? 10));
+    const rowType = String(row.exam_type || "questions").trim();
+    setDeliveryMode(rowType === "pdf_form" ? "pdf_form" : "questions");
+    setPdfAnswerKey(
+      row.pdf_answer_key_json && typeof row.pdf_answer_key_json === "object" ? row.pdf_answer_key_json : {}
+    );
+    setPdfFieldSchema(
+      Array.isArray(row.pdf_field_schema_json) ? row.pdf_field_schema_json : []
+    );
+    setPdfTemplatePath(row.pdf_template_path || "");
+    setPendingPdfFile(null);
     const layout = row.exam_layout_json && typeof row.exam_layout_json === "object" ? row.exam_layout_json : {};
     const base = defaultExamLayout();
     setExamLayout({
@@ -1547,7 +1640,8 @@ export default function ExamsTab() {
       await Swal.fire({ icon: "error", title: "Name required", text: "Exam name is required." });
       return;
     }
-    if (!templateId) {
+    const isPdfForm = deliveryMode === "pdf_form";
+    if (!isPdfForm && !templateId) {
       await Swal.fire({ icon: "error", title: "Template required", text: "Please select an exam template." });
       return;
     }
@@ -1596,8 +1690,16 @@ export default function ExamsTab() {
         ? buildFileUploadOptionsPayload(q)
         : null,
     }));
-    if (payloadQuestions.some((q) => !q.question_text)) {
+    if (!isPdfForm && payloadQuestions.some((q) => !q.question_text)) {
       await Swal.fire({ icon: "error", title: "Question required", text: "Every question must have text." });
+      return;
+    }
+    if (isPdfForm && !editingId && !pendingPdfFile && !pdfTemplatePath) {
+      await Swal.fire({
+        icon: "warning",
+        title: "PDF required",
+        text: "Choose your exam PDF (from Word: File → Save as PDF) before saving, or save the exam first then upload on edit.",
+      });
       return;
     }
     const startStr = formatScheduleTimeForApi(scheduleStartTime);
@@ -1618,7 +1720,9 @@ export default function ExamsTab() {
         headers: authHeaders(token),
         body: JSON.stringify({
           title,
-          template_id: templateId,
+          exam_type: isPdfForm ? "pdf_form" : "questions",
+          pdf_answer_key_json: isPdfForm ? pdfAnswerKey : undefined,
+          template_id: isPdfForm ? null : templateId,
           curriculum_id: curriculumId || null,
           curriculum_class_id: curriculumClassId || null,
           curriculum_subject_id: curriculumSubjectId || null,
@@ -1630,9 +1734,9 @@ export default function ExamsTab() {
           allow_retake: Boolean(allowRetake),
           max_attempts: allowRetake ? Math.max(1, Number(maxAttempts) || 1) : 1,
           ...(isEdit ? {} : { status }),
-          instructions: instructions || null,
+          instructions: isPdfForm ? null : instructions || null,
           exam_layout_json: { ...examLayout, template_pages_override: selectedTemplatePages },
-          questions: payloadQuestions,
+          questions: isPdfForm ? [] : payloadQuestions,
           ...(scheduleEnabled && scheduleDate && startStr && endStr
             ? {
                 teacher_id: teacherId || null,
@@ -1648,6 +1752,27 @@ export default function ExamsTab() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.message || (isEdit ? "Failed updating exam" : "Failed creating exam"));
+      const savedId = data?.data?.id || editingId;
+      if (isPdfForm && pendingPdfFile && savedId) {
+        const formData = new FormData();
+        formData.append("exam_pdf_template", pendingPdfFile);
+        const upRes = await fetch(`/api/exams/${savedId}/pdf-template`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          body: formData,
+        });
+        const upData = await upRes.json().catch(() => ({}));
+        if (!upRes.ok || !upData.success) {
+          throw new Error(upData.message || "Exam saved but PDF upload failed.");
+        }
+      }
+      if (isPdfForm && savedId && Object.keys(pdfAnswerKey).length) {
+        await fetch(`/api/exams/${savedId}/pdf-answer-key`, {
+          method: "PUT",
+          headers: authHeaders(token),
+          body: JSON.stringify({ pdf_answer_key_json: pdfAnswerKey }),
+        });
+      }
       await Swal.fire({ icon: "success", title: isEdit ? "Exam updated" : "Exam created", timer: 1200, showConfirmButton: false });
       setMode("list");
       resetForm();
@@ -1830,6 +1955,23 @@ export default function ExamsTab() {
   const downloadExamPdf = async () => {
     if (!viewRow) return;
     try {
+      if (isPdfFormExamRow(viewRow)) {
+        if (!pdfPreviewUrl && viewRow.pdf_template_path) {
+          await loadPdfPreviewForExam(viewRow);
+        }
+        if (!pdfPreviewUrl) {
+          await Swal.fire({ icon: "warning", title: "No PDF", text: "Upload an exam PDF first." });
+          return;
+        }
+        const safeName = String(viewRow.title || "exam").replace(/[^\w\-]+/g, "_");
+        const a = document.createElement("a");
+        a.href = pdfPreviewUrl;
+        a.download = `${safeName}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        return;
+      }
       const pageNodes = Array.from(previewPagesContainerRef.current?.querySelectorAll("[data-exam-preview-page='true']") || []);
       if (!pageNodes.length) return;
       const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: [595, 842] });
@@ -2035,16 +2177,30 @@ ${imageParts}--${boundary}--`;
           <CardContent>
             <Stack spacing={1.5}>
               <TextField label="Exam name" value={name} onChange={(e) => setName(e.target.value)} />
-               <Select fullWidth displayEmpty value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
-                 <MenuItem value="">
-                   <em>Select template</em>
-                 </MenuItem>
-                 {templates.map((t) => (
-                   <MenuItem key={t.id} value={t.id}>
-                     {t.name}
-                   </MenuItem>
-                 ))}
-               </Select>
+              <Select
+                fullWidth
+                value={deliveryMode}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setDeliveryMode(next);
+                  if (next === "pdf_form") setTemplateId("");
+                }}
+              >
+                <MenuItem value="questions">Online questions (built in editor)</MenuItem>
+                <MenuItem value="pdf_form">Fillable PDF form</MenuItem>
+              </Select>
+              {deliveryMode !== "pdf_form" ? (
+                <Select fullWidth displayEmpty value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
+                  <MenuItem value="">
+                    <em>Select exam template</em>
+                  </MenuItem>
+                  {templates.map((t) => (
+                    <MenuItem key={t.id} value={t.id}>
+                      {t.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              ) : null}
                <Select fullWidth displayEmpty value={curriculumId} onChange={(e) => { setCurriculumId(e.target.value); setCurriculumClassId(""); setCurriculumSubjectId(""); setCurriculumClassLevelId(""); }}>
                  <MenuItem value="">
                    <em>Select curriculum</em>
@@ -2215,34 +2371,36 @@ ${imageParts}--${boundary}--`;
                   />
                 ) : null}
               </Stack>
-              <Stack spacing={1}>
-                <Typography sx={{ fontWeight: 700 }}>Instructions</Typography>
-                {instructionLines.map((line, idx) => (
-                  <Stack key={`instruction-${idx}`} direction="row" spacing={1} alignItems="center">
-                    <Typography sx={{ minWidth: 18, color: "text.secondary" }}>{idx + 1}.</Typography>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      placeholder={`Instruction ${idx + 1}`}
-                      value={line}
-                      onChange={(e) => setInstructionLines((prev) => prev.map((x, i) => (i === idx ? e.target.value : x)))}
-                    />
-                    <Button
-                      color="error"
-                      variant="outlined"
-                      disabled={instructionLines.length <= 1}
-                      onClick={() => setInstructionLines((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)))}
-                    >
-                      Remove
+              {deliveryMode !== "pdf_form" ? (
+                <Stack spacing={1}>
+                  <Typography sx={{ fontWeight: 700 }}>Instructions</Typography>
+                  {instructionLines.map((line, idx) => (
+                    <Stack key={`instruction-${idx}`} direction="row" spacing={1} alignItems="center">
+                      <Typography sx={{ minWidth: 18, color: "text.secondary" }}>{idx + 1}.</Typography>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        placeholder={`Instruction ${idx + 1}`}
+                        value={line}
+                        onChange={(e) => setInstructionLines((prev) => prev.map((x, i) => (i === idx ? e.target.value : x)))}
+                      />
+                      <Button
+                        color="error"
+                        variant="outlined"
+                        disabled={instructionLines.length <= 1}
+                        onClick={() => setInstructionLines((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)))}
+                      >
+                        Remove
+                      </Button>
+                    </Stack>
+                  ))}
+                  <Stack direction="row" spacing={1}>
+                    <Button variant="outlined" onClick={() => setInstructionLines((prev) => [...prev, ""])}>
+                      Add instruction
                     </Button>
                   </Stack>
-                ))}
-                <Stack direction="row" spacing={1}>
-                  <Button variant="outlined" onClick={() => setInstructionLines((prev) => [...prev, ""])}>
-                    Add instruction
-                  </Button>
                 </Stack>
-              </Stack>
+              ) : null}
               <Typography sx={{ fontWeight: 800, mt: 1 }}>Advanced settings</Typography>
               <TextField fullWidth label="Total marks" type="number" value={totalMarks} onChange={(e) => setTotalMarks(e.target.value)} />
               <TextField fullWidth label="Passing marks" type="number" value={passingMarks} onChange={(e) => setPassingMarks(e.target.value)} />
@@ -2253,6 +2411,41 @@ ${imageParts}--${boundary}--`;
                   <MenuItem value="archived">Archived</MenuItem>
                 </Select>
               ) : null}
+              {deliveryMode === "pdf_form" ? (
+                <Card variant="outlined" sx={{ borderColor: "#fecaca" }}>
+                  <CardContent>
+                    <Typography sx={{ fontWeight: 800, mb: 1 }}>Exam PDF</Typography>
+                    {!editingId ? (
+                      <Stack spacing={1} sx={{ mb: 2 }}>
+                        <Button variant="outlined" component="label">
+                          Choose PDF file
+                          <input
+                            type="file"
+                            hidden
+                            accept="application/pdf,.pdf"
+                            onChange={(e) => setPendingPdfFile(e.target.files?.[0] || null)}
+                          />
+                        </Button>
+                        {pendingPdfFile ? (
+                          <Typography variant="body2">Selected: {pendingPdfFile.name}</Typography>
+                        ) : null}
+                      </Stack>
+                    ) : null}
+                    <ExamPdfFormPanel
+                      examId={editingId}
+                      pdfFieldSchema={pdfFieldSchema}
+                      pdfAnswerKey={pdfAnswerKey}
+                      onAnswerKeyChange={setPdfAnswerKey}
+                      pdfTemplatePath={pdfTemplatePath}
+                      onUploadComplete={(data) => {
+                        setPdfFieldSchema(data?.pdf_field_schema_json || []);
+                        setPdfTemplatePath(data?.pdf_template_path || "");
+                      }}
+                    />
+                  </CardContent>
+                </Card>
+              ) : null}
+              {deliveryMode === "questions" ? (
               <Stack direction={{ xs: "column", xl: "row" }} spacing={2} alignItems="flex-start">
                 <Box sx={{ width: { xs: "100%", xl: 520 }, flexShrink: 0 }}>
                   <Typography sx={{ fontWeight: 800, mt: 1, mb: 1 }}>Questions</Typography>
@@ -3143,6 +3336,17 @@ ${imageParts}--${boundary}--`;
                   </Stack>
                 </Box>
               </Stack>
+              ) : null}
+              {deliveryMode === "pdf_form" ? (
+                <Button
+                  variant="contained"
+                  onClick={() => void createExam()}
+                  disabled={saving}
+                  sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark }, alignSelf: "flex-start" }}
+                >
+                  {saving ? "Saving..." : editingId ? "Update exam" : "Save exam"}
+                </Button>
+              ) : null}
             </Stack>
           </CardContent>
         </Card>
@@ -3181,7 +3385,12 @@ ${imageParts}--${boundary}--`;
                 {rows.map((r, idx) => (
                   <TableRow key={r.id} hover>
                     <TableCell sx={{ color: "text.secondary" }}>{idx + 1}</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>{r.title || r.name}</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>
+                      {r.title || r.name}
+                      {String(r.exam_type || "") === "pdf_form" ? (
+                        <Chip size="small" label="PDF form" sx={{ ml: 1 }} color="secondary" />
+                      ) : null}
+                    </TableCell>
                     <TableCell>{r.template?.name || templateMap.get(String(r.template_id))?.name || "-"}</TableCell>
                     <TableCell>{r.status || "draft"}</TableCell>
                     <TableCell>{r.duration_minutes} min</TableCell>
@@ -3291,11 +3500,20 @@ ${imageParts}--${boundary}--`;
                           </Typography>
                         </Stack>
                       </Stack>
-                      {Array.isArray(s.answers) && s.answers.length ? (
+                      {s.pdf_auto_score != null ? (
+                        <Typography variant="body2" color="text.secondary">
+                          Auto-score: {s.pdf_auto_score} / {markingRow?.total_marks || "—"}
+                        </Typography>
+                      ) : null}
+                      {s.pdf_answers_json && typeof s.pdf_answers_json === "object" ? (
+                        <Box sx={{ maxHeight: 180, overflow: "auto", border: "1px solid #eee", borderRadius: 1, p: 1 }}>
+                          {renderSubmissionAnswerContent(null, s)}
+                        </Box>
+                      ) : Array.isArray(s.answers) && s.answers.length ? (
                         <Box sx={{ maxHeight: 180, overflow: "auto", border: "1px solid #eee", borderRadius: 1, p: 1 }}>
                           <Stack spacing={0.75}>
                             {s.answers.map((a) => {
-                              const answerContent = renderSubmissionAnswerContent(a);
+                              const answerContent = renderSubmissionAnswerContent(a, s);
                               return (
                               <Box key={a.id}>
                                 <Typography variant="caption" sx={{ fontWeight: 700 }}>
@@ -3360,9 +3578,35 @@ ${imageParts}--${boundary}--`;
         </DialogActions>
       </Dialog>
 
-      <Dialog open={!!viewRow} onClose={() => setViewRow(null)} maxWidth="md" fullWidth>
-        <DialogTitle>Exam preview - {viewRow?.title || viewRow?.name || ""}</DialogTitle>
+      <Dialog open={!!viewRow} onClose={closeViewExam} maxWidth="md" fullWidth>
+        <DialogTitle>
+          Exam preview - {viewRow?.title || viewRow?.name || ""}
+          {isPdfFormExamRow(viewRow) ? <Chip size="small" label="PDF exam" sx={{ ml: 1 }} /> : null}
+        </DialogTitle>
         <DialogContent>
+          {isPdfFormExamRow(viewRow) ? (
+            <Stack spacing={1.5}>
+              {!viewRow?.pdf_template_path ? (
+                <Alert severity="warning">No PDF uploaded yet. Edit the exam and upload your Word PDF.</Alert>
+              ) : examDetailLoading || !pdfPreviewUrl ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+                  <CircularProgress sx={{ color: accent }} />
+                </Box>
+              ) : (
+                <Box
+                  component="iframe"
+                  title="Exam PDF preview"
+                  src={pdfPreviewUrl}
+                  sx={{ width: "100%", height: { xs: 480, md: 720 }, border: "1px solid #e5e7eb", borderRadius: 1, bgcolor: "#f9fafb" }}
+                />
+              )}
+              {Array.isArray(viewRow?.pdf_field_schema_json) && viewRow.pdf_field_schema_json.length ? (
+                <Typography variant="body2" color="text.secondary">
+                  {viewRow.pdf_field_schema_json.length} answer field(s) detected for students (Q1, Q2, …).
+                </Typography>
+              ) : null}
+            </Stack>
+          ) : (
           <Stack spacing={2} ref={previewPagesContainerRef}>
             {previewPages.map((page) => (
               <Box
@@ -3480,17 +3724,72 @@ ${imageParts}--${boundary}--`;
               </Box>
             ))}
           </Stack>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => void downloadExamWord()}>Download Word</Button>
+          {!isPdfFormExamRow(viewRow) ? <Button onClick={() => void downloadExamWord()}>Download Word</Button> : null}
           <Button onClick={() => void downloadExamPdf()}>Download PDF</Button>
-          <Button onClick={() => setViewRow(null)}>Close</Button>
+          <Button onClick={closeViewExam}>Close</Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={!!simulateRow} onClose={() => setSimulateRow(null)} maxWidth="lg" fullWidth>
+      <Dialog open={!!simulateRow} onClose={closeSimulateExam} maxWidth="lg" fullWidth>
         <DialogTitle>Student real-time preview - {simulateRow?.title || simulateRow?.name || ""}</DialogTitle>
         <DialogContent>
+          {isPdfFormExamRow(simulateRow) ? (
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+              <Box sx={{ flex: 1.2, minWidth: 0 }}>
+                {!simulateRow?.pdf_template_path ? (
+                  <Alert severity="warning">No PDF on this exam.</Alert>
+                ) : !pdfPreviewUrl ? (
+                  <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                    <CircularProgress size={28} sx={{ color: accent }} />
+                  </Box>
+                ) : (
+                  <Box
+                    component="iframe"
+                    title="Exam PDF"
+                    src={pdfPreviewUrl}
+                    sx={{ width: "100%", height: 520, border: "1px solid #e5e7eb", borderRadius: 1 }}
+                  />
+                )}
+              </Box>
+              <Stack spacing={1.25} sx={{ flex: 1 }}>
+                <Typography sx={{ fontWeight: 700 }}>Student answer fields (preview)</Typography>
+                {(Array.isArray(simulateRow?.pdf_field_schema_json) ? simulateRow.pdf_field_schema_json : []).map((f) => (
+                  <Box key={f.name} sx={{ border: "1px solid #f3f4f6", borderRadius: 1, p: 1 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, display: "block" }}>
+                      {f.label || f.name}
+                    </Typography>
+                    {f.prompt ? (
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                        {f.prompt}
+                      </Typography>
+                    ) : null}
+                    {f.type === "RadioGroup" && Array.isArray(f.options) ? (
+                      <RadioGroup
+                        value={String(simulateAnswers[f.name] || "")}
+                        onChange={(e) => setSimulateAnswers((prev) => ({ ...prev, [f.name]: e.target.value }))}
+                      >
+                        {f.options.map((opt) => (
+                          <FormControlLabel key={opt} value={opt} control={<Radio size="small" />} label={opt} />
+                        ))}
+                      </RadioGroup>
+                    ) : (
+                      <TextField
+                        fullWidth
+                        size="small"
+                        multiline={f.type === "long_text"}
+                        minRows={f.type === "long_text" ? 3 : 1}
+                        value={simulateAnswers[f.name] ?? ""}
+                        onChange={(e) => setSimulateAnswers((prev) => ({ ...prev, [f.name]: e.target.value }))}
+                      />
+                    )}
+                  </Box>
+                ))}
+              </Stack>
+            </Stack>
+          ) : (
           <Stack spacing={2}>
             {simulatePages.map((page) => (
               <Box key={`simulate-page-${page.pageNo}`} sx={{ border: "1px solid #e5e7eb", borderRadius: 2, p: 2, bgcolor: "#fff" }}>
@@ -3629,6 +3928,7 @@ ${imageParts}--${boundary}--`;
               </Box>
             ))}
           </Stack>
+          )}
         </DialogContent>
         <DialogActions>
           <Button
@@ -3644,13 +3944,15 @@ ${imageParts}--${boundary}--`;
               void Swal.fire({
                 icon: "info",
                 title: "Preview attempt summary",
-                text: `Attempted ${attempted} question(s) in student preview mode.`,
+                text: isPdfFormExamRow(simulateRow)
+                  ? `Attempted ${attempted} field(s) in student preview mode.`
+                  : `Attempted ${attempted} question(s) in student preview mode.`,
               });
             }}
           >
             Check attempt
           </Button>
-          <Button onClick={() => setSimulateRow(null)}>Close</Button>
+          <Button onClick={closeSimulateExam}>Close</Button>
         </DialogActions>
       </Dialog>
     </Stack>

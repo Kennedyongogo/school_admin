@@ -64,14 +64,26 @@ export default function AdminNotificationBell() {
 
   const loadNotifications = useCallback(async () => {
     if (!token) return null;
-    const res = await fetch("/api/admin/notifications", { headers: authHeaders(token) });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success) throw new Error(data.message || "Could not load notifications");
-    const unread = Number(data.data?.unread_count) || 0;
-    const list = Array.isArray(data.data?.notifications) ? data.data.notifications : [];
-    setUnreadCount(unread);
-    setNotifications(list);
-    return { unread, list };
+    try {
+      const res = await fetch("/api/admin/notifications", { headers: authHeaders(token) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        console.warn("[notifications]", data.message || res.status);
+        setUnreadCount(0);
+        setNotifications([]);
+        return { unread: 0, list: [] };
+      }
+      const unread = Number(data.data?.unread_count) || 0;
+      const list = Array.isArray(data.data?.notifications) ? data.data.notifications : [];
+      setUnreadCount(unread);
+      setNotifications(list);
+      return { unread, list };
+    } catch (e) {
+      console.warn("[notifications]", e?.message || e);
+      setUnreadCount(0);
+      setNotifications([]);
+      return { unread: 0, list: [] };
+    }
   }, [token]);
 
   const handleIncoming = useCallback(

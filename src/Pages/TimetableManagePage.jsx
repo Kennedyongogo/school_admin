@@ -3,7 +3,6 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box,
   Alert,
-  Chip,
   CircularProgress,
   IconButton,
   Paper,
@@ -228,9 +227,6 @@ export default function TimetableManagePage() {
                     <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>Day</TableCell>
                     <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>P</TableCell>
                     <TableCell>Subject</TableCell>
-                    <TableCell align="center">Delivery</TableCell>
-                    <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>Teacher</TableCell>
-                    <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>Time</TableCell>
                     <TableCell align="right" width={56}>
                       {" "}
                     </TableCell>
@@ -239,7 +235,7 @@ export default function TimetableManagePage() {
                 <TableBody>
                   {lessons.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8}>
+                      <TableCell colSpan={5}>
                         <Typography color="text.secondary" sx={{ py: 2 }}>
                           No lesson on this timetable yet.
                         </Typography>
@@ -249,9 +245,6 @@ export default function TimetableManagePage() {
                     lessons.map((row) => {
                       const wd = WEEKDAYS.find((w) => w.value === row.day_of_week)?.label || "—";
                       const subName = row.curriculum_subject?.name || "—";
-                      const teach = row.teacher ? teacherLabel(row.teacher) : "—";
-                      const timeBits = [row.starts_at, row.ends_at].filter(Boolean).join(" – ");
-                      const onlineLesson = row.delivery_mode === "online";
                       return (
                         <TableRow key={row.id} hover>
                           <TableCell>{rowDateLabel(row)}</TableCell>
@@ -260,21 +253,6 @@ export default function TimetableManagePage() {
                             {row.period_index ?? "—"}
                           </TableCell>
                           <TableCell>{subName}</TableCell>
-                          <TableCell align="center">
-                            <Chip
-                              size="small"
-                              label={onlineLesson ? "Online" : "Physical"}
-                              variant="outlined"
-                              sx={{
-                                fontWeight: 700,
-                                borderColor: onlineLesson ? "rgba(139,115,85,0.45)" : "#d1d5db",
-                                color: onlineLesson ? "#5c4a38" : "text.secondary",
-                                bgcolor: onlineLesson ? "rgba(237,226,209,0.45)" : "transparent",
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>{teach}</TableCell>
-                          <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>{timeBits || "—"}</TableCell>
                           <TableCell align="right">
                             <IconButton
                               size="small"
