@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Box,
@@ -22,6 +22,7 @@ import {
 } from "@mui/material";
 import { ArrowBack as ArrowBackIcon, Edit as EditIcon } from "@mui/icons-material";
 import Swal from "sweetalert2";
+import { levelsForClass, studentLevelIdFromRow } from "./studentFormLevels";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
@@ -80,6 +81,7 @@ function rowToForm(row) {
     gender: row?.gender || "male",
     curriculum_id: curriculumId,
     curriculum_class_id: row?.curriculum_class_id ?? "",
+    curriculum_class_level_id: studentLevelIdFromRow(row),
     enrollment_date: enr,
     graduation_year: row?.graduation_year != null ? String(row.graduation_year) : "",
     blood_group: row?.blood_group ?? "",
@@ -116,6 +118,7 @@ export default function ElimuPlusStudentEdit() {
   const [form, setForm] = useState(() => rowToForm(location.state?.studentRow || {}));
   const [curricula, setCurricula] = useState([]);
   const [allClasses, setAllClasses] = useState([]);
+  const [allClassLevels, setAllClassLevels] = useState([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -144,25 +147,32 @@ export default function ElimuPlusStudentEdit() {
     setPageLoading(true);
     setError(null);
     try {
-      const [cRows, classRows] = await Promise.all([
+      const [cRows, classRows, levelRows] = await Promise.all([
         fetchAllPages("/api/curricula", token),
         fetchAllPages("/api/curricula/all-classes", token),
+        fetchAllPages("/api/curricula/all-class-levels", token),
       ]);
       setCurricula(Array.isArray(cRows) ? cRows : []);
       setAllClasses(Array.isArray(classRows) ? classRows : []);
+      setAllClassLevels(Array.isArray(levelRows) ? levelRows : []);
 
       if (!location.state?.studentRow && studentId) {
-        const res = await fetch(`/api/students?page=1&limit=500`, { headers: authHeaders(token) });
+        const res = await fetch(`/api/students/${encodeURIComponent(studentId)}`, { headers: authHeaders(token) });
         const data = await res.json().catch(() => ({}));
-        const rows = Array.isArray(data?.data) ? data.data : [];
-        const found = rows.find((r) => String(r.id) === String(studentId));
-        if (!found) throw new Error("Student not found.");
-        setForm(rowToForm(found));
+        if (!res.ok || !data.success || !data.data) throw new Error(data.message || "Student not found.");
+        setForm(rowToForm(data.data));
+      } else if (location.state?.studentRow && studentId) {
+        const res = await fetch(`/api/students/${encodeURIComponent(studentId)}`, { headers: authHeaders(token) });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success && data.data) {
+          setForm(rowToForm(data.data));
+        }
       }
     } catch (e) {
       setError(e.message || "Could not load student.");
       setCurricula([]);
       setAllClasses([]);
+      setAllClassLevels([]);
     } finally {
       setPageLoading(false);
     }
@@ -171,6 +181,11 @@ export default function ElimuPlusStudentEdit() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  const levelOptions = useMemo(
+    () => levelsForClass(allClassLevels, form.curriculum_class_id),
+    [allClassLevels, form.curriculum_class_id]
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -184,8 +199,8 @@ export default function ElimuPlusStudentEdit() {
       setError("Missing student.");
       return;
     }
-    if (!form.admission_number?.trim() || !form.date_of_birth || !form.curriculum_id || !form.curriculum_class_id) {
-      setError("Admission number, date of birth, curriculum, and class are required.");
+    if (!form.admission_number?.trim() || !form.date_of_birth || !form.curriculum_id || !form.curriculum_class_id || !form.curriculum_class_level_id) {
+      setError("Admission number, date of birth, curriculum, class, and term/level are required.");
       return;
     }
     if (!form.user_full_name?.trim()) {
@@ -215,6 +230,7 @@ export default function ElimuPlusStudentEdit() {
       fd.append("gender", form.gender);
       fd.append("curriculum_id", form.curriculum_id);
       fd.append("curriculum_class_id", form.curriculum_class_id);
+      fd.append("curriculum_class_level_id", form.curriculum_class_level_id);
       fd.append("enrollment_date", form.enrollment_date?.trim() || "");
       fd.append("graduation_year", graduation_year === null ? "" : String(graduation_year));
       fd.append("blood_group", form.blood_group?.trim() || "");
@@ -353,7 +369,7 @@ export default function ElimuPlusStudentEdit() {
                   </FormControl>
                   <FormControl fullWidth required>
                     <InputLabel id="stu-edit-curr">Curriculum</InputLabel>
-                    <Select labelId="stu-edit-curr" label="Curriculum" value={form.curriculum_id === "" ? "" : form.curriculum_id} onChange={(e) => setForm((prev) => ({ ...prev, curriculum_id: e.target.value, curriculum_class_id: "" }))}>
+                    <Select labelId="stu-edit-curr" label="Curriculum" value={form.curriculum_id === "" ? "" : form.curriculum_id} onChange={(e) => setForm((prev) => ({ ...prev, curriculum_id: e.target.value, curriculum_class_id: "", curriculum_class_level_id: "" }))}>
                       <MenuItem value=""><em>Select…</em></MenuItem>
                       {curricula.map((c) => (
                         <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
@@ -362,10 +378,21 @@ export default function ElimuPlusStudentEdit() {
                   </FormControl>
                   <FormControl fullWidth required disabled={!form.curriculum_id}>
                     <InputLabel id="stu-edit-cc">Class</InputLabel>
-                    <Select labelId="stu-edit-cc" label="Class" value={form.curriculum_class_id === "" ? "" : form.curriculum_class_id} onChange={(e) => setForm((prev) => ({ ...prev, curriculum_class_id: e.target.value }))}>
+                    <Select labelId="stu-edit-cc" label="Class" value={form.curriculum_class_id === "" ? "" : form.curriculum_class_id} onChange={(e) => setForm((prev) => ({ ...prev, curriculum_class_id: e.target.value, curriculum_class_level_id: "" }))}>
                       <MenuItem value=""><em>Select…</em></MenuItem>
                       {allClasses.filter((cl) => cl.curriculum_id === form.curriculum_id).map((cl) => (
                         <MenuItem key={cl.id} value={cl.id}>{cl.name}{cl.code ? ` (${cl.code})` : ""}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl fullWidth required disabled={!form.curriculum_class_id}>
+                    <InputLabel id="stu-edit-level">Term / level</InputLabel>
+                    <Select labelId="stu-edit-level" label="Term / level" value={form.curriculum_class_level_id === "" ? "" : form.curriculum_class_level_id} onChange={(e) => setForm((prev) => ({ ...prev, curriculum_class_level_id: e.target.value }))}>
+                      <MenuItem value="">
+                        <em>{form.curriculum_class_id ? (levelOptions.length ? "Select…" : "No levels for this class") : "Select class first"}</em>
+                      </MenuItem>
+                      {levelOptions.map((lv) => (
+                        <MenuItem key={lv.id} value={lv.id}>{lv.name}</MenuItem>
                       ))}
                     </Select>
                   </FormControl>

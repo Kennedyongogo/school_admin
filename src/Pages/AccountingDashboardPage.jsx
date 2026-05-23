@@ -6,6 +6,8 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import PaidIcon from "@mui/icons-material/Paid";
 import SavingsIcon from "@mui/icons-material/Savings";
 import CurriculumFeeStructuresTab from "../components/Curriculum/CurriculumFeeStructuresTab";
+import FeeInvoicesTab from "../components/Curriculum/FeeInvoicesTab";
+import FeePaymentsTab from "../components/Curriculum/FeePaymentsTab";
 
 const primaryRed = "#DC2626";
 const primaryDark = "#B91C1C";
@@ -37,6 +39,7 @@ function Placeholder({ title }) {
 export default function AccountingDashboardPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
+  const [invoiceGenOpen, setInvoiceGenOpen] = useState(false);
 
   return (
     <Box
@@ -86,6 +89,25 @@ export default function AccountingDashboardPage() {
               Create fee structure
             </Button>
           ) : null}
+          {tab === 1 ? (
+            <Button
+              variant="contained"
+              onClick={() => setInvoiceGenOpen(true)}
+              sx={{
+                bgcolor: "rgba(255,255,255,0.95)",
+                color: primaryDark,
+                fontWeight: 700,
+                textTransform: "none",
+                borderRadius: 2,
+                px: 3,
+                py: 1.25,
+                boxShadow: "0 4px 14px rgba(0,0,0,0.15)",
+                "&:hover": { bgcolor: "#fff", color: primaryRed },
+              }}
+            >
+              Generate invoice
+            </Button>
+          ) : null}
         </Stack>
       </Box>
 
@@ -104,12 +126,14 @@ export default function AccountingDashboardPage() {
         >
           <Tab icon={<SavingsIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Fee structures" />
           <Tab icon={<ReceiptLongIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Invoices" />
-          <Tab icon={<PaidIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Collections" />
+          <Tab icon={<PaidIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Fee payments" />
         </Tabs>
 
         {tab === 0 ? <CurriculumFeeStructuresTab /> : null}
-        {tab === 1 ? <Placeholder title="Invoices" /> : null}
-        {tab === 2 ? <Placeholder title="Collections" /> : null}
+        {tab === 1 ? (
+          <FeeInvoicesTab genOpen={invoiceGenOpen} onGenOpenChange={setInvoiceGenOpen} />
+        ) : null}
+        {tab === 2 ? <FeePaymentsTab /> : null}
       </Box>
     </Box>
   );

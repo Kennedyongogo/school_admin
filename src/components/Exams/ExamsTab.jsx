@@ -859,6 +859,9 @@ export default function ExamsTab() {
   const [ocrRawText, setOcrRawText] = useState("");
   const [ocrParsedBlocks, setOcrParsedBlocks] = useState([]);
   const [deliveryMode, setDeliveryMode] = useState("questions");
+  const [examFeeAccessMode, setExamFeeAccessMode] = useState("none");
+  const [examFeeMinimumAmount, setExamFeeMinimumAmount] = useState("");
+  const [examFeeMinimumBasis, setExamFeeMinimumBasis] = useState("total");
   const [pdfAnswerKey, setPdfAnswerKey] = useState({});
   const [pdfFieldSchema, setPdfFieldSchema] = useState([]);
   const [pdfTemplatePath, setPdfTemplatePath] = useState("");
@@ -1352,6 +1355,9 @@ export default function ExamsTab() {
     setOcrRawText("");
     setOcrParsedBlocks([]);
     setDeliveryMode("questions");
+    setExamFeeAccessMode("none");
+    setExamFeeMinimumAmount("");
+    setExamFeeMinimumBasis("total");
     setPdfAnswerKey({});
     setPdfFieldSchema([]);
     setPdfTemplatePath("");
@@ -1401,6 +1407,9 @@ export default function ExamsTab() {
     setAllowLateJoinMinutes(Number(row.allow_late_join_minutes ?? 10));
     const rowType = String(row.exam_type || "questions").trim();
     setDeliveryMode(rowType === "pdf_form" ? "pdf_form" : "questions");
+    setExamFeeAccessMode(row.exam_fee_access_mode || "none");
+    setExamFeeMinimumAmount(row.exam_fee_minimum_amount != null ? String(row.exam_fee_minimum_amount) : "");
+    setExamFeeMinimumBasis(row.exam_fee_minimum_basis || "total");
     setPdfAnswerKey(
       row.pdf_answer_key_json && typeof row.pdf_answer_key_json === "object" ? row.pdf_answer_key_json : {}
     );
@@ -1727,6 +1736,12 @@ export default function ExamsTab() {
           curriculum_class_id: curriculumClassId || null,
           curriculum_subject_id: curriculumSubjectId || null,
           curriculum_class_level_id: curriculumClassLevelId || null,
+          exam_fee_access_mode: examFeeAccessMode || "none",
+          exam_fee_minimum_amount:
+            examFeeAccessMode === "custom_minimum" && examFeeMinimumAmount !== ""
+              ? Number(examFeeMinimumAmount)
+              : null,
+          exam_fee_minimum_basis: examFeeAccessMode === "custom_minimum" ? null : examFeeMinimumBasis || "total",
           duration_minutes: Number(duration),
           total_marks: Number(totalMarks) || 0,
           passing_marks: Number(passingMarks) || 0,
@@ -2242,6 +2257,27 @@ ${imageParts}--${boundary}--`;
                  ))}
                </Select>
               <TextField fullWidth label="Duration (minutes)" type="number" value={duration} onChange={(e) => setDuration(e.target.value)} />
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: accentDark, pt: 1 }}>
+                Fee access (exam gate)
+              </Typography>
+              <Select fullWidth value={examFeeAccessMode} onChange={(e) => setExamFeeAccessMode(e.target.value)}>
+                <MenuItem value="none">No fee check</MenuItem>
+                <MenuItem value="first_half_paid">1st half (installment) paid</MenuItem>
+                <MenuItem value="full_fee_paid">Full term fee paid</MenuItem>
+                <MenuItem value="custom_minimum">Custom minimum paid</MenuItem>
+              </Select>
+              {examFeeAccessMode === "custom_minimum" ? (
+                <TextField
+                  fullWidth
+                  required
+                  label="Minimum amount to open exam (KES)"
+                  type="number"
+                  inputProps={{ min: 1, step: "any" }}
+                  value={examFeeMinimumAmount}
+                  onChange={(e) => setExamFeeMinimumAmount(e.target.value)}
+                  helperText="Student must have paid at least this amount (for their class level) before opening the exam. Not tied to full fee or 1st half rules."
+                />
+              ) : null}
               <Typography variant="subtitle1" sx={{ fontWeight: 800, color: accentDark, pt: 1 }}>
                 Schedule (optional)
               </Typography>
