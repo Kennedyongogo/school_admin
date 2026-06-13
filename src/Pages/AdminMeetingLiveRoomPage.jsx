@@ -192,7 +192,7 @@ export default function AdminMeetingLiveRoomPage() {
 
   const handleLeaveMeeting = useCallback(() => {
     void leaveLobby();
-    navigate("/elimu-plus-online/meetings");
+    navigate("/timetable");
   }, [leaveLobby, navigate]);
 
   const canJoinVideo =
@@ -233,8 +233,8 @@ export default function AdminMeetingLiveRoomPage() {
               {liveActionBusy ? "Ending…" : "End live session"}
             </Button>
           ) : null}
-          <Button variant="outlined" onClick={() => navigate("/elimu-plus-online/meetings")}>
-            Back to meetings
+          <Button variant="outlined" onClick={() => navigate("/timetable")}>
+            Back to timetable
           </Button>
         </Stack>
       </Box>
@@ -261,8 +261,8 @@ export default function AdminMeetingLiveRoomPage() {
         <Typography variant="body2" color="text.secondary">
           {lobbyError || "You are in the waiting room. The meeting creator must admit you before video opens."}
         </Typography>
-        <Button sx={{ mt: 2 }} onClick={() => navigate("/elimu-plus-online/meetings")}>
-          Back to meetings
+        <Button sx={{ mt: 2 }} onClick={() => navigate("/timetable")}>
+          Back to timetable
         </Button>
       </Box>
     );

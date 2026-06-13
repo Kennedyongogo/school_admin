@@ -13,6 +13,7 @@ import PeopleIcon from "@mui/icons-material/People";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import FamilyRestroomIcon from "@mui/icons-material/FamilyRestroom";
 import SchoolIcon from "@mui/icons-material/School";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
 import {
   Bar,
   BarChart,
@@ -153,6 +154,14 @@ export default function ElimuPlusDashboardPage() {
       })),
     [stats]
   );
+  const subjectsBarData = useMemo(
+    () =>
+      (stats?.subjects_bar_chart?.series || []).map((row) => ({
+        name: row.x,
+        value: row.y,
+      })),
+    [stats]
+  );
   const curriculumChartRows = useMemo(
     () =>
       (stats?.students_by_curriculum || stats?.pie_chart?.series || []).map((row, index) => ({
@@ -270,6 +279,54 @@ export default function ElimuPlusDashboardPage() {
                         contentStyle={{ borderRadius: 8, borderColor: "#fecaca" }}
                       />
                       <Bar dataKey="value" name="Students" fill={accent} radius={[6, 6, 0, 0]} maxBarSize={56} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Box>
+              )}
+            </Paper>
+
+            <Paper
+              elevation={0}
+              sx={{
+                width: "100%",
+                p: { xs: 1.5, sm: 2.5 },
+                border: "1px solid #fecaca",
+                borderRadius: 2,
+                bgcolor: "#fff",
+              }}
+            >
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                <MenuBookIcon sx={{ color: accent, fontSize: 22 }} />
+                <Typography variant="h6" sx={{ fontWeight: 800, color: accentDark }}>
+                  Subjects by class
+                </Typography>
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Number of active subjects linked to each curriculum class
+              </Typography>
+              {subjectsBarData.length === 0 ? (
+                <Typography color="text.secondary" sx={{ py: 4, textAlign: "center" }}>
+                  No class data yet.
+                </Typography>
+              ) : (
+                <Box sx={{ width: "100%", height: { xs: 320, md: 380 } }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={subjectsBarData} margin={{ top: 8, right: 12, left: 0, bottom: 72 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#fecaca" />
+                      <XAxis
+                        dataKey="name"
+                        angle={-32}
+                        textAnchor="end"
+                        height={88}
+                        interval={0}
+                        tick={{ fill: accentDark, fontSize: 11 }}
+                      />
+                      <YAxis allowDecimals={false} tick={{ fill: accentDark, fontSize: 12 }} />
+                      <Tooltip
+                        formatter={(value) => [value, "Subjects"]}
+                        contentStyle={{ borderRadius: 8, borderColor: "#fecaca" }}
+                      />
+                      <Bar dataKey="value" name="Subjects" fill="#2563EB" radius={[6, 6, 0, 0]} maxBarSize={56} />
                     </BarChart>
                   </ResponsiveContainer>
                 </Box>

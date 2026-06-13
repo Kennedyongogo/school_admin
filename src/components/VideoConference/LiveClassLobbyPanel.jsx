@@ -95,7 +95,7 @@ const scrollBodySx = {
   overscrollBehavior: "contain",
 };
 
-export default function LiveClassLobbyPanel({ liveClassId, token, socket, embedded = false }) {
+export default function LiveClassLobbyPanel({ liveClassId, token, socket, embedded = false, meetingStyle = false }) {
   const [tab, setTab] = useState(0);
   const now = useLiveClock(15000);
   const { loading, error, lobby, busyId, loadLobby, admit, deny, admitAll } = useLiveClassLobby({
@@ -111,12 +111,17 @@ export default function LiveClassLobbyPanel({ liveClassId, token, socket, embedd
   const left = lobby?.left || [];
   const denied = lobby?.denied || [];
 
-  const tabs = [
-    { label: `Waiting (${waiting.length})`, rows: waiting, showActions: true },
-    { label: `In class (${admitted.length})`, rows: admitted, showActions: false },
-    { label: `Left (${left.length})`, rows: left, showActions: false },
-    { label: `Denied (${denied.length})`, rows: denied, showActions: false },
-  ];
+  const tabs = meetingStyle
+    ? [
+        { label: `Waiting (${waiting.length})`, rows: waiting, showActions: true },
+        { label: `In class (${admitted.length})`, rows: admitted, showActions: false },
+      ]
+    : [
+        { label: `Waiting (${waiting.length})`, rows: waiting, showActions: true },
+        { label: `In class (${admitted.length})`, rows: admitted, showActions: false },
+        { label: `Left (${left.length})`, rows: left, showActions: false },
+        { label: `Denied (${denied.length})`, rows: denied, showActions: false },
+      ];
 
   const active = tabs[tab] || tabs[0];
   const socketLive = socket?.connected;
@@ -142,10 +147,10 @@ export default function LiveClassLobbyPanel({ liveClassId, token, socket, embedd
       <Box sx={{ px: 1.5, py: 1, borderBottom: 1, borderColor: "divider", flexShrink: 0 }}>
         <Stack direction="row" alignItems="center" spacing={0.75}>
           <GroupsRoundedIcon color="primary" fontSize="small" />
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, flex: 1 }}>
-            Class roster
+          <Typography variant="subtitle2" sx={{ fontWeight: meetingStyle ? 800 : 700, flex: 1 }}>
+            {meetingStyle ? "Class lobby" : "Class roster"}
           </Typography>
-          {socketLive ? (
+          {!meetingStyle && socketLive ? (
             <Chip
               size="small"
               icon={<FiberManualRecordIcon sx={{ fontSize: 10, color: "success.main" }} />}
@@ -159,13 +164,29 @@ export default function LiveClassLobbyPanel({ liveClassId, token, socket, embedd
             <RefreshRoundedIcon fontSize="small" />
           </Button>
         </Stack>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: "block", mt: 0.5, lineHeight: 1.4, wordBreak: "break-word" }}
-        >
-          Updates when students knock, are admitted, or leave. Minutes count up while they stay in class.
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5, lineHeight: 1.4 }}>
+          {meetingStyle
+            ? "Admit students from the waiting list. They join from the student portal → Classes."
+            : "Updates when students knock, are admitted, or leave. Minutes count up while they stay in class."}
         </Typography>
+        {meetingStyle ? (
+          <Stack direction="row" spacing={0.75} sx={{ mt: 1, flexWrap: "wrap" }} useFlexGap>
+            <Chip size="small" label={`Waiting ${stats.waiting ?? 0}`} color="warning" variant="outlined" />
+            <Chip size="small" label={`In class ${stats.in_class ?? 0}`} color="success" variant="outlined" />
+          </Stack>
+        ) : null}
+        {meetingStyle && waiting.length > 0 ? (
+          <Button
+            fullWidth
+            size="small"
+            variant="contained"
+            sx={{ mt: 1 }}
+            disabled={busyId === "all"}
+            onClick={() => void admitAll().catch((e) => alert(e.message))}
+          >
+            Admit all ({waiting.length})
+          </Button>
+        ) : null}
       </Box>
 
       <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -179,19 +200,21 @@ export default function LiveClassLobbyPanel({ liveClassId, token, socket, embedd
           </Alert>
         ) : (
           <>
-            <Stack
-              direction="row"
-              spacing={0.75}
-              sx={{ p: 1, flexWrap: "wrap", justifyContent: "center", flexShrink: 0 }}
-              useFlexGap
-            >
-              <StatCard label="Waiting" value={stats.waiting ?? 0} color="warning" />
-              <StatCard label="In class" value={stats.in_class ?? 0} color="success" />
-              <StatCard label="Left" value={stats.left_after_admit ?? 0} color="text.secondary" />
-              <StatCard label="Denied" value={stats.denied ?? 0} color="error" />
-            </Stack>
+            {!meetingStyle ? (
+              <Stack
+                direction="row"
+                spacing={0.75}
+                sx={{ p: 1, flexWrap: "wrap", justifyContent: "center", flexShrink: 0 }}
+                useFlexGap
+              >
+                <StatCard label="Waiting" value={stats.waiting ?? 0} color="warning" />
+                <StatCard label="In class" value={stats.in_class ?? 0} color="success" />
+                <StatCard label="Left" value={stats.left_after_admit ?? 0} color="text.secondary" />
+                <StatCard label="Denied" value={stats.denied ?? 0} color="error" />
+              </Stack>
+            ) : null}
 
-            {waiting.length > 0 ? (
+            {!meetingStyle && waiting.length > 0 ? (
               <Box sx={{ px: 1, pb: 1, flexShrink: 0 }}>
                 <Button
                   fullWidth
@@ -208,12 +231,17 @@ export default function LiveClassLobbyPanel({ liveClassId, token, socket, embedd
             <Tabs
               value={tab}
               onChange={(_, v) => setTab(v)}
-              variant="scrollable"
-              scrollButtons="auto"
-              sx={{ minHeight: 36, borderBottom: 1, borderColor: "divider", flexShrink: 0 }}
+              variant={meetingStyle ? "fullWidth" : "scrollable"}
+              scrollButtons={meetingStyle ? false : "auto"}
+              sx={{ minHeight: 36, borderBottom: meetingStyle ? 0 : 1, borderColor: "divider", flexShrink: 0 }}
             >
               {tabs.map((t, i) => (
-                <Tab key={t.label} label={t.label} sx={{ minHeight: 36, py: 0, fontSize: "0.7rem", minWidth: 80 }} value={i} />
+                <Tab
+                  key={t.label}
+                  label={t.label}
+                  sx={{ minHeight: 36, py: 0, fontSize: meetingStyle ? "0.72rem" : "0.7rem", minWidth: meetingStyle ? undefined : 80 }}
+                  value={i}
+                />
               ))}
             </Tabs>
 
@@ -222,15 +250,27 @@ export default function LiveClassLobbyPanel({ liveClassId, token, socket, embedd
                 <Table size="small" stickyHeader sx={{ tableLayout: "fixed", width: "100%" }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, width: active.showActions ? "42%" : "55%" }}>Student</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: active.showActions ? "28%" : "45%" }}>Time</TableCell>
-                  {active.showActions ? <TableCell sx={{ fontWeight: 700, width: "30%" }} /> : null}
+                  <TableCell sx={{ fontWeight: 700, width: meetingStyle ? undefined : active.showActions ? "42%" : "55%" }}>
+                    {meetingStyle ? "Name" : "Student"}
+                  </TableCell>
+                  {meetingStyle ? null : (
+                    <TableCell sx={{ fontWeight: 700, width: active.showActions ? "28%" : "45%" }}>Time</TableCell>
+                  )}
+                  {active.showActions ? (
+                    <TableCell align={meetingStyle ? "right" : undefined} sx={{ fontWeight: 700, width: meetingStyle ? undefined : "30%" }}>
+                      {meetingStyle ? "Actions" : null}
+                    </TableCell>
+                  ) : null}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {active.rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={active.showActions ? 3 : 2}>
+                    <TableCell
+                      colSpan={meetingStyle ? (active.showActions ? 2 : 1) : active.showActions ? 3 : 2}
+                      align={meetingStyle ? "center" : undefined}
+                      sx={meetingStyle ? { py: 3, color: "text.secondary" } : undefined}
+                    >
                       <Typography variant="body2" color="text.secondary">
                         No one in this list.
                       </Typography>
@@ -241,88 +281,107 @@ export default function LiveClassLobbyPanel({ liveClassId, token, socket, embedd
                     const chip = statusChip(row, now);
                     return (
                       <TableRow key={row.id} hover>
-                        <TableCell sx={{ overflow: "hidden" }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: "break-word" }}>
-                            {personLabel(row)}
-                          </Typography>
-                          {row.student?.admission_number ? (
-                            <Typography variant="caption" color="text.secondary" display="block">
-                              {row.student.admission_number}
-                            </Typography>
-                          ) : null}
-                          {chip ? (
-                            <Chip
-                              size="small"
-                              label={chip.label}
-                              color={chip.color}
-                              variant={chip.variant || (row.status === "admitted" ? "filled" : "outlined")}
-                              sx={{
-                                mt: 0.25,
-                                height: 20,
-                                fontSize: "0.65rem",
-                                maxWidth: "100%",
-                                ...(row.status === "left"
-                                  ? {
-                                      color: "info.main",
-                                      borderColor: "info.light",
-                                      "& .MuiChip-label": { color: "info.dark" },
-                                    }
-                                  : {}),
-                              }}
-                            />
-                          ) : null}
+                        <TableCell sx={{ overflow: "hidden", fontWeight: meetingStyle ? 600 : undefined }}>
+                          {meetingStyle ? (
+                            personLabel(row)
+                          ) : (
+                            <>
+                              <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: "break-word" }}>
+                                {personLabel(row)}
+                              </Typography>
+                              {row.student?.admission_number ? (
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  {row.student.admission_number}
+                                </Typography>
+                              ) : null}
+                              {chip ? (
+                                <Chip
+                                  size="small"
+                                  label={chip.label}
+                                  color={chip.color}
+                                  variant={chip.variant || (row.status === "admitted" ? "filled" : "outlined")}
+                                  sx={{
+                                    mt: 0.25,
+                                    height: 20,
+                                    fontSize: "0.65rem",
+                                    maxWidth: "100%",
+                                    ...(row.status === "left"
+                                      ? {
+                                          color: "info.main",
+                                          borderColor: "info.light",
+                                          "& .MuiChip-label": { color: "info.dark" },
+                                        }
+                                      : {}),
+                                  }}
+                                />
+                              ) : null}
+                            </>
+                          )}
                         </TableCell>
-                        <TableCell sx={{ whiteSpace: "nowrap", fontSize: "0.75rem" }}>
-                          <Typography variant="caption" display="block">
-                            {row.status === "admitted"
-                              ? "Admitted"
-                              : row.status === "waiting"
-                              ? "Requested"
-                              : row.status === "left"
-                              ? "Left"
-                              : row.status === "denied"
-                              ? "Denied"
-                              : "—"}{" "}
-                            {formatTime(
-                              row.status === "admitted"
-                                ? row.admitted_at
+                        {meetingStyle ? null : (
+                          <TableCell sx={{ whiteSpace: "nowrap", fontSize: "0.75rem" }}>
+                            <Typography variant="caption" display="block">
+                              {row.status === "admitted"
+                                ? "Admitted"
+                                : row.status === "waiting"
+                                ? "Requested"
                                 : row.status === "left"
-                                ? row.left_at
-                                : row.requested_at
-                            )}
-                          </Typography>
-                          {durationLabel(row, now) ? (
-                            <Typography
-                              variant="caption"
-                              color={row.status === "left" ? "info.main" : "success.main"}
-                              display="block"
-                            >
-                              {durationLabel(row, now)}
+                                ? "Left"
+                                : row.status === "denied"
+                                ? "Denied"
+                                : "—"}{" "}
+                              {formatTime(
+                                row.status === "admitted"
+                                  ? row.admitted_at
+                                  : row.status === "left"
+                                  ? row.left_at
+                                  : row.requested_at
+                              )}
                             </Typography>
-                          ) : null}
-                        </TableCell>
+                            {durationLabel(row, now) ? (
+                              <Typography
+                                variant="caption"
+                                color={row.status === "left" ? "info.main" : "success.main"}
+                                display="block"
+                              >
+                                {durationLabel(row, now)}
+                              </Typography>
+                            ) : null}
+                          </TableCell>
+                        )}
                         {active.showActions ? (
-                          <TableCell sx={{ p: 0.5, verticalAlign: "top" }}>
-                            <Stack direction="column" spacing={0.25} alignItems="stretch">
-                              <Button
-                                size="small"
-                                variant="contained"
-                                disabled={busyId === row.id}
-                                onClick={() => void admit(row.id).catch((e) => alert(e.message))}
-                                sx={{ minWidth: 0, px: 0.75, fontSize: "0.7rem" }}
-                              >
-                                Admit
-                              </Button>
-                              <Button
-                                size="small"
-                                color="error"
-                                disabled={busyId === row.id}
-                                onClick={() => void deny(row.id).catch((e) => alert(e.message))}
-                                sx={{ minWidth: 0, px: 0.75, fontSize: "0.7rem" }}
-                              >
-                                Deny
-                              </Button>
-                            </Stack>
+                          <TableCell align={meetingStyle ? "right" : undefined} sx={{ p: meetingStyle ? undefined : 0.5, verticalAlign: "top" }}>
+                            {meetingStyle ? (
+                              <>
+                                <Button size="small" disabled={busyId === row.id} onClick={() => void admit(row.id).catch((e) => alert(e.message))}>
+                                  Admit
+                                </Button>
+                                <Button size="small" color="error" disabled={busyId === row.id} onClick={() => void deny(row.id).catch((e) => alert(e.message))}>
+                                  Deny
+                                </Button>
+                              </>
+                            ) : (
+                              <Stack direction="column" spacing={0.25} alignItems="stretch">
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  disabled={busyId === row.id}
+                                  onClick={() => void admit(row.id).catch((e) => alert(e.message))}
+                                  sx={{ minWidth: 0, px: 0.75, fontSize: "0.7rem" }}
+                                >
+                                  Admit
+                                </Button>
+                                <Button
+                                  size="small"
+                                  color="error"
+                                  disabled={busyId === row.id}
+                                  onClick={() => void deny(row.id).catch((e) => alert(e.message))}
+                                  sx={{ minWidth: 0, px: 0.75, fontSize: "0.7rem" }}
+                                >
+                                  Deny
+                                </Button>
+                              </Stack>
+                            )}
                           </TableCell>
                         ) : null}
                       </TableRow>

@@ -18,7 +18,6 @@ import LiveClassHostLayout from "./LiveClassHostLayout";
 import LiveKitMediaControls from "./LiveKitMediaControls";
 import Controls from "./Controls";
 import { resolveLiveKitJoinMediaForRole } from "../../utils/liveKitJoinMedia";
-import LiveKitConnectionStatus from "./LiveKitConnectionStatus";
 import { examLiveVideoSlotSx } from "./examLiveVideoSlotSx";
 import { reportLiveKitConnectionError } from "../../utils/reportLiveKitConnectionError";
 import { useGatedLiveKitConnection } from "../../hooks/useGatedLiveKitConnection";
@@ -92,13 +91,11 @@ export default function LiveKitConference({
   const [loading, setLoading] = useState(true);
   const [fatalError, setFatalError] = useState("");
   const [connectionError, setConnectionError] = useState("");
-  const [retryWaitLabel, setRetryWaitLabel] = useState("");
-  const [deviceWarning, setDeviceWarning] = useState("");
   const [mobilePanel, setMobilePanel] = useState("video");
   const theme = useTheme();
   const isNarrow = useMediaQuery(theme.breakpoints.down("md"));
 
-  const { socket, connected } = useSocket(token);
+  const { socket } = useSocket(token);
   const intentionalLeaveRef = useRef(false);
   const wasConnectedRef = useRef(false);
   const reportedErrorRef = useRef("");
@@ -139,7 +136,9 @@ export default function LiveKitConference({
   const applyConnectionFailure = useCallback(
     (msg) => {
       const failureKind = onConnectionFailure(msg);
-      setConnectionError(userMessageForLiveKitFailure(msg, failureKind));
+      if (failureKind === "exhausted" || failureKind === "rate_limit") {
+        setConnectionError(userMessageForLiveKitFailure(msg, failureKind));
+      }
       return failureKind;
     },
     [onConnectionFailure]
@@ -185,20 +184,6 @@ export default function LiveKitConference({
   ]);
 
   useEffect(() => {
-    if (!connectionError) {
-      setRetryWaitLabel("");
-      return undefined;
-    }
-    const tick = () => {
-      const wait = msUntilRetry();
-      setRetryWaitLabel(wait > 0 ? `Wait ${Math.ceil(wait / 1000)}s before retry` : "");
-    };
-    tick();
-    const id = setInterval(tick, 500);
-    return () => clearInterval(id);
-  }, [connectionError, msUntilRetry]);
-
-  useEffect(() => {
     if (!socket || !liveClassId) return undefined;
     const joinRoom = () => socket.emit("join:live-class", liveClassId);
     if (socket.connected) joinRoom();
@@ -228,41 +213,19 @@ export default function LiveKitConference({
   const handleDisconnected = useCallback(() => {
     if (intentionalLeaveRef.current) {
       intentionalLeaveRef.current = false;
-      return;
-    }
-    if (!wasConnectedRef.current) {
-      console.warn("LiveKit disconnected before session was established (ignored).");
-    } else {
-      console.warn("LiveKit disconnected unexpectedly.");
     }
   }, []);
 
-  const handleMediaDeviceFailure = useCallback((failure, kind) => {
-    console.warn("LiveKit media device:", failure, kind);
-    const kindLabel = kind || "Camera";
-    if (failure === "PermissionDenied" || failure === "NotAllowedError") {
-      setDeviceWarning(`${kindLabel} access was blocked. Allow camera/microphone in your browser.`);
-    } else if (failure === "NotFound") {
-      setDeviceWarning(`No ${String(kindLabel).toLowerCase()} found on this device.`);
-    } else if (failure === "DeviceInUse") {
-      setDeviceWarning(`${kindLabel} is in use by another application.`);
-    }
+  const handleMediaDeviceFailure = useCallback(() => {
+    /* Non-blocking — no on-screen toasts for device permission noise. */
   }, []);
 
   const handleRoomError = useCallback(
     (err) => {
       const msg = err?.message || "";
-      if (isLiveKitMediaError(msg)) {
-        console.warn("LiveKit media (non-fatal):", msg);
-        return;
-      }
-      if (isLiveKitTeardownError(msg)) {
-        return;
-      }
-      if (isTransientLiveKitSignalError(msg, wasConnectedRef.current)) {
-        console.warn("LiveKit signal (transient):", msg);
-        return;
-      }
+      if (isLiveKitMediaError(msg)) return;
+      if (isLiveKitTeardownError(msg)) return;
+      if (isTransientLiveKitSignalError(msg, wasConnectedRef.current)) return;
 
       disableConnect();
       applyConnectionFailure(msg);
@@ -284,7 +247,6 @@ export default function LiveKitConference({
 
   const handleConnected = useCallback(() => {
     setConnectionError("");
-    setDeviceWarning("");
     reportedErrorRef.current = "";
     onConnectionSuccess();
   }, [onConnectionSuccess]);
@@ -296,8 +258,8 @@ export default function LiveKitConference({
     forceReconnect();
   }, [forceReconnect]);
 
-  const serverReachable = Boolean(lkToken && serverUrl);
   const rateLimited = Date.now() < rateLimitUntil;
+  const showConnectionError = Boolean(connectionError && attemptsExhausted);
 
   const header = useMemo(
     () => (
@@ -316,18 +278,10 @@ export default function LiveKitConference({
         <Typography variant="subtitle2" sx={{ fontWeight: 700, flex: 1 }}>
           Live class
         </Typography>
-        <Chip size="small" label="LiveKit" color="info" variant="outlined" sx={{ display: { xs: "none", sm: "flex" } }} />
-        <Chip
-          size="small"
-          label={connected ? "Live chat on" : "Live chat (polling)"}
-          color={connected ? "success" : "warning"}
-          variant={connected ? "filled" : "outlined"}
-          sx={{ display: { xs: "none", sm: "flex" } }}
-        />
         {isTeacher ? <Chip size="small" label="Host" color="primary" sx={{ display: { xs: "none", sm: "flex" } }} /> : null}
       </Box>
     ),
-    [connected, isTeacher]
+    [isTeacher]
   );
 
   if (loading) {
@@ -365,31 +319,34 @@ export default function LiveKitConference({
   }
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, width: "100%", maxWidth: "100%", overflow: "hidden", bgcolor: "#0b1220" }}>
+    <Box
+      className="live-class-lk-shell"
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+        width: "100%",
+        maxWidth: "100%",
+        overflow: "hidden",
+        bgcolor: "#0b1220",
+        "& .lk-toast": { display: "none !important" },
+      }}
+    >
       {header}
 
       <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-        {connectionError ? (
+        {showConnectionError ? (
           <Alert
             severity={isLiveKitRateLimitError(connectionError) ? "error" : "warning"}
             sx={{ mx: 1, mt: 1, flexShrink: 0 }}
             action={
-              <Button
-                color="inherit"
-                size="small"
-                disabled={rateLimited}
-                onClick={handleConnectVideo}
-              >
-                Connect video
+              <Button color="inherit" size="small" disabled={rateLimited} onClick={handleConnectVideo}>
+                Retry video
               </Button>
             }
           >
             {connectionError}
-            {retryWaitLabel ? (
-              <Box component="span" sx={{ display: "block", typography: "caption", mt: 0.5 }}>
-                {retryWaitLabel}
-              </Box>
-            ) : null}
           </Alert>
         ) : null}
         <LiveKitRoom
@@ -421,12 +378,6 @@ export default function LiveKitConference({
               userName={userName}
               videoSlot={
                 <Box sx={{ flex: 1, height: "100%", minHeight: 0, minWidth: 0, position: "relative", ...examLiveVideoSlotSx }}>
-                  <LiveKitConnectionStatus
-                    deviceWarning={deviceWarning}
-                    serverReachable={serverReachable}
-                    connectEnabled={connectEnabled}
-                    rateLimited={rateLimited}
-                  />
                   <LiveKitVideoRoom />
                 </Box>
               }

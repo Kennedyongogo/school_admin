@@ -250,8 +250,6 @@ export default function TimetableDayPage() {
     timezone: "Africa/Nairobi",
     status: "scheduled",
     is_active: true,
-    allow_late_join_minutes: 10,
-    max_attempts: "",
     requires_webcam: null,
     prevent_tab_switch: null,
     proctoring_mode: "live_monitor",
@@ -610,8 +608,6 @@ export default function TimetableDayPage() {
       timezone: row?.timezone || "Africa/Nairobi",
       status: row?.status || "scheduled",
       is_active: row?.is_active !== false,
-      allow_late_join_minutes: row?.allow_late_join_minutes ?? 10,
-      max_attempts: row?.max_attempts ?? "",
         requires_webcam: row?.requires_webcam == null ? null : !!row?.requires_webcam,
         prevent_tab_switch: row?.prevent_tab_switch == null ? null : !!row?.prevent_tab_switch,
       proctoring_mode: row?.proctoring_mode || "live_monitor",
@@ -727,8 +723,6 @@ export default function TimetableDayPage() {
         timezone: examForm.timezone || "Africa/Nairobi",
         status: examForm.status || "scheduled",
         is_active: !!examForm.is_active,
-        allow_late_join_minutes: Number(examForm.allow_late_join_minutes || 10),
-        max_attempts: examForm.max_attempts === "" ? null : Number(examForm.max_attempts),
         requires_webcam: examForm.requires_webcam,
         prevent_tab_switch: examForm.prevent_tab_switch,
         proctoring_mode: examForm.proctoring_mode || "none",
@@ -1390,8 +1384,6 @@ export default function TimetableDayPage() {
                 </Typography>
                 <Typography variant="body2"><strong>Requires webcam:</strong> {examViewRow?.requires_webcam == null ? "Inherit from exam" : examViewRow?.requires_webcam ? "Yes" : "No"}</Typography>
                 <Typography variant="body2"><strong>Prevent tab switch:</strong> {examViewRow?.prevent_tab_switch == null ? "Inherit from exam" : examViewRow?.prevent_tab_switch ? "Yes" : "No"}</Typography>
-                <Typography variant="body2"><strong>Allow late join (minutes):</strong> {examViewRow?.allow_late_join_minutes ?? "—"}</Typography>
-                <Typography variant="body2"><strong>Max attempts override:</strong> {examViewRow?.max_attempts ?? "Exam default"}</Typography>
               </Stack>
               <Stack spacing={1}>
                 <Typography variant="body2"><strong>Meeting provider:</strong> {examViewRow?.meeting_provider || "—"}</Typography>

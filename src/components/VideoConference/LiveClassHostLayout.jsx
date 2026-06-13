@@ -7,21 +7,14 @@ import LiveClassLobbyPanel from "./LiveClassLobbyPanel";
 import LiveClassSidebar from "./LiveClassSidebar";
 import LiveClassSidePanels from "./LiveClassSidePanels";
 import { useLiveClassHostAlerts } from "../../hooks/useLiveClassHostAlerts";
-
-const halfColumnSx = {
-  flex: "1 1 50%",
-  width: "50%",
-  maxWidth: "50%",
-  height: "100%",
-  minWidth: 0,
-  minHeight: 0,
-  display: "flex",
-  flexDirection: "column",
-  overflow: "hidden",
-};
+import {
+  eventLiveScrollRootSx,
+  eventLiveVideoViewportSx,
+  eventLiveRosterSectionSx,
+} from "../EventLive/eventLiveScrollLayoutSx";
 
 /**
- * Teacher (wide): video + roster 50/50 across full width; interactions full width below.
+ * Teacher (wide): fullscreen video, scroll down for class lobby + chat (same pattern as staff meetings).
  * Student / mobile: video + side panels or tabs.
  */
 export default function LiveClassHostLayout({
@@ -47,37 +40,10 @@ export default function LiveClassHostLayout({
 
   if (hostWide) {
     return (
-      <Box
-        sx={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          minHeight: 0,
-          minWidth: 0,
-          width: "100%",
-          overflowY: "auto",
-          overflowX: "hidden",
-          WebkitOverflowScrolling: "touch",
-        }}
-      >
-        <Box
-          sx={{
-            flex: "0 0 auto",
-            height: "100%",
-            minHeight: "100%",
-            display: "flex",
-            flexDirection: "row",
-            width: "100%",
-            minWidth: 0,
-            overflow: "hidden",
-            borderBottom: 1,
-            borderColor: "divider",
-          }}
-        >
-          <Box sx={halfColumnSx}>{videoSlot}</Box>
-          <Box sx={{ ...halfColumnSx, borderLeft: 1, borderColor: "divider" }}>
-            <LiveClassLobbyPanel liveClassId={liveClassId} token={token} socket={socket} embedded />
-          </Box>
+      <Box sx={eventLiveScrollRootSx}>
+        <Box sx={eventLiveVideoViewportSx}>{videoSlot}</Box>
+        <Box sx={eventLiveRosterSectionSx}>
+          <LiveClassLobbyPanel liveClassId={liveClassId} token={token} socket={socket} embedded meetingStyle />
         </Box>
         <LiveClassSidebar
           liveClassId={liveClassId}
@@ -130,16 +96,34 @@ export default function LiveClassHostLayout({
             {videoSlot}
           </Box>
         )}
-        <LiveClassSidePanels
-          liveClassId={liveClassId}
-          token={token}
-          socket={socket}
-          isTeacher={isTeacher}
-          userName={userName}
-          showLobbyPanel={showLobbyPanel}
-          isNarrow={isNarrow}
-          mobilePanel={mobilePanel}
-        />
+        {isNarrow && isTeacher && showLobbyPanel && mobilePanel === "roster" ? (
+          <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <LiveClassLobbyPanel liveClassId={liveClassId} token={token} socket={socket} meetingStyle />
+          </Box>
+        ) : null}
+        {isNarrow && mobilePanel === "chat" ? (
+          <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <LiveClassSidebar
+              liveClassId={liveClassId}
+              token={token}
+              socket={socket}
+              isTeacher={isTeacher}
+              userName={userName}
+            />
+          </Box>
+        ) : null}
+        {!isNarrow ? (
+          <LiveClassSidePanels
+            liveClassId={liveClassId}
+            token={token}
+            socket={socket}
+            isTeacher={isTeacher}
+            userName={userName}
+            showLobbyPanel={showLobbyPanel}
+            isNarrow={isNarrow}
+            mobilePanel={mobilePanel}
+          />
+        ) : null}
       </Box>
     </>
   );

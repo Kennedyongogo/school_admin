@@ -6,7 +6,6 @@ import {
   Event,
   School,
   MenuBook,
-  VideocamOutlined,
   Dashboard,
   Badge,
   AccountBalance,
@@ -30,7 +29,10 @@ import Tooltip from "@mui/material/Tooltip";
 import { Box } from "@mui/material";
 import Header from "./Header/Header";
 
-const drawerWidth = 300;
+const drawerWidth = 256;
+const navRed = "#D32F2F";
+const navRedHoverBg = "rgba(211, 47, 47, 0.08)";
+const navRedActiveBg = "rgba(211, 47, 47, 0.14)";
 
 const openedMixin = (theme) => ({
   width: drawerWidth,
@@ -123,7 +125,6 @@ const Navbar = (props) => {
     (path === "/elimu-plus" && location.pathname.startsWith("/elimu-plus")) ||
     (path === "/curriculum" && location.pathname.startsWith("/curriculum")) ||
     (path === "/timetable" && location.pathname.startsWith("/timetable")) ||
-    (path === "/elimu-plus-online" && location.pathname.startsWith("/elimu-plus-online")) ||
     (path === "/settings" && location.pathname.startsWith("/settings"));
 
   const logout = () => {
@@ -142,7 +143,6 @@ const Navbar = (props) => {
     { text: "Exam", icon: <Quiz />, path: "/exam" },
     { text: "Curriculum", icon: <MenuBook />, path: "/curriculum" },
     { text: "Timetable", icon: <Event />, path: "/timetable" },
-    { text: "Online", icon: <VideocamOutlined />, path: "/elimu-plus-online" },
     { text: "Users", icon: <PeopleAlt />, path: "/users" },
     { text: "Elimu Plus", icon: <School />, path: "/elimu-plus" },
     { text: "Settings", icon: <Settings />, path: "/settings" },
@@ -206,20 +206,33 @@ const Navbar = (props) => {
                 selected={isNavPathSelected(item.path)}
                 sx={{
                   cursor: "pointer",
-                  bgcolor: isNavPathSelected(item.path) ? "action.selected" : "transparent",
+                  bgcolor: isNavPathSelected(item.path) ? navRedActiveBg : "transparent",
+                  borderLeft: isNavPathSelected(item.path)
+                    ? `3px solid ${navRed}`
+                    : "3px solid transparent",
+                  "&:hover": {
+                    bgcolor: isNavPathSelected(item.path) ? navRedActiveBg : navRedHoverBg,
+                    "& .MuiListItemIcon-root": { color: navRed },
+                    "& .MuiListItemText-root .MuiTypography-root": { color: navRed },
+                  },
                 }}
               >
-                <ListItemIcon>
-                  {cloneElement(item.icon, {
-                    color: isNavPathSelected(item.path) ? "primary" : "textSecondary",
-                  })}
+                <ListItemIcon
+                  sx={{
+                    color: isNavPathSelected(item.path) ? navRed : "text.secondary",
+                    minWidth: 40,
+                  }}
+                >
+                  {cloneElement(item.icon)}
                 </ListItemIcon>
                 <ListItemText
                   primary={item.text}
                   sx={{
                     cursor: "pointer",
-                    color: isNavPathSelected(item.path) ? "primary" : "textSecondary",
-                    fontWeight: isNavPathSelected(item.path) ? "bold" : "normal",
+                    "& .MuiTypography-root": {
+                      color: isNavPathSelected(item.path) ? navRed : "text.secondary",
+                      fontWeight: isNavPathSelected(item.path) ? 700 : 400,
+                    },
                   }}
                 />
               </ListItem>
@@ -229,7 +242,18 @@ const Navbar = (props) => {
         <Divider />
         <List>
           <Tooltip title="Logout" placement="right" disableHoverListener={open}>
-            <ListItem button onClick={logout} sx={{ cursor: "pointer" }}>
+            <ListItem
+              button
+              onClick={logout}
+              sx={{
+                cursor: "pointer",
+                "&:hover": {
+                  bgcolor: navRedHoverBg,
+                  "& .MuiListItemIcon-root": { color: navRed },
+                  "& .MuiListItemText-root .MuiTypography-root": { color: navRed },
+                },
+              }}
+            >
               <ListItemIcon>
                 <Logout />
               </ListItemIcon>

@@ -338,6 +338,12 @@ const emptyQuestion = (index = 1) => ({
   diagram_canvas_page: 0,
 });
 
+const PERSISTED_QUESTION_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const persistedQuestionId = (key) =>
+  PERSISTED_QUESTION_ID_RE.test(String(key || "").trim()) ? String(key).trim() : null;
+
 const renderTemplateText = (el, schoolProfile) => {
   if (el.type === "school_name") return schoolProfile?.name || el.label || "School name";
   if (el.type === "website") return schoolProfile?.website || el.label || "Website";
@@ -821,8 +827,6 @@ export default function ExamsTab() {
   const [instructionLines, setInstructionLines] = useState([""]);
   const [totalMarks, setTotalMarks] = useState(0);
   const [passingMarks, setPassingMarks] = useState(0);
-  const [allowRetake, setAllowRetake] = useState(false);
-  const [maxAttempts, setMaxAttempts] = useState(1);
   const [status, setStatus] = useState("draft");
   const [scheduleEnabled, setScheduleEnabled] = useState(true);
   const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -832,8 +836,10 @@ export default function ExamsTab() {
   const [sessionStatus, setSessionStatus] = useState("scheduled");
   const [scheduleIsActive, setScheduleIsActive] = useState(true);
   const [proctoringMode, setProctoringMode] = useState("record_only");
-  const [allowLateJoinMinutes, setAllowLateJoinMinutes] = useState(10);
   const [lookupTeachers, setLookupTeachers] = useState([]);
+  const [assignedStudentIds, setAssignedStudentIds] = useState([]);
+  const [classStudents, setClassStudents] = useState([]);
+  const [classStudentsLoading, setClassStudentsLoading] = useState(false);
   const [examLayout, setExamLayout] = useState(defaultExamLayout);
   const [questions, setQuestions] = useState([emptyQuestion(1)]);
   const [editingId, setEditingId] = useState(null);
@@ -859,9 +865,6 @@ export default function ExamsTab() {
   const [ocrRawText, setOcrRawText] = useState("");
   const [ocrParsedBlocks, setOcrParsedBlocks] = useState([]);
   const [deliveryMode, setDeliveryMode] = useState("questions");
-  const [examFeeAccessMode, setExamFeeAccessMode] = useState("none");
-  const [examFeeMinimumAmount, setExamFeeMinimumAmount] = useState("");
-  const [examFeeMinimumBasis, setExamFeeMinimumBasis] = useState("total");
   const [pdfAnswerKey, setPdfAnswerKey] = useState({});
   const [pdfFieldSchema, setPdfFieldSchema] = useState([]);
   const [pdfTemplatePath, setPdfTemplatePath] = useState("");
@@ -1245,6 +1248,39 @@ export default function ExamsTab() {
   }, [templateId]);
 
   useEffect(() => {
+    if (!curriculumClassId || !curriculumClassLevelId) {
+      setClassStudents([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setClassStudentsLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        const params = new URLSearchParams({
+          curriculum_class_id: curriculumClassId,
+          curriculum_class_level_id: curriculumClassLevelId,
+          limit: "500",
+        });
+        const res = await fetch(`/api/students?${params.toString()}`, { headers: authHeaders(token) });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        const rows = res.ok && data.success && Array.isArray(data.data) ? data.data : [];
+        setClassStudents(rows);
+        setAssignedStudentIds((prev) => prev.filter((id) => rows.some((s) => String(s.id) === String(id))));
+      } catch {
+        if (!cancelled) setClassStudents([]);
+      } finally {
+        if (!cancelled) setClassStudentsLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [curriculumClassId, curriculumClassLevelId]);
+
+  useEffect(() => {
     const onMove = (ev) => {
       const canvas = questionCanvasRef.current;
       if (!canvas) return;
@@ -1333,12 +1369,11 @@ export default function ExamsTab() {
     setCurriculumClassId("");
     setCurriculumSubjectId("");
     setCurriculumClassLevelId("");
+    setAssignedStudentIds([]);
     setDuration(60);
     setInstructionLines([""]);
     setTotalMarks(0);
     setPassingMarks(0);
-    setAllowRetake(false);
-    setMaxAttempts(1);
     setStatus("draft");
     setScheduleEnabled(true);
     setScheduleDate(new Date().toISOString().slice(0, 10));
@@ -1348,16 +1383,12 @@ export default function ExamsTab() {
     setSessionStatus("scheduled");
     setScheduleIsActive(true);
     setProctoringMode("record_only");
-    setAllowLateJoinMinutes(10);
     setExamLayout(defaultExamLayout());
     setTemplatePagesForExam([{ id: "page-1", elements: [] }]);
     setQuestions([emptyQuestion(1)]);
     setOcrRawText("");
     setOcrParsedBlocks([]);
     setDeliveryMode("questions");
-    setExamFeeAccessMode("none");
-    setExamFeeMinimumAmount("");
-    setExamFeeMinimumBasis("total");
     setPdfAnswerKey({});
     setPdfFieldSchema([]);
     setPdfTemplatePath("");
@@ -1381,13 +1412,14 @@ export default function ExamsTab() {
     setCurriculumClassId(row.curriculum_class_id || "");
     setCurriculumSubjectId(row.curriculum_subject_id || "");
     setCurriculumClassLevelId(row.curriculum_class_level_id || "");
+    setAssignedStudentIds(
+      Array.isArray(row.assigned_student_ids) ? row.assigned_student_ids.map((id) => String(id)) : []
+    );
     setDuration(Number(row.duration_minutes) || 60);
     setInstructionLines(parseInstructionLines(row.instructions));
     setTotalMarks(Number(row.total_marks) || 0);
     setPassingMarks(Number(row.passing_marks) || 0);
     setProctoringMode(proctoringModeFromExam(row));
-    setAllowRetake(Boolean(row.allow_retake));
-    setMaxAttempts(Number(row.max_attempts) || 1);
     setStatus(row.status || "draft");
     setScheduleEnabled(Boolean(row.start_time));
     if (row.start_time) {
@@ -1404,12 +1436,8 @@ export default function ExamsTab() {
     setTeacherId(row.teacher_id || "");
     setSessionStatus(row.session_status || "scheduled");
     setScheduleIsActive(row.is_active !== false);
-    setAllowLateJoinMinutes(Number(row.allow_late_join_minutes ?? 10));
     const rowType = String(row.exam_type || "questions").trim();
     setDeliveryMode(rowType === "pdf_form" ? "pdf_form" : "questions");
-    setExamFeeAccessMode(row.exam_fee_access_mode || "none");
-    setExamFeeMinimumAmount(row.exam_fee_minimum_amount != null ? String(row.exam_fee_minimum_amount) : "");
-    setExamFeeMinimumBasis(row.exam_fee_minimum_basis || "total");
     setPdfAnswerKey(
       row.pdf_answer_key_json && typeof row.pdf_answer_key_json === "object" ? row.pdf_answer_key_json : {}
     );
@@ -1658,7 +1686,10 @@ export default function ExamsTab() {
       await Swal.fire({ icon: "error", title: "Duration invalid", text: "Duration must be greater than zero." });
       return;
     }
-    const payloadQuestions = questions.map((q, i) => ({
+    const payloadQuestions = questions.map((q, i) => {
+      const questionId = persistedQuestionId(q.key);
+      return {
+      ...(questionId ? { id: questionId } : {}),
       question_text: q.question_text.trim(),
       question_type: q.question_type,
       required: Boolean(q.required),
@@ -1698,7 +1729,8 @@ export default function ExamsTab() {
         : q.question_type === "file_upload"
         ? buildFileUploadOptionsPayload(q)
         : null,
-    }));
+    };
+    });
     if (!isPdfForm && payloadQuestions.some((q) => !q.question_text)) {
       await Swal.fire({ icon: "error", title: "Question required", text: "Every question must have text." });
       return;
@@ -1721,6 +1753,22 @@ export default function ExamsTab() {
       });
       return;
     }
+    if (!curriculumClassId || !curriculumClassLevelId) {
+      await Swal.fire({
+        icon: "error",
+        title: "Class and level required",
+        text: "Select the class and class level before assigning students.",
+      });
+      return;
+    }
+    if (!assignedStudentIds.length) {
+      await Swal.fire({
+        icon: "error",
+        title: "Students required",
+        text: "Select at least one student for this exam. Only assigned students will see it when published.",
+      });
+      return;
+    }
     setSaving(true);
     try {
       const isEdit = Boolean(editingId);
@@ -1736,18 +1784,11 @@ export default function ExamsTab() {
           curriculum_class_id: curriculumClassId || null,
           curriculum_subject_id: curriculumSubjectId || null,
           curriculum_class_level_id: curriculumClassLevelId || null,
-          exam_fee_access_mode: examFeeAccessMode || "none",
-          exam_fee_minimum_amount:
-            examFeeAccessMode === "custom_minimum" && examFeeMinimumAmount !== ""
-              ? Number(examFeeMinimumAmount)
-              : null,
-          exam_fee_minimum_basis: examFeeAccessMode === "custom_minimum" ? null : examFeeMinimumBasis || "total",
+          assigned_student_ids: assignedStudentIds,
           duration_minutes: Number(duration),
           total_marks: Number(totalMarks) || 0,
           passing_marks: Number(passingMarks) || 0,
           proctoring_mode: proctoringMode,
-          allow_retake: Boolean(allowRetake),
-          max_attempts: allowRetake ? Math.max(1, Number(maxAttempts) || 1) : 1,
           ...(isEdit ? {} : { status }),
           instructions: isPdfForm ? null : instructions || null,
           exam_layout_json: { ...examLayout, template_pages_override: selectedTemplatePages },
@@ -1760,7 +1801,6 @@ export default function ExamsTab() {
                 timezone: "Africa/Nairobi",
                 session_status: sessionStatus || "scheduled",
                 is_active: scheduleIsActive,
-                allow_late_join_minutes: Number(allowLateJoinMinutes) || 10,
               }
             : { session_status: null }),
         }),
@@ -2216,7 +2256,7 @@ ${imageParts}--${boundary}--`;
                   ))}
                 </Select>
               ) : null}
-               <Select fullWidth displayEmpty value={curriculumId} onChange={(e) => { setCurriculumId(e.target.value); setCurriculumClassId(""); setCurriculumSubjectId(""); setCurriculumClassLevelId(""); }}>
+               <Select fullWidth displayEmpty value={curriculumId} onChange={(e) => { setCurriculumId(e.target.value); setCurriculumClassId(""); setCurriculumSubjectId(""); setCurriculumClassLevelId(""); setAssignedStudentIds([]); }}>
                  <MenuItem value="">
                    <em>Select curriculum</em>
                  </MenuItem>
@@ -2226,7 +2266,7 @@ ${imageParts}--${boundary}--`;
                    </MenuItem>
                  ))}
                </Select>
-               <Select fullWidth displayEmpty value={curriculumClassId} onChange={(e) => { setCurriculumClassId(e.target.value); setCurriculumSubjectId(""); setCurriculumClassLevelId(""); }}>
+               <Select fullWidth displayEmpty value={curriculumClassId} onChange={(e) => { setCurriculumClassId(e.target.value); setCurriculumSubjectId(""); setCurriculumClassLevelId(""); setAssignedStudentIds([]); }}>
                  <MenuItem value="">
                    <em>Select class</em>
                  </MenuItem>
@@ -2246,7 +2286,7 @@ ${imageParts}--${boundary}--`;
                    </MenuItem>
                  ))}
                </Select>
-               <Select fullWidth displayEmpty value={curriculumClassLevelId} onChange={(e) => setCurriculumClassLevelId(e.target.value)}>
+               <Select fullWidth displayEmpty value={curriculumClassLevelId} onChange={(e) => { setCurriculumClassLevelId(e.target.value); setAssignedStudentIds([]); }}>
                  <MenuItem value="">
                    <em>Select class level</em>
                  </MenuItem>
@@ -2256,28 +2296,65 @@ ${imageParts}--${boundary}--`;
                    </MenuItem>
                  ))}
                </Select>
-              <TextField fullWidth label="Duration (minutes)" type="number" value={duration} onChange={(e) => setDuration(e.target.value)} />
               <Typography variant="subtitle1" sx={{ fontWeight: 800, color: accentDark, pt: 1 }}>
-                Fee access (exam gate)
+                Assigned students
               </Typography>
-              <Select fullWidth value={examFeeAccessMode} onChange={(e) => setExamFeeAccessMode(e.target.value)}>
-                <MenuItem value="none">No fee check</MenuItem>
-                <MenuItem value="first_half_paid">1st half (installment) paid</MenuItem>
-                <MenuItem value="full_fee_paid">Full term fee paid</MenuItem>
-                <MenuItem value="custom_minimum">Custom minimum paid</MenuItem>
-              </Select>
-              {examFeeAccessMode === "custom_minimum" ? (
-                <TextField
-                  fullWidth
-                  required
-                  label="Minimum amount to open exam (KES)"
-                  type="number"
-                  inputProps={{ min: 1, step: "any" }}
-                  value={examFeeMinimumAmount}
-                  onChange={(e) => setExamFeeMinimumAmount(e.target.value)}
-                  helperText="Student must have paid at least this amount (for their class level) before opening the exam. Not tied to full fee or 1st half rules."
-                />
-              ) : null}
+              {!curriculumClassId || !curriculumClassLevelId ? (
+                <Typography variant="body2" color="text.secondary">
+                  Select class and class level to load students.
+                </Typography>
+              ) : classStudentsLoading ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                  <CircularProgress size={22} sx={{ color: accent }} />
+                </Box>
+              ) : classStudents.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No students found for this class and level.
+                </Typography>
+              ) : (
+                <Stack spacing={0.5} sx={{ maxHeight: 240, overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 1, p: 1 }}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={assignedStudentIds.length === classStudents.length && classStudents.length > 0}
+                        indeterminate={assignedStudentIds.length > 0 && assignedStudentIds.length < classStudents.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setAssignedStudentIds(classStudents.map((s) => String(s.id)));
+                          } else {
+                            setAssignedStudentIds([]);
+                          }
+                        }}
+                      />
+                    }
+                    label={<Typography sx={{ fontWeight: 700 }}>Select all ({classStudents.length})</Typography>}
+                  />
+                  {classStudents.map((s) => {
+                    const sid = String(s.id);
+                    const label = s.user?.full_name || s.user?.username || s.admission_number || sid;
+                    return (
+                      <FormControlLabel
+                        key={sid}
+                        control={
+                          <Checkbox
+                            checked={assignedStudentIds.includes(sid)}
+                            onChange={() => {
+                              setAssignedStudentIds((prev) =>
+                                prev.includes(sid) ? prev.filter((id) => id !== sid) : [...prev, sid]
+                              );
+                            }}
+                          />
+                        }
+                        label={label}
+                      />
+                    );
+                  })}
+                </Stack>
+              )}
+              <Typography variant="caption" color="text.secondary">
+                {assignedStudentIds.length} student(s) selected
+              </Typography>
+              <TextField fullWidth label="Duration (minutes)" type="number" value={duration} onChange={(e) => setDuration(e.target.value)} />
               <Typography variant="subtitle1" sx={{ fontWeight: 800, color: accentDark, pt: 1 }}>
                 Schedule (optional)
               </Typography>
@@ -2366,47 +2443,11 @@ ${imageParts}--${boundary}--`;
                     </Select>
                   </Stack>
                   <ProctoringModeSelector value={proctoringMode} onChange={setProctoringMode} />
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="Allow late join (minutes)"
-                    value={allowLateJoinMinutes}
-                    onChange={(e) => setAllowLateJoinMinutes(e.target.value)}
-                    inputProps={{ min: 0, max: 120 }}
-                  />
                 </Stack>
               ) : null}
               {!scheduleEnabled ? (
                 <ProctoringModeSelector value={proctoringMode} onChange={setProctoringMode} />
               ) : null}
-              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: accentDark, pt: 1 }}>
-                Attempts
-              </Typography>
-              <Stack spacing={2}>
-                <Select
-                  fullWidth
-                  value={allowRetake ? "yes" : "no"}
-                  onChange={(e) => {
-                    const on = e.target.value === "yes";
-                    setAllowRetake(on);
-                    if (!on) setMaxAttempts(1);
-                  }}
-                >
-                  <MenuItem value="no">Allow retake — No (one attempt)</MenuItem>
-                  <MenuItem value="yes">Allow retake — Yes</MenuItem>
-                </Select>
-                {allowRetake ? (
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="Maximum attempts"
-                    value={maxAttempts}
-                    onChange={(e) => setMaxAttempts(Math.max(1, Number(e.target.value) || 1))}
-                    inputProps={{ min: 1, max: 10 }}
-                    helperText="How many times a student may submit this exam."
-                  />
-                ) : null}
-              </Stack>
               {deliveryMode !== "pdf_form" ? (
                 <Stack spacing={1}>
                   <Typography sx={{ fontWeight: 700 }}>Instructions</Typography>

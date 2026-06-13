@@ -20,7 +20,7 @@ export default function LiveKitHostMediaEnabler({ enabled = false }) {
           await room.localParticipant.setMicrophoneEnabled(true);
         }
       } catch (err) {
-        if (!cancelled) console.warn("LiveKit host media enable:", err?.message || err);
+        /* Host media enable is best-effort; avoid console noise on join. */
       }
     })();
 

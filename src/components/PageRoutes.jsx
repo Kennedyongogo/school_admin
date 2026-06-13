@@ -53,10 +53,6 @@ import Timetable from "../Pages/Timetable";
 import TimetableDayPage from "../Pages/TimetableDayPage";
 import TimetableCreatePage from "../Pages/TimetableCreatePage";
 import TimetableManagePage from "../Pages/TimetableManagePage";
-import ElimuPlusOnlineHub from "../Pages/ElimuPlusOnlineHub";
-import OnlineScheduledLessonsPage from "../Pages/OnlineScheduledLessonsPage";
-import OnlineScheduledExamsPage from "../Pages/OnlineScheduledExamsPage";
-import OnlineScheduledSessionsPage from "../Pages/OnlineScheduledSessionsPage";
 import LiveClassRoomPage from "../Pages/LiveClassRoomPage";
 import ExamLiveRoomPage from "../Pages/ExamLiveRoomPage";
 import EventLiveRoomPage from "../Pages/EventLiveRoomPage";
@@ -177,11 +173,6 @@ function PageRoutes() {
               element={<TimetableManagePage />}
             />
             <Route path="timetable" element={<Timetable />} />
-            <Route path="elimu-plus-online/scheduled" element={<OnlineScheduledSessionsPage />} />
-            <Route path="elimu-plus-online/lessons" element={<OnlineScheduledSessionsPage />} />
-            <Route path="elimu-plus-online/exams" element={<OnlineScheduledSessionsPage />} />
-            <Route path="elimu-plus-online/meetings" element={<OnlineScheduledSessionsPage />} />
-            <Route path="elimu-plus-online" element={<ElimuPlusOnlineHub />} />
             <Route path="live-class/:liveClassId" element={<LiveClassRoomPage />} />
             <Route path="exam/:examId/live" element={<ExamLiveRoomPage />} />
             <Route path="exam-schedule/:scheduleId/live" element={<ExamLiveRoomPage />} />

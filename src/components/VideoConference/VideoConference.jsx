@@ -202,11 +202,6 @@ export default function VideoConference({
 
   const hasVideoTrack = !!localStream?.getVideoTracks()?.length;
   const isTeacher = role === "teacher";
-  const participantCount = useMemo(() => {
-    const ids = new Set(peerNames.keys());
-    remoteStreams.forEach((_, id) => ids.add(id));
-    return 1 + ids.size;
-  }, [peerNames, remoteStreams]);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, width: "100%", maxWidth: "100%", overflow: "hidden", bgcolor: "#0b1220" }}>
@@ -225,13 +220,6 @@ export default function VideoConference({
         <Typography variant="subtitle2" sx={{ fontWeight: 700, flex: 1 }}>
           Live class
         </Typography>
-        <Chip
-          size="small"
-          label={connected ? "Connected" : "Connecting…"}
-          color={connected ? "success" : "default"}
-          sx={{ display: { xs: "none", sm: "flex" } }}
-        />
-        <Chip size="small" variant="outlined" label={`${participantCount} in call`} />
         {role === "teacher" ? <Chip size="small" label="Host" color="primary" sx={{ display: { xs: "none", sm: "flex" } }} /> : null}
       </Box>
 
