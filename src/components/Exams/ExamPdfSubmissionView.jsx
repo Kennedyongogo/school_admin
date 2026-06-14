@@ -3,16 +3,12 @@ import {
   Alert,
   Box,
   Button,
-  Checkbox,
   CircularProgress,
-  FormControlLabel,
-  Radio,
-  RadioGroup,
   Stack,
-  TextField,
   Typography,
 } from "@mui/material";
 import { fetchExamPdfBlobUrl } from "./examPdfAdminUtils";
+import { renderManualPdfAnswerRows, renderManualPdfWorkingPapers, isImageWorkingPaper } from "./pdfManualAnswers";
 
 const mediaUrl = (path) => {
   if (!path) return "";
@@ -20,94 +16,20 @@ const mediaUrl = (path) => {
   return path.startsWith("/") ? path : `/${path}`;
 };
 
-function formatAnswerValue(value) {
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (Array.isArray(value)) return value.join(", ");
-  return String(value ?? "").trim() || "—";
-}
-
-function ReadOnlyField({ field, value }) {
-  const label = field.label || field.name;
-  const type = String(field.type || "Text");
-
-  if (type === "CheckBox") {
-    return (
-      <FormControlLabel
-        control={<Checkbox size="small" disabled checked={Boolean(value)} />}
-        label={label}
-      />
-    );
-  }
-
-  if (type === "RadioGroup" && Array.isArray(field.options) && field.options.length) {
-    return (
-      <Box>
-        <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
-          {label}
-        </Typography>
-        {field.prompt ? (
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-            {field.prompt}
-          </Typography>
-        ) : null}
-        <RadioGroup value={String(value ?? "")}>
-          {field.options.map((opt) => (
-            <FormControlLabel key={opt} value={opt} control={<Radio size="small" disabled />} label={opt} />
-          ))}
-        </RadioGroup>
-      </Box>
-    );
-  }
-
-  return (
-    <Box>
-      <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
-        {label}
-      </Typography>
-      {field.prompt ? (
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-          {field.prompt}
-        </Typography>
-      ) : null}
-      <TextField
-        fullWidth
-        size="small"
-        multiline={type === "long_text"}
-        minRows={type === "long_text" ? 4 : 1}
-        value={formatAnswerValue(value)}
-        disabled
-        InputProps={{ readOnly: true }}
-      />
-    </Box>
-  );
-}
-
 export default function ExamPdfSubmissionView({ exam, submission }) {
   const [pdfUrl, setPdfUrl] = useState("");
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState("");
 
-  const answers =
-    submission?.pdf_answers_json && typeof submission.pdf_answers_json === "object"
-      ? submission.pdf_answers_json
-      : {};
+  const answerRows = useMemo(
+    () => renderManualPdfAnswerRows(submission?.pdf_answers_json),
+    [submission?.pdf_answers_json]
+  );
 
-  const schemaFields = useMemo(() => {
-    const schema = Array.isArray(exam?.pdf_field_schema_json) ? exam.pdf_field_schema_json : [];
-    if (schema.length) return schema;
-    return Object.keys(answers).map((name) => ({ name, label: name, type: "Text" }));
-  }, [exam?.pdf_field_schema_json, answers]);
-
-  const breakdown = Array.isArray(submission?.pdf_auto_grading_json?.breakdown)
-    ? submission.pdf_auto_grading_json.breakdown
-    : [];
-  const breakdownByField = useMemo(() => {
-    const map = new Map();
-    breakdown.forEach((row) => {
-      if (row?.fieldName) map.set(row.fieldName, row);
-    });
-    return map;
-  }, [breakdown]);
+  const workingPapers = useMemo(
+    () => renderManualPdfWorkingPapers(submission?.pdf_answers_json),
+    [submission?.pdf_answers_json]
+  );
 
   const completedUrl = mediaUrl(submission?.pdf_completed_file_path);
 
@@ -129,7 +51,7 @@ export default function ExamPdfSubmissionView({ exam, submission }) {
     };
   }, [exam?.id, exam?.pdf_template_path]);
 
-  if (!schemaFields.length && !completedUrl) {
+  if (!answerRows.length && !workingPapers.length && !completedUrl) {
     return (
       <Typography variant="body2" color="text.secondary">
         No PDF answers captured for this submission.
@@ -139,16 +61,6 @@ export default function ExamPdfSubmissionView({ exam, submission }) {
 
   return (
     <Stack spacing={2}>
-      {submission?.pdf_auto_score != null ? (
-        <Alert severity="info" sx={{ py: 0.5 }}>
-          Auto-score (answer key): {submission.pdf_auto_score}
-          {exam?.total_marks ? ` / ${exam.total_marks}` : ""}
-          {submission?.pdf_auto_grading_json?.percentage != null
-            ? ` (${submission.pdf_auto_grading_json.percentage}%)`
-            : ""}
-        </Alert>
-      ) : null}
-
       <Stack direction={{ xs: "column", lg: "row" }} spacing={2} alignItems="stretch">
         {exam?.pdf_template_path ? (
           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -172,39 +84,84 @@ export default function ExamPdfSubmissionView({ exam, submission }) {
 
         <Stack spacing={1.25} sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontWeight: 700 }}>Student answers</Typography>
-          {schemaFields.map((field) => {
-            const value = answers[field.name];
-            const gradeRow = breakdownByField.get(field.name);
-            return (
+          {answerRows.length ? (
+            answerRows.map((row, index) => (
               <Box
-                key={field.name}
+                key={row.id || `answer-${index}`}
                 sx={{
-                  border: "1px solid",
-                  borderColor: gradeRow ? (gradeRow.match ? "#bbf7d0" : "#fecaca") : "#f3f4f6",
+                  border: "1px solid #f3f4f6",
                   borderRadius: 1,
                   p: 1.25,
-                  bgcolor: gradeRow ? (gradeRow.match ? "#f0fdf4" : "#fef2f2") : "#fff",
+                  bgcolor: "#fff",
                 }}
               >
-                <ReadOnlyField field={field} value={value} />
-                {gradeRow ? (
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: "block" }}>
-                    {gradeRow.match ? "Correct" : "Incorrect"}
-                    {gradeRow.correctAnswer != null && gradeRow.correctAnswer !== ""
-                      ? ` · Expected: ${formatAnswerValue(gradeRow.correctAnswer)}`
-                      : ""}
-                    {gradeRow.marks != null ? ` · ${gradeRow.marks} marks` : ""}
-                  </Typography>
-                ) : null}
+                <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                  Question {row.question || "—"}
+                </Typography>
+                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                  {row.answer || "—"}
+                </Typography>
               </Box>
-            );
-          })}
+            ))
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              No typed answers recorded.
+            </Typography>
+          )}
         </Stack>
       </Stack>
 
+      {workingPapers.length ? (
+        <Box>
+          <Typography sx={{ fontWeight: 700, mb: 1 }}>Uploaded working papers</Typography>
+          <Stack spacing={1.25}>
+            {workingPapers.map((file, index) => {
+              const fileUrl = mediaUrl(file.url);
+              return (
+                <Box
+                  key={file.id || `paper-${index}`}
+                  sx={{ border: "1px solid #e5e7eb", borderRadius: 1, p: 1.25, bgcolor: "#fff" }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    Paper {index + 1}: {file.name || "Uploaded file"}
+                  </Typography>
+                  {fileUrl ? (
+                    <Button
+                      size="small"
+                      component="a"
+                      href={fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      sx={{ mt: 0.5 }}
+                    >
+                      Open file
+                    </Button>
+                  ) : null}
+                  {isImageWorkingPaper(file) && fileUrl ? (
+                    <Box
+                      component="img"
+                      src={fileUrl}
+                      alt={file.name || `Working paper ${index + 1}`}
+                      sx={{
+                        mt: 1,
+                        width: "100%",
+                        maxHeight: 320,
+                        objectFit: "contain",
+                        borderRadius: 1,
+                        border: "1px solid #f3f4f6",
+                      }}
+                    />
+                  ) : null}
+                </Box>
+              );
+            })}
+          </Stack>
+        </Box>
+      ) : null}
+
       {completedUrl ? (
         <Box>
-          <Typography sx={{ fontWeight: 700, mb: 1 }}>Completed answer sheet</Typography>
+          <Typography sx={{ fontWeight: 700, mb: 1 }}>Submitted answer sheet</Typography>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
             <Button variant="outlined" size="small" component="a" href={completedUrl} target="_blank" rel="noopener noreferrer">
               Open / download PDF

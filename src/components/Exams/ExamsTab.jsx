@@ -45,6 +45,8 @@ import {
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
 import ExamPdfFormPanel from "./ExamPdfFormPanel";
+import { createManualAnswerEntry, renderManualPdfAnswerRows, renderManualPdfWorkingPapers } from "./pdfManualAnswers";
+import ExamPdfStudentPreviewPanel from "./ExamPdfStudentPreviewPanel";
 import { fetchExamPdfBlobUrl, isPdfFormExamRow } from "./examPdfAdminUtils";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -251,13 +253,41 @@ const fileUploadFieldsFromOptions = (q) => {
 
 const renderSubmissionAnswerContent = (a, submission) => {
   if (submission?.pdf_answers_json && typeof submission.pdf_answers_json === "object") {
+    const rows = renderManualPdfAnswerRows(submission.pdf_answers_json);
+    const papers = renderManualPdfWorkingPapers(submission.pdf_answers_json);
     return (
       <Stack spacing={0.5} component="span">
-        {Object.entries(submission.pdf_answers_json).map(([k, v]) => (
-          <Typography key={k} variant="body2" component="span" display="block">
-            <strong>{k}:</strong> {typeof v === "boolean" ? (v ? "Yes" : "No") : Array.isArray(v) ? v.join(", ") : String(v ?? "")}
+        {rows.length ? (
+          rows.map((row) => (
+            <Typography key={row.id} variant="body2" component="span" display="block">
+              <strong>Q{row.question || "—"}:</strong> {row.answer || "—"}
+            </Typography>
+          ))
+        ) : null}
+        {papers.length ? (
+          <Stack spacing={0.25} sx={{ mt: rows.length ? 0.5 : 0 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700 }} component="span" display="block">
+              Working papers:
+            </Typography>
+            {papers.map((file) => (
+              <Typography key={file.id} variant="body2" component="span" display="block">
+                <Box
+                  component="a"
+                  href={file.url?.startsWith("/") ? file.url : `/${file.url || ""}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {file.name || "Uploaded file"}
+                </Box>
+              </Typography>
+            ))}
+          </Stack>
+        ) : null}
+        {!rows.length && !papers.length ? (
+          <Typography variant="body2" component="span" display="block">
+            No answers recorded.
           </Typography>
-        ))}
+        ) : null}
         {submission.pdf_completed_file_path ? (
           <Box
             component="a"
@@ -860,6 +890,8 @@ export default function ExamsTab() {
   const [cleanupRunning, setCleanupRunning] = useState(false);
   const [simulateRow, setSimulateRow] = useState(null);
   const [simulateAnswers, setSimulateAnswers] = useState({});
+  const [simulatePdfEntries, setSimulatePdfEntries] = useState([createManualAnswerEntry()]);
+  const [simulatePdfWorkingPapers, setSimulatePdfWorkingPapers] = useState([]);
   const [generatingFromDoc, setGeneratingFromDoc] = useState(false);
   const [questionGenCount, setQuestionGenCount] = useState(10);
   const [ocrRawText, setOcrRawText] = useState("");
@@ -975,6 +1007,39 @@ export default function ExamsTab() {
     return pages;
   };
 
+  const revokeSimulateWorkingPaperUrls = useCallback((papers) => {
+    (papers || []).forEach((file) => {
+      if (file?.url && String(file.url).startsWith("blob:")) {
+        URL.revokeObjectURL(file.url);
+      }
+    });
+  }, []);
+
+  const addSimulateWorkingPaper = useCallback((file) => {
+    if (!file) return;
+    const entry = {
+      id: `paper-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      url: URL.createObjectURL(file),
+      name: file.name || "Uploaded file",
+      mime: file.type || "",
+      size: file.size || null,
+      uploaded_at: new Date().toISOString(),
+    };
+    setSimulatePdfWorkingPapers((prev) => [...prev, entry]);
+  }, []);
+
+  const removeSimulateWorkingPaper = useCallback(
+    (fileId) => {
+      setSimulatePdfWorkingPapers((prev) => {
+        const target = prev.find((file) => file.id === fileId);
+        if (target?.url && String(target.url).startsWith("blob:")) {
+          URL.revokeObjectURL(target.url);
+        }
+        return prev.filter((file) => file.id !== fileId);
+      });
+    },
+    []
+  );
   const previewPages = useMemo(() => buildPreviewPages(viewRow), [viewRow, schoolProfile]);
   const simulatePages = useMemo(() => buildPreviewPages(simulateRow), [simulateRow, schoolProfile]);
 
@@ -1102,11 +1167,8 @@ export default function ExamsTab() {
       setSimulateRow(full);
       if (isPdfFormExamRow(full)) {
         await loadPdfPreviewForExam(full);
-        const initialAnswers = {};
-        (Array.isArray(full.pdf_field_schema_json) ? full.pdf_field_schema_json : []).forEach((f) => {
-          if (f?.name) initialAnswers[f.name] = f.type === "CheckBox" ? false : "";
-        });
-        setSimulateAnswers(initialAnswers);
+        setSimulatePdfEntries([createManualAnswerEntry()]);
+        setSimulatePdfWorkingPapers([]);
         return;
       }
       revokePdfPreviewUrl();
@@ -1168,8 +1230,11 @@ export default function ExamsTab() {
 
   const closeSimulateExam = () => {
     revokePdfPreviewUrl();
+    revokeSimulateWorkingPaperUrls(simulatePdfWorkingPapers);
     setSimulateRow(null);
     setSimulateAnswers({});
+    setSimulatePdfEntries([createManualAnswerEntry()]);
+    setSimulatePdfWorkingPapers([]);
   };
 
   const load = async () => {
@@ -2242,7 +2307,7 @@ ${imageParts}--${boundary}--`;
                 }}
               >
                 <MenuItem value="questions">Online questions (built in editor)</MenuItem>
-                <MenuItem value="pdf_form">Fillable PDF form</MenuItem>
+                <MenuItem value="pdf_form">PDF exam (student adds answers)</MenuItem>
               </Select>
               {deliveryMode !== "pdf_form" ? (
                 <Select fullWidth displayEmpty value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
@@ -2510,9 +2575,6 @@ ${imageParts}--${boundary}--`;
                     ) : null}
                     <ExamPdfFormPanel
                       examId={editingId}
-                      pdfFieldSchema={pdfFieldSchema}
-                      pdfAnswerKey={pdfAnswerKey}
-                      onAnswerKeyChange={setPdfAnswerKey}
                       pdfTemplatePath={pdfTemplatePath}
                       onUploadComplete={(data) => {
                         setPdfFieldSchema(data?.pdf_field_schema_json || []);
@@ -3655,33 +3717,37 @@ ${imageParts}--${boundary}--`;
         </DialogActions>
       </Dialog>
 
-      <Dialog open={!!viewRow} onClose={closeViewExam} maxWidth="md" fullWidth>
+      <Dialog open={!!viewRow} onClose={closeViewExam} maxWidth={isPdfFormExamRow(viewRow) ? "lg" : "md"} fullWidth>
         <DialogTitle>
           Exam preview - {viewRow?.title || viewRow?.name || ""}
           {isPdfFormExamRow(viewRow) ? <Chip size="small" label="PDF exam" sx={{ ml: 1 }} /> : null}
         </DialogTitle>
         <DialogContent>
           {isPdfFormExamRow(viewRow) ? (
-            <Stack spacing={1.5}>
-              {!viewRow?.pdf_template_path ? (
-                <Alert severity="warning">No PDF uploaded yet. Edit the exam and upload your Word PDF.</Alert>
-              ) : examDetailLoading || !pdfPreviewUrl ? (
-                <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-                  <CircularProgress sx={{ color: accent }} />
-                </Box>
-              ) : (
-                <Box
-                  component="iframe"
-                  title="Exam PDF preview"
-                  src={pdfPreviewUrl}
-                  sx={{ width: "100%", height: { xs: 480, md: 720 }, border: "1px solid #e5e7eb", borderRadius: 1, bgcolor: "#f9fafb" }}
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+              <Box sx={{ flex: 1.2, minWidth: 0 }}>
+                {!viewRow?.pdf_template_path ? (
+                  <Alert severity="warning">No PDF uploaded yet. Edit the exam and upload your Word PDF.</Alert>
+                ) : examDetailLoading || !pdfPreviewUrl ? (
+                  <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+                    <CircularProgress sx={{ color: accent }} />
+                  </Box>
+                ) : (
+                  <Box
+                    component="iframe"
+                    title="Exam PDF preview"
+                    src={pdfPreviewUrl}
+                    sx={{ width: "100%", height: { xs: 480, md: 720 }, border: "1px solid #e5e7eb", borderRadius: 1, bgcolor: "#f9fafb" }}
+                  />
+                )}
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0, maxHeight: { md: 720 }, overflow: "auto" }}>
+                <ExamPdfStudentPreviewPanel
+                  entries={[{ id: "preview-sample", question: "", answer: "" }]}
+                  workingPapers={[]}
+                  readOnly
                 />
-              )}
-              {Array.isArray(viewRow?.pdf_field_schema_json) && viewRow.pdf_field_schema_json.length ? (
-                <Typography variant="body2" color="text.secondary">
-                  {viewRow.pdf_field_schema_json.length} answer field(s) detected for students (Q1, Q2, …).
-                </Typography>
-              ) : null}
+              </Box>
             </Stack>
           ) : (
           <Stack spacing={2} ref={previewPagesContainerRef}>
@@ -3831,40 +3897,15 @@ ${imageParts}--${boundary}--`;
                   />
                 )}
               </Box>
-              <Stack spacing={1.25} sx={{ flex: 1 }}>
-                <Typography sx={{ fontWeight: 700 }}>Student answer fields (preview)</Typography>
-                {(Array.isArray(simulateRow?.pdf_field_schema_json) ? simulateRow.pdf_field_schema_json : []).map((f) => (
-                  <Box key={f.name} sx={{ border: "1px solid #f3f4f6", borderRadius: 1, p: 1 }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, display: "block" }}>
-                      {f.label || f.name}
-                    </Typography>
-                    {f.prompt ? (
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                        {f.prompt}
-                      </Typography>
-                    ) : null}
-                    {f.type === "RadioGroup" && Array.isArray(f.options) ? (
-                      <RadioGroup
-                        value={String(simulateAnswers[f.name] || "")}
-                        onChange={(e) => setSimulateAnswers((prev) => ({ ...prev, [f.name]: e.target.value }))}
-                      >
-                        {f.options.map((opt) => (
-                          <FormControlLabel key={opt} value={opt} control={<Radio size="small" />} label={opt} />
-                        ))}
-                      </RadioGroup>
-                    ) : (
-                      <TextField
-                        fullWidth
-                        size="small"
-                        multiline={f.type === "long_text"}
-                        minRows={f.type === "long_text" ? 3 : 1}
-                        value={simulateAnswers[f.name] ?? ""}
-                        onChange={(e) => setSimulateAnswers((prev) => ({ ...prev, [f.name]: e.target.value }))}
-                      />
-                    )}
-                  </Box>
-                ))}
-              </Stack>
+              <Box sx={{ flex: 1, minWidth: 0, maxHeight: 520, overflow: "auto" }}>
+                <ExamPdfStudentPreviewPanel
+                  entries={simulatePdfEntries}
+                  onEntriesChange={setSimulatePdfEntries}
+                  workingPapers={simulatePdfWorkingPapers}
+                  onAddWorkingPaper={addSimulateWorkingPaper}
+                  onRemoveWorkingPaper={removeSimulateWorkingPaper}
+                />
+              </Box>
             </Stack>
           ) : (
           <Stack spacing={2}>
@@ -4010,7 +4051,10 @@ ${imageParts}--${boundary}--`;
         <DialogActions>
           <Button
             onClick={() => {
-              const attempted = Object.values(simulateAnswers || {}).filter((v) => {
+              const attempted = isPdfFormExamRow(simulateRow)
+                ? simulatePdfEntries.filter((row) => String(row.question || "").trim() || String(row.answer || "").trim())
+                    .length
+                : Object.values(simulateAnswers || {}).filter((v) => {
                 if (Array.isArray(v)) return v.length > 0;
                 if (v && typeof v === "object") {
                   if (Array.isArray(v.files)) return v.files.length > 0;
@@ -4018,11 +4062,12 @@ ${imageParts}--${boundary}--`;
                 }
                 return String(v || "").trim().length > 0;
               }).length;
+              const paperCount = isPdfFormExamRow(simulateRow) ? simulatePdfWorkingPapers.length : 0;
               void Swal.fire({
                 icon: "info",
                 title: "Preview attempt summary",
                 text: isPdfFormExamRow(simulateRow)
-                  ? `Attempted ${attempted} field(s) in student preview mode.`
+                  ? `Attempted ${attempted} answer row(s) and ${paperCount} working paper file(s) in student preview mode.`
                   : `Attempted ${attempted} question(s) in student preview mode.`,
               });
             }}
