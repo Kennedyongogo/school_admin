@@ -18,29 +18,28 @@ import Swal from "sweetalert2";
 import ExamSubmissionPaperView from "../components/Exams/ExamSubmissionPaperView";
 import ExamPdfSubmissionView from "../components/Exams/ExamPdfSubmissionView";
 import { isPdfFormExamRow } from "../components/Exams/examPdfAdminUtils";
+import {
+  ExamHero,
+  ExamPanelCard,
+  ExamPrimaryButton,
+  ExamGhostButton,
+  TabPanelShell,
+} from "../components/Exams/examUi";
+import {
+  authJsonHeaders,
+  fullMainBleedSx,
+  warmCream,
+  elimuViewportSx,
+  primaryRed,
+  primaryDark,
+  primaryLight,
+} from "../components/Exams/examShared";
 
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
-const accentLight = "#FEE2E2";
-const backgroundLight = "#FEF2F2";
+const accent = primaryRed;
+const accentDark = primaryDark;
+const accentLight = primaryLight;
 
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-const fullMainBleedSx = (theme) => ({
-  width: `calc(100% + ${theme.spacing(6)})`,
-  maxWidth: "none",
-  marginLeft: theme.spacing(-3),
-  marginRight: theme.spacing(-3),
-  marginTop: theme.spacing(-2),
-  marginBottom: "1px",
-  boxSizing: "border-box",
-  minHeight: "100%",
-  background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
-});
+const authHeaders = authJsonHeaders;
 
 export default function ExamSubmissionsPage() {
   const { examId } = useParams();
@@ -271,53 +270,46 @@ export default function ExamSubmissionsPage() {
   };
 
   return (
-    <Box sx={(theme) => ({ ...fullMainBleedSx(theme) })}>
-      <Box
-        sx={{
-          background: `linear-gradient(135deg, ${accentDark} 0%, ${accent} 55%, #f97316 100%)`,
-          px: { xs: 2, sm: 3 },
-          py: { xs: 1.5, sm: 2 },
-          color: "#fff",
-          boxShadow: `0 8px 24px ${accent}33`,
-        }}
-      >
-        <Stack direction="row" alignItems="center" spacing={1.5}>
-          <IconButton onClick={() => navigate("/exam")} sx={{ color: "#fff", bgcolor: "rgba(255,255,255,0.15)", "&:hover": { bgcolor: "rgba(255,255,255,0.25)" } }}>
-            <ArrowBackIcon />
+    <Box
+      sx={(theme) => ({
+        ...fullMainBleedSx(theme),
+        ...elimuViewportSx,
+        bgcolor: warmCream,
+        px: { xs: 1.5, sm: 2, md: 3 },
+        py: { xs: 2, sm: 2.5 },
+        gap: 2,
+        display: "flex",
+        flexDirection: "column",
+      })}
+    >
+      <ExamHero
+        title="Submissions & marking"
+        subtitle={title}
+        icon={
+          <IconButton onClick={() => navigate("/exam")} sx={{ color: "#fff", p: 0, "&:hover": { bgcolor: "transparent" } }}>
+            <ArrowBackIcon sx={{ fontSize: 28 }} />
           </IconButton>
-          <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography variant="overline" sx={{ opacity: 0.9 }}>
-              Exams
-            </Typography>
-            <Typography variant="h5" sx={{ fontWeight: 800 }}>
-              Submissions and Marking
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.92 }}>
-              {title}
-            </Typography>
-          </Box>
-          <Button variant="contained" color="warning" onClick={() => void runCleanupStaleDrafts()} disabled={cleanupRunning || loading}>
-            {cleanupRunning ? "Cleaning..." : "Clean stale drafts"}
-          </Button>
-        </Stack>
-      </Box>
+        }
+        actions={
+          <ExamGhostButton
+            onClick={() => void runCleanupStaleDrafts()}
+            disabled={cleanupRunning || loading}
+            sx={{ bgcolor: "rgba(255,255,255,0.15)", color: "#fff", borderColor: "rgba(255,255,255,0.35)", "&:hover": { bgcolor: "rgba(255,255,255,0.25)" } }}
+          >
+            {cleanupRunning ? "Cleaning…" : "Clean stale drafts"}
+          </ExamGhostButton>
+        }
+      />
 
-      <Box sx={{ py: 3, pb: 4, px: { xs: 1, sm: 1.5, md: 2 }, width: "100%", boxSizing: "border-box" }}>
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : error ? (
-          <Alert severity="error">{error}</Alert>
-        ) : rows.length === 0 ? (
-          <Alert severity="info">No student submissions yet for this exam.</Alert>
+      <TabPanelShell loading={loading} error={error} onDismissError={() => setError("")}>
+        {rows.length === 0 ? (
+          <Alert severity="info" sx={{ borderRadius: "16px" }}>No student submissions yet for this exam.</Alert>
         ) : (
-          <Stack spacing={1.25}>
+          <Stack spacing={1.5}>
             {rows.map((s, idx) => {
               const isExpanded = !!expandedById[s.id];
               return (
-                <Card key={s.id} variant="outlined" sx={{ width: "100%" }}>
-                  <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
+                <ExamPanelCard key={s.id}>
                     <Stack spacing={1}>
                       <Stack
                         direction={{ xs: "column", lg: "row" }}
@@ -400,18 +392,13 @@ export default function ExamSubmissionsPage() {
                                     },
                                   }}
                                 />
-                                <Button
-                                  variant="contained"
+                                <ExamPrimaryButton
                                   size="small"
                                   onClick={() =>
                                     void (isPdfFormExam ? saveSubmissionMark(s.id) : saveQuestionMarks(s.id))
                                   }
                                   disabled={markSavingId === s.id || s.status !== "submitted"}
-                                  sx={{
-                                    ...actionBtnSx,
-                                    bgcolor: accent,
-                                    "&:hover": { bgcolor: accentDark },
-                                  }}
+                                  sx={{ ...actionBtnSx, minWidth: 156 }}
                                 >
                                   {markSavingId === s.id
                                     ? "Saving…"
@@ -422,7 +409,7 @@ export default function ExamSubmissionsPage() {
                                       : alreadyMarked
                                         ? "Update marks"
                                         : "Save marks"}
-                                </Button>
+                                </ExamPrimaryButton>
                                 <Button
                                   variant="outlined"
                                   size="small"
@@ -526,14 +513,13 @@ export default function ExamSubmissionsPage() {
                         </Box>
                       ) : null}
                     </Stack>
-                  </CardContent>
-                </Card>
+                </ExamPanelCard>
               );
             })}
           </Stack>
         )}
-        {!loading && !error ? (
-          <Box sx={{ mt: 2, borderTop: "1px solid #f1d5d5", pt: 1 }}>
+        {!loading && !error && rows.length > 0 ? (
+          <Box sx={{ mt: 2, borderTop: `1px solid ${primaryLight}`, pt: 1 }}>
             <TablePagination
               component="div"
               rowsPerPageOptions={[10, 20, 50, 100]}
@@ -551,7 +537,7 @@ export default function ExamSubmissionsPage() {
             />
           </Box>
         ) : null}
-      </Box>
+      </TabPanelShell>
     </Box>
   );
 }

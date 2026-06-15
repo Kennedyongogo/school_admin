@@ -3,36 +3,27 @@ import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Box,
-  Button,
-  Card,
-  CardContent,
   CircularProgress,
-  FormControl,
   FormControlLabel,
   Checkbox,
   IconButton,
-  InputLabel,
   MenuItem,
-  Select,
   Stack,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 import { ArrowBack as ArrowBackIcon, PersonAdd as PersonAddIcon } from "@mui/icons-material";
-import Swal from "sweetalert2";
 import StudentSelectCards from "./StudentSelectCards";
-
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
-const accentLight = "#FEE2E2";
-const backgroundLight = "#FEF2F2";
-
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
+import { authHeaders, fullMainBleedSx, elimuViewportSx, warmCream, primaryRed, primaryDark } from "./hrShared";
+import {
+  HRHero,
+  FormSection,
+  HRFilterSelect,
+  HRPrimaryButton,
+  HRGhostButton,
+  hrSwal,
+} from "./hrUi";
 
 const RELATIONSHIPS = [
   { value: "father", label: "Father" },
@@ -40,16 +31,6 @@ const RELATIONSHIPS = [
   { value: "guardian", label: "Guardian" },
   { value: "other", label: "Other" },
 ];
-
-const fullMainBleedSx = (theme) => ({
-  width: `calc(100% + ${theme.spacing(6)})`,
-  maxWidth: "none",
-  marginLeft: theme.spacing(-3),
-  marginRight: theme.spacing(-3),
-  marginTop: "1px",
-  marginBottom: "1px",
-  boxSizing: "border-box",
-});
 
 const initialForm = () => ({
   user_id: "",
@@ -108,19 +89,19 @@ export default function HRParentCreate() {
     setError(null);
     const token = localStorage.getItem("token");
     if (!token) {
-      await Swal.fire({ icon: "error", title: "Session expired", text: "Please sign in again.", confirmButtonColor: accent });
+      await hrSwal({ icon: "error", title: "Session expired", text: "Please sign in again." });
       return;
     }
     if (!form.user_id) {
       const msg = "Select a parent user account (create the user under User management with role Parent first).";
       setError(msg);
-      await Swal.fire({ icon: "warning", title: "Parent user required", text: msg, confirmButtonColor: accent });
+      await hrSwal({ icon: "warning", title: "Parent user required", text: msg });
       return;
     }
     if (!form.student_ids?.length) {
       const msg = "Select at least one student to link.";
       setError(msg);
-      await Swal.fire({ icon: "warning", title: "Students required", text: msg, confirmButtonColor: accent });
+      await hrSwal({ icon: "warning", title: "Students required", text: msg });
       return;
     }
 
@@ -141,11 +122,10 @@ export default function HRParentCreate() {
       if (!res.ok || !data.success) {
         throw new Error(data.message || "Could not create parent profile.");
       }
-      await Swal.fire({
+      await hrSwal({
         icon: "success",
         title: "Parent profile created",
         text: "The parent profile is linked to the selected student(s).",
-        confirmButtonColor: accent,
         timer: 2400,
         showConfirmButton: false,
       });
@@ -153,7 +133,7 @@ export default function HRParentCreate() {
     } catch (err) {
       const msg = err.message || "Create failed.";
       setError(msg);
-      await Swal.fire({ icon: "error", title: "Could not create profile", text: msg, confirmButtonColor: accent });
+      await hrSwal({ icon: "error", title: "Could not create profile", text: msg });
     } finally {
       setSaving(false);
     }
@@ -165,21 +145,20 @@ export default function HRParentCreate() {
       onSubmit={handleSubmit}
       sx={(theme) => ({
         ...fullMainBleedSx(theme),
-        marginTop: theme.spacing(-2.5),
-        minHeight: "100%",
-        background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
+        ...elimuViewportSx,
+        bgcolor: warmCream,
+        px: { xs: 1.5, sm: 2, md: 3 },
+        py: { xs: 2, sm: 2.5 },
+        gap: 2,
+        display: "flex",
+        flexDirection: "column",
       })}
     >
-      <Box
-        sx={{
-          background: `linear-gradient(135deg, ${accentDark} 0%, ${accent} 55%, #EF4444 100%)`,
-          px: { xs: 1.5, sm: 2 },
-          py: { xs: 1.5, sm: 2 },
-          color: "white",
-          boxShadow: `0 8px 24px ${accent}33`,
-        }}
-      >
-        <Stack direction="row" alignItems="center" spacing={1.5}>
+      <HRHero
+        title="Create parent profile"
+        subtitle="Link an existing parent user to one or more students."
+        icon={<PersonAddIcon sx={{ fontSize: 28, color: "#fff" }} />}
+        actions={
           <Tooltip title="Back to Parents">
             <IconButton
               type="button"
@@ -188,160 +167,112 @@ export default function HRParentCreate() {
               sx={{
                 color: "#fff",
                 bgcolor: "rgba(255,255,255,0.15)",
+                border: "1px solid rgba(255,255,255,0.22)",
                 "&:hover": { bgcolor: "rgba(255,255,255,0.28)" },
               }}
             >
               <ArrowBackIcon />
             </IconButton>
           </Tooltip>
-          <PersonAddIcon sx={{ fontSize: 32, opacity: 0.95 }} />
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
-              Create parent profile
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.92, mt: 0.25 }}>
-              Link an existing parent user to one or more students.
-            </Typography>
-          </Box>
-        </Stack>
-      </Box>
+        }
+      />
 
-      <Box sx={{ px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 }, width: "100%", boxSizing: "border-box" }}>
-        {error ? (
-          <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        ) : null}
+      {error ? (
+        <Alert severity="error" sx={{ borderRadius: "16px" }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      ) : null}
 
-        {pageLoading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <CircularProgress sx={{ color: accent }} />
-          </Box>
-        ) : (
-          <Card
-            elevation={0}
-            sx={{
-              width: "100%",
-              borderRadius: 2,
-              border: `1px solid ${accentLight}`,
-              boxShadow: `0 8px 28px -12px ${accent}33`,
-            }}
-          >
-            <CardContent sx={{ px: { xs: 2, sm: 3 }, py: 3 }}>
-              <Stack spacing={3}>
-                <Box>
-                  <Typography
-                    variant="subtitle2"
-                    sx={{ fontWeight: 700, color: accentDark, letterSpacing: "0.04em", textTransform: "uppercase", mb: 1.5 }}
-                  >
-                    Parent user
-                  </Typography>
-                  <FormControl fullWidth required size="small">
-                    <InputLabel id="parent-user-label">Parent user account</InputLabel>
-                    <Select
-                      labelId="parent-user-label"
-                      label="Parent user account"
-                      value={form.user_id}
-                      onChange={(e) => setForm({ ...form, user_id: e.target.value })}
-                    >
-                      <MenuItem value="">
-                        <em>Select…</em>
-                      </MenuItem>
-                      {eligibleUsers.map((u) => (
-                        <MenuItem key={u.id} value={u.id}>
-                          {u.full_name || u.username} ({u.email})
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  {eligibleUsers.length === 0 ? (
-                    <Alert severity="info" sx={{ mt: 1.5, borderRadius: 2 }}>
-                      No users with role Parent found. Create one under User management first, then return here.
-                    </Alert>
-                  ) : null}
-                </Box>
+      {pageLoading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+          <CircularProgress sx={{ color: primaryRed }} />
+        </Box>
+      ) : (
+        <Stack spacing={2.5}>
+          <FormSection title="Parent user">
+            <HRFilterSelect
+              label="Parent user account"
+              required
+              value={form.user_id}
+              onChange={(e) => setForm({ ...form, user_id: e.target.value })}
+            >
+              <MenuItem value="">
+                <em>Select…</em>
+              </MenuItem>
+              {eligibleUsers.map((u) => (
+                <MenuItem key={u.id} value={u.id}>
+                  {u.full_name || u.username} ({u.email})
+                </MenuItem>
+              ))}
+            </HRFilterSelect>
+            {eligibleUsers.length === 0 ? (
+              <Alert severity="info" sx={{ mt: 1.5, borderRadius: "14px" }}>
+                No users with role Parent found. Create one under User management first, then return here.
+              </Alert>
+            ) : null}
+          </FormSection>
 
-                <Box>
-                  <Typography
-                    variant="subtitle2"
-                    sx={{ fontWeight: 700, color: accentDark, letterSpacing: "0.04em", textTransform: "uppercase", mb: 1.5 }}
-                  >
-                    Students to link
-                  </Typography>
-                  <StudentSelectCards
-                    students={studentsWithoutParent}
-                    selectedIds={form.student_ids}
-                    onChange={(ids) => setForm({ ...form, student_ids: ids })}
-                    disabled={saving}
+          <FormSection title="Students to link">
+            <StudentSelectCards
+              students={studentsWithoutParent}
+              selectedIds={form.student_ids}
+              onChange={(ids) => setForm({ ...form, student_ids: ids })}
+              disabled={saving}
+            />
+            {studentsWithoutParent.length === 0 ? (
+              <Alert severity="info" sx={{ mt: 1.5, borderRadius: "14px" }}>
+                No students without a parent profile. Create student profiles under Elimu Plus first.
+              </Alert>
+            ) : null}
+          </FormSection>
+
+          <FormSection title="Parent details">
+            <Stack spacing={2}>
+              <HRFilterSelect
+                label="Relationship"
+                required
+                value={form.relationship}
+                onChange={(e) => setForm({ ...form, relationship: e.target.value })}
+              >
+                {RELATIONSHIPS.map((opt) => (
+                  <MenuItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </MenuItem>
+                ))}
+              </HRFilterSelect>
+              <TextField
+                label="Occupation"
+                size="small"
+                fullWidth
+                value={form.occupation}
+                onChange={(e) => setForm({ ...form, occupation: e.target.value })}
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={form.newsletter_subscription}
+                    onChange={(e) => setForm({ ...form, newsletter_subscription: e.target.checked })}
                   />
-                  {studentsWithoutParent.length === 0 ? (
-                    <Alert severity="info" sx={{ mt: 1.5, borderRadius: 2 }}>
-                      No students without a parent profile. Create student profiles under Elimu Plus first.
-                    </Alert>
-                  ) : null}
-                </Box>
+                }
+                label="Newsletter subscription"
+              />
+            </Stack>
+          </FormSection>
 
-                <Box>
-                  <Typography
-                    variant="subtitle2"
-                    sx={{ fontWeight: 700, color: accentDark, letterSpacing: "0.04em", textTransform: "uppercase", mb: 1.5 }}
-                  >
-                    Parent details
-                  </Typography>
-                  <Stack spacing={2}>
-                    <FormControl fullWidth size="small" required>
-                      <InputLabel id="rel-label">Relationship</InputLabel>
-                      <Select
-                        labelId="rel-label"
-                        label="Relationship"
-                        value={form.relationship}
-                        onChange={(e) => setForm({ ...form, relationship: e.target.value })}
-                      >
-                        {RELATIONSHIPS.map((opt) => (
-                          <MenuItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <TextField
-                      label="Occupation"
-                      size="small"
-                      fullWidth
-                      value={form.occupation}
-                      onChange={(e) => setForm({ ...form, occupation: e.target.value })}
-                    />
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={form.newsletter_subscription}
-                          onChange={(e) => setForm({ ...form, newsletter_subscription: e.target.checked })}
-                        />
-                      }
-                      label="Newsletter subscription"
-                    />
-                  </Stack>
-                </Box>
-
-                <Stack direction="row" spacing={1.5} justifyContent="flex-end" sx={{ pt: 1 }}>
-                  <Button type="button" onClick={goBack} disabled={saving} sx={{ textTransform: "none", fontWeight: 700 }}>
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={saving || !form.user_id || !form.student_ids?.length}
-                    startIcon={saving ? null : <PersonAddIcon />}
-                    sx={{ textTransform: "none", fontWeight: 700, bgcolor: accent, "&:hover": { bgcolor: accentDark } }}
-                  >
-                    {saving ? <CircularProgress size={22} color="inherit" /> : "Create parent profile"}
-                  </Button>
-                </Stack>
-              </Stack>
-            </CardContent>
-          </Card>
-        )}
-      </Box>
+          <Stack direction="row" spacing={1.5} justifyContent="flex-end">
+            <HRGhostButton type="button" onClick={goBack} disabled={saving}>
+              Cancel
+            </HRGhostButton>
+            <HRPrimaryButton
+              type="submit"
+              disabled={saving || !form.user_id || !form.student_ids?.length}
+              startIcon={saving ? null : <PersonAddIcon />}
+            >
+              {saving ? <CircularProgress size={22} color="inherit" /> : "Create parent profile"}
+            </HRPrimaryButton>
+          </Stack>
+        </Stack>
+      )}
     </Box>
   );
 }

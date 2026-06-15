@@ -40,7 +40,6 @@ import {
   UploadFile as UploadFileIcon,
   VideocamOutlined as VideocamOutlinedIcon,
   Visibility as VisibilityIcon,
-  PublishedWithChanges as PublishedWithChangesIcon,
   FactCheck as FactCheckIcon,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
@@ -55,6 +54,25 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { TimePicker } from "@mui/x-date-pickers/TimePicker";
 import { renderTimeViewClock } from "@mui/x-date-pickers/timeViewRenderers";
+import {
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  PremiumDialog,
+  DetailField,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+  ExamSectionHeader,
+  ExamStatusChip,
+  ExamTypeChip,
+  ExamActionIcon,
+  ExamPanelCard,
+  ExamToolbar,
+  ExamPrimaryButton,
+  ExamGhostButton,
+} from "./examUi";
+import { formatDurationMinutes } from "./examShared";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
@@ -878,9 +896,6 @@ export default function ExamsTab() {
   const [saving, setSaving] = useState(false);
   const [examDetailLoading, setExamDetailLoading] = useState(false);
   const [viewRow, setViewRow] = useState(null);
-  const [statusEditRow, setStatusEditRow] = useState(null);
-  const [statusEditValue, setStatusEditValue] = useState("draft");
-  const [statusSaving, setStatusSaving] = useState(false);
   const [markingRow, setMarkingRow] = useState(null);
   const [markingLoading, setMarkingLoading] = useState(false);
   const [markingError, setMarkingError] = useState("");
@@ -1593,44 +1608,6 @@ export default function ExamsTab() {
     }
   };
 
-  const openStatusDialog = (row) => {
-    setStatusEditRow(row);
-    setStatusEditValue(row?.status || "draft");
-  };
-
-  const saveExamStatusOnly = async () => {
-    if (!statusEditRow?.id) return;
-    const token = localStorage.getItem("token");
-    if (!token) return;
-    setStatusSaving(true);
-    try {
-      const res = await fetch(`/api/exams/${statusEditRow.id}`, {
-        method: "PUT",
-        headers: authHeaders(token),
-        body: JSON.stringify({ status: statusEditValue }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.message || "Could not update exam status.");
-      await Swal.fire({
-        icon: "success",
-        title: "Exam status updated",
-        text: `Status changed to ${statusEditValue}.`,
-        timer: 1200,
-        showConfirmButton: false,
-      });
-      setStatusEditRow(null);
-      await load();
-    } catch (e) {
-      await Swal.fire({
-        icon: "error",
-        title: "Status update failed",
-        text: e.message || "Could not update exam status.",
-      });
-    } finally {
-      setStatusSaving(false);
-    }
-  };
-
   const openMarkingDialog = async (row) => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -2287,14 +2264,12 @@ ${imageParts}--${boundary}--`;
     return (
       <LocalizationProvider dateAdapter={AdapterDayjs}>
       <Stack spacing={2}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ width: "100%" }}>
-          <Typography sx={{ fontWeight: 800 }}>{editingId ? "Edit exam" : "Create exam"}</Typography>
-          <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => setMode("list")}>
-            Back
-          </Button>
-        </Stack>
-        <Card elevation={0} sx={{ border: "1px solid #fecaca" }}>
-          <CardContent>
+        <ExamToolbar
+          title={editingId ? "Edit exam" : "Create exam"}
+          subtitle={editingId ? "Update schedule, questions, and proctoring settings." : "Set up a new exam for your students."}
+          onBack={() => setMode("list")}
+        />
+        <ExamPanelCard>
             <Stack spacing={1.5}>
               <TextField label="Exam name" value={name} onChange={(e) => setName(e.target.value)} />
               <Select
@@ -3477,91 +3452,78 @@ ${imageParts}--${boundary}--`;
               </Stack>
               ) : null}
               {deliveryMode === "pdf_form" ? (
-                <Button
-                  variant="contained"
-                  onClick={() => void createExam()}
-                  disabled={saving}
-                  sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark }, alignSelf: "flex-start" }}
-                >
+                <ExamPrimaryButton onClick={() => void createExam()} disabled={saving} sx={{ alignSelf: "flex-start" }}>
                   {saving ? "Saving..." : editingId ? "Update exam" : "Save exam"}
-                </Button>
+                </ExamPrimaryButton>
               ) : null}
             </Stack>
-          </CardContent>
-        </Card>
+        </ExamPanelCard>
       </Stack>
       </LocalizationProvider>
     );
   }
 
   return (
-    <Stack spacing={2}>
-      {error ? <Alert severity="error">{error}</Alert> : null}
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ width: "100%" }}>
-        <Typography sx={{ fontWeight: 800 }}>Exams</Typography>
-      </Stack>
-      <Card elevation={0} sx={{ border: "1px solid #fecaca" }}>
-        <CardContent>
-          {loading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
-              <CircularProgress size={28} />
-            </Box>
-          ) : rows.length === 0 ? (
-            <Typography color="text.secondary">No exams created yet.</Typography>
-          ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell width={70}>No</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Template</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Duration</TableCell>
-                  <TableCell align="right">Action</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rows.map((r, idx) => (
-                  <TableRow key={r.id} hover>
-                    <TableCell sx={{ color: "text.secondary" }}>{idx + 1}</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>
+    <TabPanelShell loading={loading} error={error} onDismissError={() => setError("")}>
+      <ExamSectionHeader
+        title="Scheduled exams"
+        subtitle="Create, publish, and mark exams. Open live invigilation or review submissions from here."
+      />
+      <DataTableShell>
+        {rows.length === 0 ? (
+          <EmptyTableRow message="No exams created yet. Use Create exam to schedule your first assessment." />
+        ) : (
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={tableHeadRowSx}>
+                <TableCell width={56}>#</TableCell>
+                <TableCell>Exam</TableCell>
+                <TableCell>Template</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Duration</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rows.map((r, idx) => (
+                <TableRow
+                  key={r.id}
+                  hover
+                  sx={{
+                    "& td": { fontFamily: "inherit", fontSize: "0.88rem", py: 1.35 },
+                    "&:hover": { bgcolor: "rgba(254,226,226,0.35)" },
+                  }}
+                >
+                  <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>{idx + 1}</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>
+                    <Box component="span" sx={{ display: "inline-flex", alignItems: "center", flexWrap: "wrap", gap: 0.5 }}>
                       {r.title || r.name}
-                      {String(r.exam_type || "") === "pdf_form" ? (
-                        <Chip size="small" label="PDF form" sx={{ ml: 1 }} color="secondary" />
-                      ) : null}
-                    </TableCell>
-                    <TableCell>{r.template?.name || templateMap.get(String(r.template_id))?.name || "-"}</TableCell>
-                    <TableCell>{r.status || "draft"}</TableCell>
-                    <TableCell>{r.duration_minutes} min</TableCell>
-                    <TableCell align="right">
-                      <IconButton size="small" disabled={examDetailLoading} onClick={() => void openViewExam(r)}>
+                      <ExamTypeChip examType={r.exam_type} />
+                    </Box>
+                  </TableCell>
+                  <TableCell>{r.template?.name || templateMap.get(String(r.template_id))?.name || "—"}</TableCell>
+                  <TableCell>
+                    <ExamStatusChip status={r.status || "draft"} />
+                  </TableCell>
+                  <TableCell>{formatDurationMinutes(r.duration_minutes)}</TableCell>
+                  <TableCell align="right">
+                    <Stack direction="row" spacing={0.25} justifyContent="flex-end">
+                      <ExamActionIcon title="View details" disabled={examDetailLoading} onClick={() => void openViewExam(r)}>
                         <VisibilityIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        title="Student preview test"
-                        disabled={examDetailLoading}
-                        onClick={() => void openStudentPreview(r)}
-                      >
+                      </ExamActionIcon>
+                      <ExamActionIcon title="Student preview" disabled={examDetailLoading} onClick={() => void openStudentPreview(r)}>
                         <PlayCircleOutlineIcon fontSize="small" />
-                      </IconButton>
+                      </ExamActionIcon>
                       {examUsesLiveInvigilationRoom(r) ? (
-                        <Tooltip title="Open LiveKit invigilation room (admit students)">
-                          <IconButton
-                            size="small"
-                            onClick={() => navigate(`/exam/${encodeURIComponent(r.id)}/live`)}
-                            sx={{ color: accent }}
-                          >
-                            <VideocamOutlinedIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        <ExamActionIcon title="Open live invigilation room" onClick={() => navigate(`/exam/${encodeURIComponent(r.id)}/live`)}>
+                          <VideocamOutlinedIcon fontSize="small" />
+                        </ExamActionIcon>
                       ) : null}
-                      <IconButton size="small" disabled={examDetailLoading} onClick={() => void startEditExam(r)}>
+                      <ExamActionIcon title="Edit exam" disabled={examDetailLoading} onClick={() => void startEditExam(r)}>
                         <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        title="View submissions and mark"
+                      </ExamActionIcon>
+                      <ExamActionIcon
+                        title="Submissions & marking"
                         onClick={() =>
                           navigate(`/exam/${r.id}/submissions`, {
                             state: { examTitle: r.title || r.name || "Exam" },
@@ -3569,51 +3531,34 @@ ${imageParts}--${boundary}--`;
                         }
                       >
                         <FactCheckIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" title="Edit status" onClick={() => openStatusDialog(r)}>
-                        <PublishedWithChangesIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" color="error" onClick={() => void deleteExam(r)}>
+                      </ExamActionIcon>
+                      <ExamActionIcon title="Delete exam" color="error" onClick={() => void deleteExam(r)}>
                         <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                      </ExamActionIcon>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </DataTableShell>
 
-      <Dialog open={!!statusEditRow} onClose={() => !statusSaving && setStatusEditRow(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Update exam status</DialogTitle>
-        <DialogContent>
-          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
-            <Typography variant="body2" color="text.secondary">
-              {statusEditRow?.title || statusEditRow?.name || "Exam"}
-            </Typography>
-            <Select fullWidth value={statusEditValue} onChange={(e) => setStatusEditValue(e.target.value)} disabled={statusSaving}>
-              <MenuItem value="draft">Draft</MenuItem>
-              <MenuItem value="published">Published</MenuItem>
-              <MenuItem value="archived">Archived</MenuItem>
-            </Select>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setStatusEditRow(null)} disabled={statusSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={() => void saveExamStatusOnly()} disabled={statusSaving}>
-            {statusSaving ? "Saving..." : "Save status"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={!!markingRow} onClose={() => setMarkingRow(null)} maxWidth="lg" fullWidth>
-        <DialogTitle>
-          Submissions and marking - {markingRow?.title || markingRow?.name || "Exam"}
-        </DialogTitle>
-        <DialogContent>
+      <PremiumDialog
+        open={!!markingRow}
+        onClose={() => setMarkingRow(null)}
+        title="Submissions & marking"
+        subtitle={markingRow?.title || markingRow?.name || "Exam"}
+        maxWidth="lg"
+        footer={
+          <>
+            <ExamGhostButton color="warning" onClick={() => void runCleanupStaleDrafts()} disabled={cleanupRunning || markingLoading}>
+              {cleanupRunning ? "Cleaning…" : "Clean stale drafts"}
+            </ExamGhostButton>
+            <DialogGhostButton onClick={() => setMarkingRow(null)}>Close</DialogGhostButton>
+          </>
+        }
+      >
           {markingLoading ? (
             <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
               <CircularProgress size={24} />
@@ -3704,25 +3649,29 @@ ${imageParts}--${boundary}--`;
               ))}
             </Stack>
           )}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            color="warning"
-            onClick={() => void runCleanupStaleDrafts()}
-            disabled={cleanupRunning || markingLoading}
-          >
-            {cleanupRunning ? "Cleaning..." : "Clean stale drafts"}
-          </Button>
-          <Button onClick={() => setMarkingRow(null)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      </PremiumDialog>
 
-      <Dialog open={!!viewRow} onClose={closeViewExam} maxWidth={isPdfFormExamRow(viewRow) ? "lg" : "md"} fullWidth>
-        <DialogTitle>
-          Exam preview - {viewRow?.title || viewRow?.name || ""}
-          {isPdfFormExamRow(viewRow) ? <Chip size="small" label="PDF exam" sx={{ ml: 1 }} /> : null}
-        </DialogTitle>
-        <DialogContent>
+      <PremiumDialog
+        open={!!viewRow}
+        onClose={closeViewExam}
+        title="Exam preview"
+        subtitle={
+          <>
+            {viewRow?.title || viewRow?.name || ""}
+            {isPdfFormExamRow(viewRow) ? <ExamTypeChip examType="pdf_form" /> : null}
+          </>
+        }
+        maxWidth={isPdfFormExamRow(viewRow) ? "lg" : "md"}
+        footer={
+          <>
+            {!isPdfFormExamRow(viewRow) ? (
+              <DialogGhostButton onClick={() => void downloadExamWord()}>Download Word</DialogGhostButton>
+            ) : null}
+            <DialogGhostButton onClick={() => void downloadExamPdf()}>Download PDF</DialogGhostButton>
+            <DialogGhostButton onClick={closeViewExam}>Close</DialogGhostButton>
+          </>
+        }
+      >
           {isPdfFormExamRow(viewRow) ? (
             <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
               <Box sx={{ flex: 1.2, minWidth: 0 }}>
@@ -3868,17 +3817,44 @@ ${imageParts}--${boundary}--`;
             ))}
           </Stack>
           )}
-        </DialogContent>
-        <DialogActions>
-          {!isPdfFormExamRow(viewRow) ? <Button onClick={() => void downloadExamWord()}>Download Word</Button> : null}
-          <Button onClick={() => void downloadExamPdf()}>Download PDF</Button>
-          <Button onClick={closeViewExam}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      </PremiumDialog>
 
-      <Dialog open={!!simulateRow} onClose={closeSimulateExam} maxWidth="lg" fullWidth>
-        <DialogTitle>Student real-time preview - {simulateRow?.title || simulateRow?.name || ""}</DialogTitle>
-        <DialogContent>
+      <PremiumDialog
+        open={!!simulateRow}
+        onClose={closeSimulateExam}
+        title="Student preview"
+        subtitle={simulateRow?.title || simulateRow?.name || ""}
+        maxWidth="lg"
+        footer={
+          <>
+            <DialogGhostButton
+              onClick={() => {
+                const attempted = isPdfFormExamRow(simulateRow)
+                  ? simulatePdfEntries.filter((row) => String(row.question || "").trim() || String(row.answer || "").trim()).length
+                  : Object.values(simulateAnswers || {}).filter((v) => {
+                      if (Array.isArray(v)) return v.length > 0;
+                      if (v && typeof v === "object") {
+                        if (Array.isArray(v.files)) return v.files.length > 0;
+                        return Object.values(v).some((x) => String(x || "").trim());
+                      }
+                      return String(v || "").trim().length > 0;
+                    }).length;
+                const paperCount = isPdfFormExamRow(simulateRow) ? simulatePdfWorkingPapers.length : 0;
+                void Swal.fire({
+                  icon: "info",
+                  title: "Preview attempt summary",
+                  text: isPdfFormExamRow(simulateRow)
+                    ? `Attempted ${attempted} answer row(s) and ${paperCount} working paper file(s) in student preview mode.`
+                    : `Attempted ${attempted} question(s) in student preview mode.`,
+                });
+              }}
+            >
+              Check attempt
+            </DialogGhostButton>
+            <DialogGhostButton onClick={closeSimulateExam}>Close</DialogGhostButton>
+          </>
+        }
+      >
           {isPdfFormExamRow(simulateRow) ? (
             <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
               <Box sx={{ flex: 1.2, minWidth: 0 }}>
@@ -4047,36 +4023,7 @@ ${imageParts}--${boundary}--`;
             ))}
           </Stack>
           )}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              const attempted = isPdfFormExamRow(simulateRow)
-                ? simulatePdfEntries.filter((row) => String(row.question || "").trim() || String(row.answer || "").trim())
-                    .length
-                : Object.values(simulateAnswers || {}).filter((v) => {
-                if (Array.isArray(v)) return v.length > 0;
-                if (v && typeof v === "object") {
-                  if (Array.isArray(v.files)) return v.files.length > 0;
-                  return Object.values(v).some((x) => String(x || "").trim());
-                }
-                return String(v || "").trim().length > 0;
-              }).length;
-              const paperCount = isPdfFormExamRow(simulateRow) ? simulatePdfWorkingPapers.length : 0;
-              void Swal.fire({
-                icon: "info",
-                title: "Preview attempt summary",
-                text: isPdfFormExamRow(simulateRow)
-                  ? `Attempted ${attempted} answer row(s) and ${paperCount} working paper file(s) in student preview mode.`
-                  : `Attempted ${attempted} question(s) in student preview mode.`,
-              });
-            }}
-          >
-            Check attempt
-          </Button>
-          <Button onClick={closeSimulateExam}>Close</Button>
-        </DialogActions>
-      </Dialog>
-    </Stack>
+      </PremiumDialog>
+    </TabPanelShell>
   );
 }

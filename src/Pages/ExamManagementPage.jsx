@@ -1,31 +1,19 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Box, Button, Stack, Tab, Tabs, Typography } from "@mui/material";
-import QuizOutlined from "@mui/icons-material/QuizOutlined";
+import { Box } from "@mui/material";
+import QuizOutlinedIcon from "@mui/icons-material/QuizOutlined";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
+import MonitorHeartOutlinedIcon from "@mui/icons-material/MonitorHeartOutlined";
+import SummarizeOutlinedIcon from "@mui/icons-material/SummarizeOutlined";
 import AddIcon from "@mui/icons-material/Add";
 import ExamTemplatesTab from "../components/Exams/ExamTemplatesTab";
 import ExamsTab from "../components/Exams/ExamsTab";
 import ExamProctorMonitorTab from "../components/Exams/ExamProctorMonitorTab";
 import ExamReportCardsTab from "../components/Exams/ExamReportCardsTab";
-
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
-const backgroundLight = "#FEF2F2";
-
-const fullMainBleedSx = (theme) => ({
-  width: `calc(100% + ${theme.spacing(6)})`,
-  maxWidth: "none",
-  marginLeft: theme.spacing(-3),
-  marginRight: theme.spacing(-3),
-  marginTop: theme.spacing(-2),
-  marginBottom: "1px",
-  boxSizing: "border-box",
-  minHeight: "100%",
-  background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
-});
+import { elimuViewportSx, fullMainBleedSx, warmCream, EXAM_TABS } from "../components/Exams/examShared";
+import { ExamHero, ExamTabs, HeroActionButton } from "../components/Exams/examUi";
 
 export default function ExamManagementPage() {
-  const navigate = useNavigate();
   const [tab, setTab] = useState(0);
   const isCreateTab = tab === 0 || tab === 1;
   const actionLabel = tab === 0 ? "Create template" : tab === 1 ? "Create exam" : "";
@@ -36,91 +24,53 @@ export default function ExamManagementPage() {
     window.dispatchEvent(new CustomEvent(eventName));
   };
 
+  const heroActions = isCreateTab ? (
+    <HeroActionButton startIcon={<AddIcon />} onClick={onHeaderCreate}>
+      {actionLabel}
+    </HeroActionButton>
+  ) : null;
+
+  const tabIcons = [
+    <DescriptionOutlinedIcon sx={{ fontSize: 18 }} />,
+    <AssignmentOutlinedIcon sx={{ fontSize: 18 }} />,
+    <MonitorHeartOutlinedIcon sx={{ fontSize: 18 }} />,
+    <SummarizeOutlinedIcon sx={{ fontSize: 18 }} />,
+  ];
+
   return (
-    <Box sx={(theme) => ({ ...fullMainBleedSx(theme) })}>
-      <Box
-        sx={{
-          background: `linear-gradient(135deg, ${accentDark} 0%, ${accent} 55%, #f97316 100%)`,
-          px: { xs: 2, sm: 3 },
-          py: { xs: 1.5, sm: 2 },
-          color: "#fff",
-          boxShadow: `0 8px 24px ${accent}33`,
-        }}
-      >
-        <Stack direction="row" alignItems="center" spacing={1.5}>
-          <QuizOutlined sx={{ fontSize: 34 }} />
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="overline" sx={{ opacity: 0.9 }}>
-              Elimu Plus
-            </Typography>
-            <Typography variant="h5" sx={{ fontWeight: 800 }}>
-              Exams
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.92, mt: 0.5 }}>
-              Manage exam templates and created exams.
-            </Typography>
-          </Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={onHeaderCreate}
-            sx={{
-              bgcolor: "#fff",
-              color: accentDark,
-              fontWeight: 700,
-              whiteSpace: "nowrap",
-              "&:hover": { bgcolor: "#fee2e2" },
-              display: isCreateTab ? "inline-flex" : "none",
-            }}
-          >
-            {actionLabel}
-          </Button>
-        </Stack>
-      </Box>
+    <Box
+      sx={(theme) => ({
+        ...fullMainBleedSx(theme),
+        ...elimuViewportSx,
+        bgcolor: warmCream,
+        px: { xs: 1.5, sm: 2, md: 3 },
+        py: { xs: 2, sm: 2.5 },
+        gap: 2,
+        display: "flex",
+        flexDirection: "column",
+      })}
+    >
+      <ExamHero
+        title="Exams"
+        subtitle="Templates, scheduled exams, live proctoring, and report cards — everything for assessment in one place."
+        icon={<QuizOutlinedIcon sx={{ fontSize: 28, color: "#fff" }} />}
+        actions={heroActions}
+      />
 
-      <Box
-        sx={{
-          py: 3,
-          pb: 4,
-          px: { xs: 1, sm: 1.5, md: 2 },
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-        }}
-      >
-        <Tabs
-          value={tab}
-          onChange={(_, v) => setTab(v)}
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{
-            mb: 2,
-            minHeight: 42,
-            "& .MuiTab-root": {
-              textTransform: "none",
-              fontWeight: 700,
-              minHeight: 42,
-              color: accentDark,
-              "&.Mui-selected": { color: accent },
-            },
-            "& .MuiTabs-indicator": { bgcolor: accent, height: 3, borderRadius: 1 },
-          }}
-        >
-          <Tab label="Exam templates" />
-          <Tab label="Exam" />
-          <Tab label="Proctor monitor" />
-          <Tab label="Report cards" />
-        </Tabs>
+      <ExamTabs
+        activeTab={tab}
+        onChange={setTab}
+        tabs={EXAM_TABS.map((t, i) => ({ label: t.label, value: t.value, icon: tabIcons[i] })).map((t) => ({
+          label: t.label,
+          value: t.value,
+        }))}
+      />
 
-        {tab === 0 ? (
-          <ExamTemplatesTab />
-        ) : tab === 1 ? (
-          <ExamsTab />
-        ) : tab === 2 ? (
-          <ExamProctorMonitorTab />
-        ) : (
-          <ExamReportCardsTab />
-        )}
+      <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        {tab === 0 ? <ExamTemplatesTab /> : null}
+        {tab === 1 ? <ExamsTab /> : null}
+        {tab === 2 ? <ExamProctorMonitorTab /> : null}
+        {tab === 3 ? <ExamReportCardsTab /> : null}
       </Box>
     </Box>
   );

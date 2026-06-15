@@ -1,46 +1,41 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
   Box,
-  Button,
-  Chip,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  IconButton,
-  InputLabel,
   MenuItem,
-  Paper,
-  Select,
   Stack,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TablePagination,
   TableRow,
-  TextField,
   Typography,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import EditIcon from "@mui/icons-material/Edit";
-import DownloadIcon from "@mui/icons-material/Download";
-import VisibilityIcon from "@mui/icons-material/Visibility";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import AssignmentIndOutlinedIcon from "@mui/icons-material/AssignmentIndOutlined";
 import Swal from "sweetalert2";
-
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
-const accentLight = "#FEE2E2";
-
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
+import { authHeaders, ADMISSION_STATUS } from "./hrShared";
+import {
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  PremiumDialog,
+  DetailField,
+  FormSection,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+  HRFilterBar,
+  HRFilterTextField,
+  HRFilterSelect,
+  HRAdmissionChip,
+  HRActionButton,
+  hrSwal,
+} from "./hrUi";
 
 const DEFAULT_STATUS_OPTIONS = [
   { value: "pending", label: "Pending" },
@@ -51,23 +46,6 @@ const DEFAULT_STATUS_OPTIONS = [
   { value: "rejected", label: "Rejected" },
   { value: "waitlisted", label: "Waitlisted" },
 ];
-
-const swalAboveDialog = {
-  didOpen: () => {
-    const container = Swal.getContainer();
-    if (container) container.style.zIndex = "2000";
-  },
-};
-
-const STATUS_CHIP_COLOR = {
-  pending: "default",
-  under_review: "info",
-  documents_verified: "primary",
-  interview_scheduled: "warning",
-  accepted: "success",
-  rejected: "error",
-  waitlisted: "secondary",
-};
 
 function documentHref(path) {
   if (!path || typeof path !== "string") return null;
@@ -97,19 +75,6 @@ async function triggerDownload(path) {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
-}
-
-function DetailField({ label, value }) {
-  return (
-    <Box>
-      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-        {label}
-      </Typography>
-      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-        {value || "—"}
-      </Typography>
-    </Box>
-  );
 }
 
 export default function HRAdmissionsTab() {
@@ -179,6 +144,7 @@ export default function HRAdmissionsTab() {
 
   const statusLabel = (value) =>
     statusOptions.find((s) => s.value === value)?.label ||
+    ADMISSION_STATUS[value]?.label ||
     String(value || "pending")
       .replace(/_/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase());
@@ -199,25 +165,17 @@ export default function HRAdmissionsTab() {
     const currentStatus = String(editRow.status || "pending").trim();
 
     if (currentStatus === nextStatus) {
-      await Swal.fire({
+      await hrSwal({
         icon: "info",
         title: "No change",
         text: `Status is already "${statusLabel(nextStatus)}".`,
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
       return;
     }
 
     const token = localStorage.getItem("token");
     if (!token) {
-      await Swal.fire({
-        icon: "warning",
-        title: "Session expired",
-        text: "Please sign in again.",
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
-      });
+      await hrSwal({ icon: "warning", title: "Session expired", text: "Please sign in again." });
       return;
     }
 
@@ -242,23 +200,19 @@ export default function HRAdmissionsTab() {
         setViewRow((prev) => (prev ? { ...prev, status: updatedStatus } : prev));
       }
 
-      await Swal.fire({
+      await hrSwal({
         icon: "success",
         title: "Status updated",
         text: savedRef
           ? `Application ${savedRef} is now ${statusLabel(updatedStatus)}.`
           : `Status is now ${statusLabel(updatedStatus)}.`,
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
       setEditRow(null);
     } catch (e) {
-      await Swal.fire({
+      await hrSwal({
         icon: "error",
         title: "Update failed",
         text: e.message || "Could not update status.",
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
     } finally {
       setUpdatingId(null);
@@ -267,123 +221,33 @@ export default function HRAdmissionsTab() {
 
   return (
     <Stack spacing={2}>
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={1.25}
-        alignItems={{ xs: "stretch", sm: "center" }}
-        justifyContent="flex-end"
-        flexWrap="wrap"
-        sx={{ width: "100%" }}
-      >
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          spacing={1.25}
-          alignItems={{ xs: "stretch", sm: "center" }}
-          sx={{ width: { xs: "100%", sm: "auto" } }}
+      <HRFilterBar>
+        <HRFilterTextField
+          label="Search applications"
+          placeholder="Name, email, reference…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <HRFilterSelect
+          label="Status"
+          value={statusFilter}
+          onChange={(e) => {
+            setPage(0);
+            setStatusFilter(e.target.value);
+          }}
         >
-          <TextField
-            size="small"
-            label="Search"
-            placeholder="Name, email, reference…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            sx={{ minWidth: { xs: "100%", sm: 220 } }}
-          />
-          <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 200 } }}>
-            <InputLabel>Status</InputLabel>
-            <Select
-              label="Status"
-              value={statusFilter}
-              onChange={(e) => {
-                setPage(0);
-                setStatusFilter(e.target.value);
-              }}
-            >
-              <MenuItem value="">All statuses</MenuItem>
-              {statusOptions.map((s) => (
-                <MenuItem key={s.value} value={s.value}>
-                  {s.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Stack>
-      </Stack>
+          <MenuItem value="">All statuses</MenuItem>
+          {statusOptions.map((s) => (
+            <MenuItem key={s.value} value={s.value}>
+              {s.label}
+            </MenuItem>
+          ))}
+        </HRFilterSelect>
+      </HRFilterBar>
 
-      {error ? <Alert severity="error">{error}</Alert> : null}
-
-      <Paper elevation={0} sx={{ border: "1px solid #fecaca", borderRadius: 2, overflow: "hidden" }}>
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-            <CircularProgress sx={{ color: accent }} />
-          </Box>
-        ) : (
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: "#fff7f7" }}>
-                  <TableCell>No.</TableCell>
-                  <TableCell>Reference</TableCell>
-                  <TableCell>Student</TableCell>
-                  <TableCell>Curriculum</TableCell>
-                  <TableCell>Class / Level</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4, color: "text.secondary" }}>
-                      No admission applications found.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  rows.map((row, idx) => (
-                    <TableRow key={row.id} hover>
-                      <TableCell>{page * rowsPerPage + idx + 1}</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>{row.application_number || "—"}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>{row.student_name || "—"}</TableCell>
-                      <TableCell>{row.curriculum || "—"}</TableCell>
-                      <TableCell>
-                        {[row.curriculum_class, row.curriculum_level].filter(Boolean).join(" · ") || "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          label={statusLabel(row.status)}
-                          color={STATUS_CHIP_COLOR[row.status] || "default"}
-                          sx={{ fontWeight: 700 }}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <IconButton
-                          size="small"
-                          aria-label="View application"
-                          onClick={() => setViewRow(row)}
-                          sx={{ color: accentDark }}
-                        >
-                          <VisibilityIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          aria-label="Edit status"
-                          disabled={updatingId === row.id}
-                          onClick={() => openEditStatus(row)}
-                          sx={{ color: accent }}
-                        >
-                          {updatingId === row.id ? (
-                            <CircularProgress size={18} sx={{ color: accent }} />
-                          ) : (
-                            <EditIcon fontSize="small" />
-                          )}
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+      <TabPanelShell loading={loading} error={error} onDismissError={() => setError("")}>
+        <DataTableShell
+          pagination={
             <TablePagination
               rowsPerPageOptions={[5, 10, 25, 50]}
               count={totalCount}
@@ -395,69 +259,116 @@ export default function HRAdmissionsTab() {
                 setPage(0);
               }}
               labelRowsPerPage="Rows per page"
-              sx={{
-                borderTop: `1px solid ${accentLight}`,
-                "& .MuiTablePagination-toolbar": { flexWrap: "wrap", gap: 1 },
-              }}
+              sx={tablePaginationSx}
             />
-          </TableContainer>
-        )}
-      </Paper>
+          }
+        >
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={tableHeadRowSx}>
+                <TableCell>No.</TableCell>
+                <TableCell>Reference</TableCell>
+                <TableCell>Student</TableCell>
+                <TableCell>Curriculum</TableCell>
+                <TableCell>Class / Level</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} sx={{ border: 0, p: 0 }}>
+                    <EmptyTableRow colSpan={7} message="No admission applications found." />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((row, idx) => (
+                  <TableRow key={row.id} hover>
+                    <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>{page * rowsPerPage + idx + 1}</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>{row.application_number || "—"}</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>{row.student_name || "—"}</TableCell>
+                    <TableCell>{row.curriculum || "—"}</TableCell>
+                    <TableCell>{[row.curriculum_class, row.curriculum_level].filter(Boolean).join(" · ") || "—"}</TableCell>
+                    <TableCell>
+                      <HRAdmissionChip status={row.status} />
+                    </TableCell>
+                    <TableCell align="right">
+                      <HRActionButton title="View application" onClick={() => setViewRow(row)}>
+                        <VisibilityOutlinedIcon fontSize="small" />
+                      </HRActionButton>
+                      <HRActionButton
+                        title="Update status"
+                        disabled={updatingId === row.id}
+                        onClick={() => openEditStatus(row)}
+                      >
+                        {updatingId === row.id ? (
+                          <CircularProgress size={18} />
+                        ) : (
+                          <EditOutlinedIcon fontSize="small" />
+                        )}
+                      </HRActionButton>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </DataTableShell>
+      </TabPanelShell>
 
-      <Dialog open={!!viewRow} onClose={() => setViewRow(null)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6, bgcolor: "#fff7f7", borderBottom: `1px solid ${accentLight}` }}>
-          Admission application
-          <IconButton
-            aria-label="Close"
-            onClick={() => setViewRow(null)}
-            sx={{ position: "absolute", right: 8, top: 8 }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {viewRow ? (
-            <Stack spacing={2.5}>
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                <Chip
-                  label={statusLabel(viewRow.status)}
-                  color={STATUS_CHIP_COLOR[viewRow.status] || "default"}
-                  sx={{ fontWeight: 700 }}
-                />
-                {viewRow.application_number ? (
-                  <Typography variant="body2" color="text.secondary">
-                    {viewRow.application_number}
-                  </Typography>
-                ) : null}
-              </Stack>
+      <PremiumDialog
+        open={!!viewRow}
+        onClose={() => setViewRow(null)}
+        title="Admission application"
+        subtitle={viewRow?.application_number || undefined}
+        icon={<AssignmentIndOutlinedIcon sx={{ color: "#fff" }} />}
+        maxWidth="md"
+        footer={
+          <Stack direction="row" spacing={1} justifyContent="flex-end" width="100%">
+            <DialogGhostButton onClick={() => setViewRow(null)}>Close</DialogGhostButton>
+            {viewRow ? (
+              <DialogPrimaryButton
+                onClick={() => {
+                  const row = viewRow;
+                  setViewRow(null);
+                  openEditStatus(row);
+                }}
+              >
+                Update status
+              </DialogPrimaryButton>
+            ) : null}
+          </Stack>
+        }
+      >
+        {viewRow ? (
+          <Stack spacing={2.5}>
+            <Box>
+              <HRAdmissionChip status={viewRow.status} />
+            </Box>
 
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: accentDark }}>
-                Programme
-              </Typography>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <FormSection title="Programme">
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
                 <DetailField label="Curriculum" value={viewRow.curriculum} />
                 <DetailField label="Class" value={viewRow.curriculum_class} />
                 <DetailField label="Term / level" value={viewRow.curriculum_level} />
               </Stack>
+            </FormSection>
 
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: accentDark }}>
-                Applicant
-              </Typography>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <FormSection title="Applicant">
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
                 <DetailField label="Name" value={viewRow.applicant_name} />
                 <DetailField label="Phone" value={viewRow.applicant_phone} />
                 <DetailField label="Email" value={viewRow.applicant_email} />
               </Stack>
+            </FormSection>
 
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: accentDark }}>
-                Student
-              </Typography>
+            <FormSection title="Student">
               <DetailField label="Full name" value={viewRow.student_name} />
+            </FormSection>
 
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: accentDark }}>
-                Documents
-              </Typography>
-              <Stack spacing={1}>
+            <FormSection title="Documents">
+              <Stack spacing={1.25}>
                 {[
                   ["Student picture", viewRow.student_picture],
                   ["Report card", viewRow.student_reportcard],
@@ -466,116 +377,81 @@ export default function HRAdmissionsTab() {
                   const href = documentHref(path);
                   const fileName = fileNameFromPath(path);
                   return (
-                    <Box
+                    <Stack
                       key={label}
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 1,
-                        flexWrap: "wrap",
-                      }}
+                      direction="row"
+                      alignItems="center"
+                      justifyContent="space-between"
+                      spacing={1}
+                      flexWrap="wrap"
                     >
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         {label}
                       </Typography>
                       {href ? (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<DownloadIcon />}
+                        <DialogGhostButton
+                          startIcon={<DownloadOutlinedIcon />}
                           onClick={async () => {
                             try {
                               await triggerDownload(path);
                             } catch (e) {
-                              Swal.fire({
+                              await hrSwal({
                                 icon: "error",
                                 title: "Download failed",
                                 text: e.message || "Could not download file.",
-                                confirmButtonColor: accentDark,
-                                ...swalAboveDialog,
                               });
                             }
                           }}
-                          sx={{
-                            textTransform: "none",
-                            fontWeight: 700,
-                            borderColor: "#fecaca",
-                            color: accentDark,
-                          }}
                         >
                           Download{fileName ? ` (${fileName})` : ""}
-                        </Button>
+                        </DialogGhostButton>
                       ) : (
                         <Typography variant="body2" color="text.secondary">
                           —
                         </Typography>
                       )}
-                    </Box>
+                    </Stack>
                   );
                 })}
               </Stack>
-            </Stack>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+            </FormSection>
+          </Stack>
+        ) : null}
+      </PremiumDialog>
 
-      <Dialog open={!!editRow} onClose={closeEditStatus} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6, bgcolor: "#fff7f7", borderBottom: `1px solid ${accentLight}` }}>
-          Update status
-          <IconButton
-            aria-label="Close"
-            onClick={closeEditStatus}
+      <PremiumDialog
+        open={!!editRow}
+        onClose={closeEditStatus}
+        title="Update status"
+        subtitle={editRow ? `${editRow.student_name || "Applicant"}${editRow.application_number ? ` · ${editRow.application_number}` : ""}` : undefined}
+        icon={<EditOutlinedIcon sx={{ color: "#fff" }} />}
+        maxWidth="xs"
+        footer={
+          <Stack direction="row" spacing={1} justifyContent="flex-end" width="100%">
+            <DialogGhostButton onClick={closeEditStatus} disabled={!!updatingId}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={!!updatingId} onClick={() => void handleSaveStatus()} disabled={!editRow}>
+              Save
+            </DialogPrimaryButton>
+          </Stack>
+        }
+      >
+        {editRow ? (
+          <HRFilterSelect
+            label="Status"
+            value={editStatus}
             disabled={!!updatingId}
-            sx={{ position: "absolute", right: 8, top: 8 }}
+            onChange={(e) => setEditStatus(e.target.value)}
           >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {editRow ? (
-            <Stack spacing={2} sx={{ pt: 0.5 }}>
-              <Typography variant="body2" color="text.secondary">
-                <strong>{editRow.student_name || "Applicant"}</strong>
-                {editRow.application_number ? ` · ${editRow.application_number}` : ""}
-              </Typography>
-              <FormControl size="small" fullWidth>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  label="Status"
-                  value={editStatus}
-                  disabled={!!updatingId}
-                  onChange={(e) => setEditStatus(e.target.value)}
-                >
-                  {statusOptions.map((s) => (
-                    <MenuItem key={s.value} value={s.value}>
-                      {s.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Stack>
-          ) : null}
-        </DialogContent>
-        <DialogActions sx={{ px: 2, py: 1.5, borderTop: `1px solid ${accentLight}` }}>
-          <Button onClick={closeEditStatus} disabled={!!updatingId} sx={{ textTransform: "none", fontWeight: 600 }}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => void handleSaveStatus()}
-            disabled={!!updatingId || !editRow}
-            sx={{
-              textTransform: "none",
-              fontWeight: 700,
-              bgcolor: accent,
-              "&:hover": { bgcolor: accentDark },
-            }}
-          >
-            {updatingId ? <CircularProgress size={22} color="inherit" /> : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+            {statusOptions.map((s) => (
+              <MenuItem key={s.value} value={s.value}>
+                {s.label}
+              </MenuItem>
+            ))}
+          </HRFilterSelect>
+        ) : null}
+      </PremiumDialog>
     </Stack>
   );
 }

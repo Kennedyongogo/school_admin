@@ -28,16 +28,20 @@ import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import Swal from "sweetalert2";
 import ExamReportCardListTab from "./ExamReportCardListTab";
+import {
+  ExamTabs,
+  ExamPanelCard,
+  ExamSectionHeader,
+  ExamPrimaryButton,
+  ExamGhostButton,
+  TabPanelShell,
+  tableHeadRowSx,
+} from "./examUi";
+import { authHeaders, primaryRed, primaryDark, primaryLight, warmCream } from "./examShared";
 
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
-const accentLight = "#FEE2E2";
-
-const authHeaders = (token) => ({
-  Accept: "application/json",
-  "Content-Type": "application/json",
-  ...(token ? { Authorization: `Bearer ${token}` } : {}),
-});
+const accent = primaryRed;
+const accentDark = primaryDark;
+const accentLight = primaryLight;
 
 async function fetchAllCurricula(token) {
   const out = [];
@@ -284,34 +288,29 @@ export default function ExamReportCardsTab() {
 
   if (loading) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-        <CircularProgress sx={{ color: accent }} />
-      </Box>
+      <TabPanelShell loading>
+        <span />
+      </TabPanelShell>
     );
   }
 
   return (
     <Stack spacing={2}>
-      <Tabs
-        value={sectionTab}
-        onChange={(_, v) => setSectionTab(v)}
-        sx={{
-          minHeight: 40,
-          "& .MuiTab-root": { textTransform: "none", fontWeight: 700, minHeight: 40, color: accentDark },
-          "& .Mui-selected": { color: accent },
-          "& .MuiTabs-indicator": { bgcolor: accent, height: 3 },
-        }}
-      >
-        <Tab label="Create report card" />
-        <Tab label="Generated report cards" />
-      </Tabs>
+      <ExamTabs
+        activeTab={sectionTab}
+        onChange={setSectionTab}
+        tabs={[
+          { label: "Create report card", value: 0 },
+          { label: "Generated report cards", value: 1 },
+        ]}
+      />
 
       {sectionTab === 1 ? (
         <ExamReportCardListTab refreshKey={listRefreshKey} />
       ) : (
         <>
       {error ? (
-        <Alert severity="error" onClose={() => setError("")}>
+        <Alert severity="error" onClose={() => setError("")} sx={{ borderRadius: "14px" }}>
           {error}
         </Alert>
       ) : null}
@@ -328,8 +327,7 @@ export default function ExamReportCardsTab() {
         }}
       >
         <Box sx={{ flex: { xs: "1 1 auto", lg: "3 1 0%" }, minWidth: 0, width: { xs: "100%", lg: "auto" } }}>
-          <Card elevation={0} sx={{ border: `1px solid ${accentLight}`, borderRadius: 2, height: "100%" }}>
-            <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+          <ExamPanelCard sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
                 <DescriptionOutlinedIcon sx={{ color: accent }} />
                 <Typography variant="subtitle1" sx={{ fontWeight: 800, color: accentDark }}>
@@ -419,13 +417,11 @@ export default function ExamReportCardsTab() {
                   ) : null}
                 </Box>
               </Box>
-            </CardContent>
-          </Card>
+          </ExamPanelCard>
         </Box>
 
         <Box sx={{ flex: { xs: "1 1 auto", lg: "1 1 0%" }, minWidth: 0, width: { xs: "100%", lg: "auto" } }}>
-          <Card elevation={0} sx={{ border: `1px solid ${accentLight}`, borderRadius: 2, height: "100%" }}>
-            <CardContent>
+          <ExamPanelCard sx={{ height: "100%" }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 800, color: accentDark, mb: 2 }}>
                 Build report card
               </Typography>
@@ -579,8 +575,7 @@ export default function ExamReportCardsTab() {
                   </>
                 ) : null}
               </Stack>
-            </CardContent>
-          </Card>
+          </ExamPanelCard>
         </Box>
       </Box>
         </>

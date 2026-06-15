@@ -2,58 +2,66 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Box,
-  Button,
   Checkbox,
   Chip,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   FormControl,
   FormControlLabel,
-  IconButton,
   InputLabel,
   MenuItem,
-  Paper,
   Select,
   Stack,
-  Tab,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TablePagination,
   TableRow,
-  Tabs,
   TextField,
-  Tooltip,
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import CloseIcon from "@mui/icons-material/Close";
-import DeleteIcon from "@mui/icons-material/Delete";
-import EditIcon from "@mui/icons-material/Edit";
-import ImageIcon from "@mui/icons-material/Image";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import Swal from "sweetalert2";
-import VideocamIcon from "@mui/icons-material/Videocam";
-import SummarizeIcon from "@mui/icons-material/Summarize";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import VideocamOutlinedIcon from "@mui/icons-material/VideocamOutlined";
+import SummarizeOutlinedIcon from "@mui/icons-material/SummarizeOutlined";
+import StopCircleOutlinedIcon from "@mui/icons-material/StopCircleOutlined";
+import NewspaperOutlinedIcon from "@mui/icons-material/NewspaperOutlined";
+import EventOutlinedIcon from "@mui/icons-material/EventOutlined";
 import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 import EventLiveHostDialog from "./EventLiveHostDialog";
 import EventReportDialog from "./EventReportDialog";
-import StopCircleOutlinedIcon from "@mui/icons-material/StopCircleOutlined";
 import {
   canEndStaleEventLive,
   canManageEventLive,
   canRegenerateEventPoster,
   getEventStatusLabel,
 } from "../../utils/eventJoinWindow";
+import { authHeaders, primaryDark, primaryLight } from "./hrShared";
+import {
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  PremiumDialog,
+  DetailField,
+  FormSection,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+  HRFilterBar,
+  HRFilterTextField,
+  HRFilterSelect,
+  HRPrimaryButton,
+  HRActionButton,
+  HRPublishedChip,
+  HRSubTabs,
+  hrSwal,
+} from "./hrUi";
 
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
-const accentLight = "#FEE2E2";
+const accentLight = primaryLight;
 
 const COLOR_PALETTES = [
   { value: "academic", label: "Academic" },
@@ -97,19 +105,6 @@ const EVENT_TYPES = [
   { value: "competition", label: "Competition" },
   { value: "other", label: "Other" },
 ];
-
-const swalAboveDialog = {
-  didOpen: () => {
-    const container = Swal.getContainer();
-    if (container) container.style.zIndex = "2000";
-  },
-};
-
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
 
 function mediaUrl(path) {
   if (!path || typeof path !== "string") return null;
@@ -155,38 +150,6 @@ function tagsToInput(tags) {
 
 function labelFor(options, value) {
   return options.find((o) => o.value === value)?.label || value || "—";
-}
-
-function DetailField({ label, value }) {
-  return (
-    <Box>
-      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-        {label}
-      </Typography>
-      <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: "pre-wrap" }}>
-        {value ?? "—"}
-      </Typography>
-    </Box>
-  );
-}
-
-function ActionIconTooltip({ title, children }) {
-  return (
-    <Tooltip title={title} arrow>
-      <span style={{ display: "inline-flex", alignItems: "center", verticalAlign: "middle" }}>{children}</span>
-    </Tooltip>
-  );
-}
-
-function PublishedChip({ published }) {
-  return (
-    <Chip
-      size="small"
-      label={published ? "Published" : "Draft"}
-      color={published ? "success" : "default"}
-      sx={{ fontWeight: 700 }}
-    />
-  );
 }
 
 const emptyNewsForm = () => ({
@@ -305,7 +268,7 @@ function PosterAiSection({
 
   return (
     <Stack spacing={1.5} sx={{ pt: 1, borderTop: `1px solid ${accentLight}` }}>
-      <Typography variant="subtitle2" sx={{ fontWeight: 800, color: accentDark }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 800, color: primaryDark }}>
         AI poster
       </Typography>
       {isEdit && !allowRegenerate ? (
@@ -667,12 +630,10 @@ function NewsPanel() {
 
   const handleCreate = async () => {
     if (!createForm.title.trim() || !createForm.content.trim()) {
-      await Swal.fire({
+      await hrSwal({
         icon: "warning",
         title: "Missing fields",
         text: "Title and content are required.",
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
       return;
     }
@@ -689,20 +650,16 @@ function NewsPanel() {
       if (!res.ok || !json.success) throw new Error(json.message || "Could not create news.");
       setCreateOpen(false);
       setCreateForm(emptyNewsForm());
-      await Swal.fire({
+      await hrSwal({
         icon: "success",
         title: "News created",
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
       void load();
     } catch (e) {
-      await Swal.fire({
+      await hrSwal({
         icon: "error",
         title: "Create failed",
         text: e.message,
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
     } finally {
       setCreateSaving(false);
@@ -723,20 +680,16 @@ function NewsPanel() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) throw new Error(json.message || "Could not update news.");
       setEditRow(null);
-      await Swal.fire({
+      await hrSwal({
         icon: "success",
         title: "News updated",
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
       void load();
     } catch (e) {
-      await Swal.fire({
+      await hrSwal({
         icon: "error",
         title: "Update failed",
         text: e.message,
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
     } finally {
       setEditSaving(false);
@@ -744,12 +697,11 @@ function NewsPanel() {
   };
 
   const handleDelete = async (row) => {
-    const result = await Swal.fire({
+    const result = await hrSwal({
       icon: "warning",
       title: "Delete news?",
       text: `"${row.title}" will be removed permanently.`,
       showCancelButton: true,
-      confirmButtonColor: accentDark,
       cancelButtonColor: "#6b7280",
       confirmButtonText: "Delete",
     });
@@ -765,11 +717,10 @@ function NewsPanel() {
       if (!res.ok || !json.success) throw new Error(json.message || "Could not delete.");
       void load();
     } catch (e) {
-      await Swal.fire({
+      await hrSwal({
         icon: "error",
         title: "Delete failed",
         text: e.message,
-        confirmButtonColor: accentDark,
       });
     }
   };
@@ -790,21 +741,17 @@ function NewsPanel() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) throw new Error(json.message || "Poster generation failed.");
-      await Swal.fire({
+      await hrSwal({
         icon: "success",
         title: "Poster generated",
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
       void load();
       if (viewRow?.id === row.id) setViewRow(json.data);
     } catch (e) {
-      await Swal.fire({
+      await hrSwal({
         icon: "error",
         title: "Poster failed",
         text: e.message,
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
     } finally {
       setPosterLoadingId(null);
@@ -813,155 +760,57 @@ function NewsPanel() {
 
   return (
     <Stack spacing={2}>
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} alignItems={{ xs: "stretch", sm: "center" }}>
-        <TextField
-          size="small"
-          label="Search"
+      <HRFilterBar
+        actions={
+          <HRPrimaryButton
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setCreateForm(emptyNewsForm());
+              setCreateOpen(true);
+            }}
+          >
+            Add news
+          </HRPrimaryButton>
+        }
+      >
+        <HRFilterTextField
+          label="Search news"
           placeholder="Title, summary…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          sx={{ minWidth: { xs: "100%", sm: 220 } }}
         />
-        <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 160 } }}>
-          <InputLabel>Category</InputLabel>
-          <Select
-            label="Category"
-            value={categoryFilter}
-            onChange={(e) => {
-              setPage(0);
-              setCategoryFilter(e.target.value);
-            }}
-          >
-            <MenuItem value="">All</MenuItem>
-            {NEWS_CATEGORIES.map((c) => (
-              <MenuItem key={c.value} value={c.value}>
-                {c.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 140 } }}>
-          <InputLabel>Status</InputLabel>
-          <Select
-            label="Status"
-            value={publishedFilter}
-            onChange={(e) => {
-              setPage(0);
-              setPublishedFilter(e.target.value);
-            }}
-          >
-            <MenuItem value="">All</MenuItem>
-            <MenuItem value="true">Published</MenuItem>
-            <MenuItem value="false">Draft</MenuItem>
-          </Select>
-        </FormControl>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            setCreateForm(emptyNewsForm());
-            setCreateOpen(true);
+        <HRFilterSelect
+          label="Category"
+          value={categoryFilter}
+          onChange={(e) => {
+            setPage(0);
+            setCategoryFilter(e.target.value);
           }}
-          sx={{ ml: { sm: "auto" }, bgcolor: accent, "&:hover": { bgcolor: accentDark } }}
         >
-          Add news
-        </Button>
-      </Stack>
+          <MenuItem value="">All</MenuItem>
+          {NEWS_CATEGORIES.map((c) => (
+            <MenuItem key={c.value} value={c.value}>
+              {c.label}
+            </MenuItem>
+          ))}
+        </HRFilterSelect>
+        <HRFilterSelect
+          label="Status"
+          value={publishedFilter}
+          onChange={(e) => {
+            setPage(0);
+            setPublishedFilter(e.target.value);
+          }}
+        >
+          <MenuItem value="">All</MenuItem>
+          <MenuItem value="true">Published</MenuItem>
+          <MenuItem value="false">Draft</MenuItem>
+        </HRFilterSelect>
+      </HRFilterBar>
 
-      {error ? <Alert severity="error">{error}</Alert> : null}
-
-      <Paper elevation={0} sx={{ border: "1px solid #fecaca", borderRadius: 2, overflow: "hidden" }}>
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-            <CircularProgress sx={{ color: accent }} />
-          </Box>
-        ) : (
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: "#fff7f7" }}>
-                  <TableCell>No.</TableCell>
-                  <TableCell>Title</TableCell>
-                  <TableCell>Category</TableCell>
-                  <TableCell>Audience</TableCell>
-                  <TableCell>Published</TableCell>
-                  <TableCell>Views</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4, color: "text.secondary" }}>
-                      No news articles found.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  rows.map((row, idx) => (
-                    <TableRow key={row.id} hover>
-                      <TableCell>{page * rowsPerPage + idx + 1}</TableCell>
-                      <TableCell sx={{ fontWeight: 700, maxWidth: 240 }}>{row.title}</TableCell>
-                      <TableCell>{labelFor(NEWS_CATEGORIES, row.category)}</TableCell>
-                      <TableCell>{labelFor(TARGET_AUDIENCES, row.target_audience)}</TableCell>
-                      <TableCell>
-                        <PublishedChip published={row.is_published} />
-                      </TableCell>
-                      <TableCell>{row.view_count ?? 0}</TableCell>
-                      <TableCell align="right">
-                        <ActionIconTooltip title="View">
-                          <IconButton
-                            size="small"
-                            aria-label="View"
-                            onClick={() => setViewRow(row)}
-                            sx={{ color: accentDark }}
-                          >
-                            <VisibilityIcon fontSize="small" />
-                          </IconButton>
-                        </ActionIconTooltip>
-                        <ActionIconTooltip title="Edit">
-                          <IconButton
-                            size="small"
-                            aria-label="Edit"
-                            onClick={() => {
-                              setEditRow(row);
-                              setEditForm(newsToForm(row));
-                            }}
-                            sx={{ color: accent }}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </ActionIconTooltip>
-                        <ActionIconTooltip title="Regenerate poster">
-                          <IconButton
-                            size="small"
-                            aria-label="Regenerate poster"
-                            disabled={posterLoadingId === row.id}
-                            onClick={() => handleRegeneratePoster(row)}
-                            sx={{ color: accentDark }}
-                          >
-                            {posterLoadingId === row.id ? (
-                              <CircularProgress size={18} />
-                            ) : (
-                              <ImageIcon fontSize="small" />
-                            )}
-                          </IconButton>
-                        </ActionIconTooltip>
-                        <ActionIconTooltip title="Delete">
-                          <IconButton
-                            size="small"
-                            aria-label="Delete"
-                            onClick={() => handleDelete(row)}
-                            sx={{ color: "#b91c1c" }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </ActionIconTooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+      <TabPanelShell loading={loading} error={error} onDismissError={() => setError("")}>
+        <DataTableShell
+          pagination={
             <TablePagination
               rowsPerPageOptions={[5, 10, 25, 50]}
               count={totalCount}
@@ -972,78 +821,156 @@ function NewsPanel() {
                 setRowsPerPage(parseInt(e.target.value, 10));
                 setPage(0);
               }}
+              sx={tablePaginationSx}
             />
-          </TableContainer>
-        )}
-      </Paper>
+          }
+        >
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={tableHeadRowSx}>
+                <TableCell>No.</TableCell>
+                <TableCell>Title</TableCell>
+                <TableCell>Category</TableCell>
+                <TableCell>Audience</TableCell>
+                <TableCell>Published</TableCell>
+                <TableCell>Views</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} sx={{ border: 0, p: 0 }}>
+                    <EmptyTableRow colSpan={7} message="No news articles found." />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((row, idx) => (
+                  <TableRow key={row.id} hover>
+                    <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>{page * rowsPerPage + idx + 1}</TableCell>
+                    <TableCell sx={{ fontWeight: 700, maxWidth: 240 }}>{row.title}</TableCell>
+                    <TableCell>{labelFor(NEWS_CATEGORIES, row.category)}</TableCell>
+                    <TableCell>{labelFor(TARGET_AUDIENCES, row.target_audience)}</TableCell>
+                    <TableCell>
+                      <HRPublishedChip published={row.is_published} />
+                    </TableCell>
+                    <TableCell>{row.view_count ?? 0}</TableCell>
+                    <TableCell align="right">
+                      <HRActionButton title="View" onClick={() => setViewRow(row)}>
+                        <VisibilityOutlinedIcon fontSize="small" />
+                      </HRActionButton>
+                      <HRActionButton
+                        title="Edit"
+                        onClick={() => {
+                          setEditRow(row);
+                          setEditForm(newsToForm(row));
+                        }}
+                      >
+                        <EditOutlinedIcon fontSize="small" />
+                      </HRActionButton>
+                      <HRActionButton
+                        title="Regenerate poster"
+                        disabled={posterLoadingId === row.id}
+                        onClick={() => handleRegeneratePoster(row)}
+                      >
+                        {posterLoadingId === row.id ? (
+                          <CircularProgress size={18} />
+                        ) : (
+                          <ImageOutlinedIcon fontSize="small" />
+                        )}
+                      </HRActionButton>
+                      <HRActionButton title="Delete" color="error" onClick={() => handleDelete(row)}>
+                        <DeleteOutlineIcon fontSize="small" />
+                      </HRActionButton>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </DataTableShell>
+      </TabPanelShell>
 
-      <Dialog open={createOpen} onClose={() => !createSaving && setCreateOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800 }}>Create news</DialogTitle>
-        <DialogContent dividers>
-          <NewsFormFields form={createForm} setForm={setCreateForm} disabled={createSaving} />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateOpen(false)} disabled={createSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleCreate} disabled={createSaving} sx={{ bgcolor: accent }}>
-            {createSaving ? "Saving…" : "Create"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <PremiumDialog
+        open={createOpen}
+        onClose={() => !createSaving && setCreateOpen(false)}
+        title="Create news"
+        subtitle="Publish an article for your school community"
+        icon={<NewspaperOutlinedIcon sx={{ color: "#fff" }} />}
+        maxWidth="md"
+        footer={
+          <Stack direction="row" spacing={1} justifyContent="flex-end" width="100%">
+            <DialogGhostButton onClick={() => setCreateOpen(false)} disabled={createSaving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={createSaving} onClick={handleCreate}>
+              Create
+            </DialogPrimaryButton>
+          </Stack>
+        }
+      >
+        <NewsFormFields form={createForm} setForm={setCreateForm} disabled={createSaving} />
+      </PremiumDialog>
 
-      <Dialog open={!!editRow} onClose={() => !editSaving && setEditRow(null)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800 }}>Edit news</DialogTitle>
-        <DialogContent dividers>
-          <NewsFormFields
-            form={editForm}
-            setForm={setEditForm}
-            disabled={editSaving}
-            isEdit
-            existingPosterUrl={editRow?.poster_image}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditRow(null)} disabled={editSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleEdit} disabled={editSaving} sx={{ bgcolor: accent }}>
-            {editSaving ? "Saving…" : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <PremiumDialog
+        open={!!editRow}
+        onClose={() => !editSaving && setEditRow(null)}
+        title="Edit news"
+        subtitle={editRow?.title}
+        icon={<EditOutlinedIcon sx={{ color: "#fff" }} />}
+        maxWidth="md"
+        footer={
+          <Stack direction="row" spacing={1} justifyContent="flex-end" width="100%">
+            <DialogGhostButton onClick={() => setEditRow(null)} disabled={editSaving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={editSaving} onClick={handleEdit}>
+              Save
+            </DialogPrimaryButton>
+          </Stack>
+        }
+      >
+        <NewsFormFields
+          form={editForm}
+          setForm={setEditForm}
+          disabled={editSaving}
+          isEdit
+          existingPosterUrl={editRow?.poster_image}
+        />
+      </PremiumDialog>
 
-      <Dialog open={!!viewRow} onClose={() => setViewRow(null)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
-          {viewRow?.title}
-          <IconButton onClick={() => setViewRow(null)} sx={{ position: "absolute", right: 8, top: 8 }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {viewRow ? (
-            <Stack spacing={2}>
-              <Stack direction="row" spacing={1} flexWrap="wrap">
-                <PublishedChip published={viewRow.is_published} />
-                <Chip size="small" label={labelFor(NEWS_CATEGORIES, viewRow.category)} />
-              </Stack>
-              {viewRow.poster_image ? (
-                <Box
-                  component="img"
-                  src={mediaUrl(viewRow.poster_image)}
-                  alt="Poster"
-                  sx={{ maxWidth: "100%", maxHeight: 280, borderRadius: 1, border: `1px solid ${accentLight}` }}
-                />
-              ) : null}
-              <DetailField label="Summary" value={viewRow.summary} />
-              <DetailField label="Content" value={viewRow.content} />
-              <DetailField label="Audience" value={labelFor(TARGET_AUDIENCES, viewRow.target_audience)} />
-              <DetailField label="Published at" value={fmtDate(viewRow.published_at)} />
-              <DetailField label="Views" value={String(viewRow.view_count ?? 0)} />
+      <PremiumDialog
+        open={!!viewRow}
+        onClose={() => setViewRow(null)}
+        title={viewRow?.title || "News article"}
+        icon={<NewspaperOutlinedIcon sx={{ color: "#fff" }} />}
+        maxWidth="md"
+        footer={
+          <DialogGhostButton onClick={() => setViewRow(null)}>Close</DialogGhostButton>
+        }
+      >
+        {viewRow ? (
+          <Stack spacing={2}>
+            <Stack direction="row" spacing={1} flexWrap="wrap">
+              <HRPublishedChip published={viewRow.is_published} />
+              <Chip size="small" label={labelFor(NEWS_CATEGORIES, viewRow.category)} />
             </Stack>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+            {viewRow.poster_image ? (
+              <Box
+                component="img"
+                src={mediaUrl(viewRow.poster_image)}
+                alt="Poster"
+                sx={{ maxWidth: "100%", maxHeight: 280, borderRadius: "16px", border: `1px solid ${accentLight}` }}
+              />
+            ) : null}
+            <DetailField label="Summary" value={viewRow.summary} />
+            <DetailField label="Content" value={viewRow.content} />
+            <DetailField label="Audience" value={labelFor(TARGET_AUDIENCES, viewRow.target_audience)} />
+            <DetailField label="Published at" value={fmtDate(viewRow.published_at)} />
+            <DetailField label="Views" value={String(viewRow.view_count ?? 0)} />
+          </Stack>
+        ) : null}
+      </PremiumDialog>
     </Stack>
   );
 }
@@ -1117,12 +1044,10 @@ function EventsPanel() {
 
   const handleCreate = async () => {
     if (!createForm.title.trim() || !createForm.description.trim() || !createForm.start_date || !createForm.end_date) {
-      await Swal.fire({
+      await hrSwal({
         icon: "warning",
         title: "Missing fields",
         text: "Title, description, start and end dates are required.",
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
       return;
     }
@@ -1139,20 +1064,16 @@ function EventsPanel() {
       if (!res.ok || !json.success) throw new Error(json.message || "Could not create event.");
       setCreateOpen(false);
       setCreateForm(emptyEventForm());
-      await Swal.fire({
+      await hrSwal({
         icon: "success",
         title: "Event created",
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
       void load();
     } catch (e) {
-      await Swal.fire({
+      await hrSwal({
         icon: "error",
         title: "Create failed",
         text: e.message,
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
     } finally {
       setCreateSaving(false);
@@ -1173,20 +1094,16 @@ function EventsPanel() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) throw new Error(json.message || "Could not update event.");
       setEditRow(null);
-      await Swal.fire({
+      await hrSwal({
         icon: "success",
         title: "Event updated",
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
       void load();
     } catch (e) {
-      await Swal.fire({
+      await hrSwal({
         icon: "error",
         title: "Update failed",
         text: e.message,
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
     } finally {
       setEditSaving(false);
@@ -1194,12 +1111,11 @@ function EventsPanel() {
   };
 
   const handleDelete = async (row) => {
-    const result = await Swal.fire({
+    const result = await hrSwal({
       icon: "warning",
       title: "Delete event?",
       text: `"${row.title}" will be removed permanently.`,
       showCancelButton: true,
-      confirmButtonColor: accentDark,
       cancelButtonColor: "#6b7280",
       confirmButtonText: "Delete",
     });
@@ -1215,11 +1131,10 @@ function EventsPanel() {
       if (!res.ok || !json.success) throw new Error(json.message || "Could not delete.");
       void load();
     } catch (e) {
-      await Swal.fire({
+      await hrSwal({
         icon: "error",
         title: "Delete failed",
         text: e.message,
-        confirmButtonColor: accentDark,
       });
     }
   };
@@ -1235,21 +1150,19 @@ function EventsPanel() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) throw new Error(json.message || "Could not end live session.");
-      await Swal.fire({
+      await hrSwal({
         icon: "success",
         title: "Event ended",
         text: json.message || "Live session ended.",
         timer: 2200,
         showConfirmButton: false,
-        confirmButtonColor: accentDark,
       });
       void load();
     } catch (e) {
-      await Swal.fire({
+      await hrSwal({
         icon: "error",
         title: "End live failed",
         text: e.message,
-        confirmButtonColor: accentDark,
       });
     } finally {
       setEndLiveBusyId(null);
@@ -1271,21 +1184,17 @@ function EventsPanel() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) throw new Error(json.message || "Poster generation failed.");
-      await Swal.fire({
+      await hrSwal({
         icon: "success",
         title: "Poster generated",
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
       void load();
       if (viewRow?.id === row.id) setViewRow(json.data);
     } catch (e) {
-      await Swal.fire({
+      await hrSwal({
         icon: "error",
         title: "Poster failed",
         text: e.message,
-        confirmButtonColor: accentDark,
-        ...swalAboveDialog,
       });
     } finally {
       setPosterLoadingId(null);
@@ -1294,217 +1203,57 @@ function EventsPanel() {
 
   return (
     <Stack spacing={2}>
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} alignItems={{ xs: "stretch", sm: "center" }}>
-        <TextField
-          size="small"
-          label="Search"
+      <HRFilterBar
+        actions={
+          <HRPrimaryButton
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setCreateForm(emptyEventForm());
+              setCreateOpen(true);
+            }}
+          >
+            Add event
+          </HRPrimaryButton>
+        }
+      >
+        <HRFilterTextField
+          label="Search events"
           placeholder="Title, location…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          sx={{ minWidth: { xs: "100%", sm: 220 } }}
         />
-        <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 160 } }}>
-          <InputLabel>Type</InputLabel>
-          <Select
-            label="Type"
-            value={typeFilter}
-            onChange={(e) => {
-              setPage(0);
-              setTypeFilter(e.target.value);
-            }}
-          >
-            <MenuItem value="">All</MenuItem>
-            {EVENT_TYPES.map((t) => (
-              <MenuItem key={t.value} value={t.value}>
-                {t.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 140 } }}>
-          <InputLabel>Status</InputLabel>
-          <Select
-            label="Status"
-            value={publishedFilter}
-            onChange={(e) => {
-              setPage(0);
-              setPublishedFilter(e.target.value);
-            }}
-          >
-            <MenuItem value="">All</MenuItem>
-            <MenuItem value="true">Published</MenuItem>
-            <MenuItem value="false">Draft</MenuItem>
-          </Select>
-        </FormControl>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            setCreateForm(emptyEventForm());
-            setCreateOpen(true);
+        <HRFilterSelect
+          label="Type"
+          value={typeFilter}
+          onChange={(e) => {
+            setPage(0);
+            setTypeFilter(e.target.value);
           }}
-          sx={{ ml: { sm: "auto" }, bgcolor: accent, "&:hover": { bgcolor: accentDark } }}
         >
-          Add event
-        </Button>
-      </Stack>
+          <MenuItem value="">All</MenuItem>
+          {EVENT_TYPES.map((t) => (
+            <MenuItem key={t.value} value={t.value}>
+              {t.label}
+            </MenuItem>
+          ))}
+        </HRFilterSelect>
+        <HRFilterSelect
+          label="Status"
+          value={publishedFilter}
+          onChange={(e) => {
+            setPage(0);
+            setPublishedFilter(e.target.value);
+          }}
+        >
+          <MenuItem value="">All</MenuItem>
+          <MenuItem value="true">Published</MenuItem>
+          <MenuItem value="false">Draft</MenuItem>
+        </HRFilterSelect>
+      </HRFilterBar>
 
-      {error ? <Alert severity="error">{error}</Alert> : null}
-
-      <Paper elevation={0} sx={{ border: "1px solid #fecaca", borderRadius: 2, overflow: "hidden" }}>
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-            <CircularProgress sx={{ color: accent }} />
-          </Box>
-        ) : (
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: "#fff7f7" }}>
-                  <TableCell>No.</TableCell>
-                  <TableCell>Title</TableCell>
-                  <TableCell>Location</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 4, color: "text.secondary" }}>
-                      No events found.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  rows.map((row, idx) => {
-                    const showManageLive = canManageEventLive(row);
-                    const showEndLive = canEndStaleEventLive(row);
-                    const showPosterRegen = canRegenerateEventPoster(row);
-                    const sessionLabel = getEventStatusLabel(row);
-
-                    return (
-                    <TableRow key={row.id} hover>
-                      <TableCell>{page * rowsPerPage + idx + 1}</TableCell>
-                      <TableCell sx={{ fontWeight: 700, maxWidth: 220 }}>{row.title}</TableCell>
-                      <TableCell>{row.location || "—"}</TableCell>
-                      <TableCell>
-                        <Stack direction="row" spacing={0.5} flexWrap="wrap" alignItems="center">
-                          <PublishedChip published={row.is_published} />
-                          {row.is_featured ? <Chip size="small" label="Featured" color="warning" /> : null}
-                          {(row.delivery_mode === "online" || row.delivery_mode === "hybrid") &&
-                          sessionLabel !== row.session_status ? (
-                            <Chip size="small" label={sessionLabel} color="warning" variant="outlined" />
-                          ) : null}
-                        </Stack>
-                      </TableCell>
-                      <TableCell align="right" sx={{ whiteSpace: "nowrap", verticalAlign: "middle" }}>
-                        <Stack
-                          direction="row"
-                          spacing={0}
-                          justifyContent="flex-end"
-                          alignItems="center"
-                          useFlexGap
-                          sx={{ flexWrap: "nowrap" }}
-                        >
-                        {showManageLive ? (
-                          <ActionIconTooltip title="Manage live">
-                            <IconButton
-                              size="small"
-                              aria-label="Manage live"
-                              onClick={() => setLiveHostEvent(row)}
-                              sx={{ color: accentDark }}
-                            >
-                              <VideocamIcon fontSize="small" />
-                            </IconButton>
-                          </ActionIconTooltip>
-                        ) : null}
-                        {showEndLive ? (
-                          <ActionIconTooltip title="End live session (scheduled time has passed)">
-                            <IconButton
-                              size="small"
-                              aria-label="End live"
-                              disabled={endLiveBusyId === row.id}
-                              onClick={() => void handleEndLive(row)}
-                              sx={{ color: "#b91c1c" }}
-                            >
-                              {endLiveBusyId === row.id ? (
-                                <CircularProgress size={18} color="inherit" />
-                              ) : (
-                                <StopCircleOutlinedIcon fontSize="small" />
-                              )}
-                            </IconButton>
-                          </ActionIconTooltip>
-                        ) : null}
-                        {(row.delivery_mode === "online" || row.delivery_mode === "hybrid") ? (
-                          <ActionIconTooltip title="Online event report">
-                            <IconButton
-                              size="small"
-                              aria-label="Online event report"
-                              onClick={() => setReportEvent(row)}
-                              sx={{ color: accentDark }}
-                            >
-                              <SummarizeIcon fontSize="small" />
-                            </IconButton>
-                          </ActionIconTooltip>
-                        ) : null}
-                        <ActionIconTooltip title="View">
-                          <IconButton
-                            size="small"
-                            aria-label="View"
-                            onClick={() => setViewRow(row)}
-                            sx={{ color: accentDark }}
-                          >
-                            <VisibilityIcon fontSize="small" />
-                          </IconButton>
-                        </ActionIconTooltip>
-                        <ActionIconTooltip title="Edit">
-                          <IconButton
-                            size="small"
-                            aria-label="Edit"
-                            onClick={() => {
-                              setEditRow(row);
-                              setEditForm(eventToForm(row));
-                            }}
-                            sx={{ color: accent }}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </ActionIconTooltip>
-                        {showPosterRegen ? (
-                          <ActionIconTooltip title="Regenerate poster">
-                            <IconButton
-                              size="small"
-                              aria-label="Regenerate poster"
-                              disabled={posterLoadingId === row.id}
-                              onClick={() => handleRegeneratePoster(row)}
-                              sx={{ color: accentDark }}
-                            >
-                              {posterLoadingId === row.id ? (
-                                <CircularProgress size={18} color="inherit" />
-                              ) : (
-                                <ImageIcon fontSize="small" />
-                              )}
-                            </IconButton>
-                          </ActionIconTooltip>
-                        ) : null}
-                        <ActionIconTooltip title="Delete">
-                          <IconButton
-                            size="small"
-                            aria-label="Delete"
-                            onClick={() => handleDelete(row)}
-                            sx={{ color: "#b91c1c" }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </ActionIconTooltip>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
+      <TabPanelShell loading={loading} error={error} onDismissError={() => setError("")}>
+        <DataTableShell
+          pagination={
             <TablePagination
               rowsPerPageOptions={[5, 10, 25, 50]}
               count={totalCount}
@@ -1515,84 +1264,196 @@ function EventsPanel() {
                 setRowsPerPage(parseInt(e.target.value, 10));
                 setPage(0);
               }}
+              sx={tablePaginationSx}
             />
-          </TableContainer>
-        )}
-      </Paper>
+          }
+        >
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={tableHeadRowSx}>
+                <TableCell>No.</TableCell>
+                <TableCell>Title</TableCell>
+                <TableCell>Location</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} sx={{ border: 0, p: 0 }}>
+                    <EmptyTableRow colSpan={5} message="No events found." />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((row, idx) => {
+                  const showManageLive = canManageEventLive(row);
+                  const showEndLive = canEndStaleEventLive(row);
+                  const showPosterRegen = canRegenerateEventPoster(row);
+                  const sessionLabel = getEventStatusLabel(row);
 
-      <Dialog open={createOpen} onClose={() => !createSaving && setCreateOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800 }}>Create event</DialogTitle>
-        <DialogContent dividers>
-          <EventFormFields form={createForm} setForm={setCreateForm} disabled={createSaving} />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateOpen(false)} disabled={createSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleCreate} disabled={createSaving} sx={{ bgcolor: accent }}>
-            {createSaving ? "Saving…" : "Create"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+                  return (
+                    <TableRow key={row.id} hover>
+                      <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>{page * rowsPerPage + idx + 1}</TableCell>
+                      <TableCell sx={{ fontWeight: 700, maxWidth: 220 }}>{row.title}</TableCell>
+                      <TableCell>{row.location || "—"}</TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap" alignItems="center">
+                          <HRPublishedChip published={row.is_published} />
+                          {row.is_featured ? <Chip size="small" label="Featured" color="warning" /> : null}
+                          {(row.delivery_mode === "online" || row.delivery_mode === "hybrid") &&
+                          sessionLabel !== row.session_status ? (
+                            <Chip size="small" label={sessionLabel} color="warning" variant="outlined" />
+                          ) : null}
+                        </Stack>
+                      </TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                        {showManageLive ? (
+                          <HRActionButton title="Manage live" onClick={() => setLiveHostEvent(row)}>
+                            <VideocamOutlinedIcon fontSize="small" />
+                          </HRActionButton>
+                        ) : null}
+                        {showEndLive ? (
+                          <HRActionButton
+                            title="End live session"
+                            color="error"
+                            disabled={endLiveBusyId === row.id}
+                            onClick={() => void handleEndLive(row)}
+                          >
+                            {endLiveBusyId === row.id ? (
+                              <CircularProgress size={18} />
+                            ) : (
+                              <StopCircleOutlinedIcon fontSize="small" />
+                            )}
+                          </HRActionButton>
+                        ) : null}
+                        {row.delivery_mode === "online" || row.delivery_mode === "hybrid" ? (
+                          <HRActionButton title="Online event report" onClick={() => setReportEvent(row)}>
+                            <SummarizeOutlinedIcon fontSize="small" />
+                          </HRActionButton>
+                        ) : null}
+                        <HRActionButton title="View" onClick={() => setViewRow(row)}>
+                          <VisibilityOutlinedIcon fontSize="small" />
+                        </HRActionButton>
+                        <HRActionButton
+                          title="Edit"
+                          onClick={() => {
+                            setEditRow(row);
+                            setEditForm(eventToForm(row));
+                          }}
+                        >
+                          <EditOutlinedIcon fontSize="small" />
+                        </HRActionButton>
+                        {showPosterRegen ? (
+                          <HRActionButton
+                            title="Regenerate poster"
+                            disabled={posterLoadingId === row.id}
+                            onClick={() => handleRegeneratePoster(row)}
+                          >
+                            {posterLoadingId === row.id ? (
+                              <CircularProgress size={18} />
+                            ) : (
+                              <ImageOutlinedIcon fontSize="small" />
+                            )}
+                          </HRActionButton>
+                        ) : null}
+                        <HRActionButton title="Delete" color="error" onClick={() => handleDelete(row)}>
+                          <DeleteOutlineIcon fontSize="small" />
+                        </HRActionButton>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </DataTableShell>
+      </TabPanelShell>
 
-      <Dialog open={!!editRow} onClose={() => !editSaving && setEditRow(null)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800 }}>Edit event</DialogTitle>
-        <DialogContent dividers>
-          <EventFormFields
-            form={editForm}
-            setForm={setEditForm}
-            disabled={editSaving}
-            isEdit
-            existingPosterUrl={editRow?.poster_image}
-            allowPosterRegenerate={editRow ? canRegenerateEventPoster(editRow) : true}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditRow(null)} disabled={editSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleEdit} disabled={editSaving} sx={{ bgcolor: accent }}>
-            {editSaving ? "Saving…" : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <PremiumDialog
+        open={createOpen}
+        onClose={() => !createSaving && setCreateOpen(false)}
+        title="Create event"
+        subtitle="Schedule a school event with optional live video"
+        icon={<EventOutlinedIcon sx={{ color: "#fff" }} />}
+        maxWidth="md"
+        footer={
+          <Stack direction="row" spacing={1} justifyContent="flex-end" width="100%">
+            <DialogGhostButton onClick={() => setCreateOpen(false)} disabled={createSaving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={createSaving} onClick={handleCreate}>
+              Create
+            </DialogPrimaryButton>
+          </Stack>
+        }
+      >
+        <EventFormFields form={createForm} setForm={setCreateForm} disabled={createSaving} />
+      </PremiumDialog>
 
-      <Dialog open={!!viewRow} onClose={() => setViewRow(null)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
-          {viewRow?.title}
-          <IconButton onClick={() => setViewRow(null)} sx={{ position: "absolute", right: 8, top: 8 }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {viewRow ? (
-            <Stack spacing={2}>
-              <Stack direction="row" spacing={1} flexWrap="wrap">
-                <PublishedChip published={viewRow.is_published} />
-                <Chip size="small" label={labelFor(EVENT_TYPES, viewRow.event_type)} />
-                <Chip size="small" label={labelFor(DELIVERY_MODES, viewRow.delivery_mode)} />
-                <Chip size="small" label={viewRow.session_status || "scheduled"} />
-                {viewRow.is_featured ? <Chip size="small" label="Featured" color="warning" /> : null}
-              </Stack>
-              {viewRow.poster_image ? (
-                <Box
-                  component="img"
-                  src={mediaUrl(viewRow.poster_image)}
-                  alt="Poster"
-                  sx={{ maxWidth: "100%", maxHeight: 280, borderRadius: 1, border: `1px solid ${accentLight}` }}
-                />
-              ) : null}
-              <DetailField label="Description" value={viewRow.description} />
-              <DetailField label="Start" value={fmtDate(viewRow.start_date)} />
-              <DetailField label="End" value={fmtDate(viewRow.end_date)} />
-              <DetailField label="Location" value={viewRow.location} />
-              {(viewRow.delivery_mode === "online" || viewRow.delivery_mode === "hybrid") ? (
-                <DetailField label="Live room" value={viewRow.live_meeting_id || "Created on save"} />
-              ) : null}
+      <PremiumDialog
+        open={!!editRow}
+        onClose={() => !editSaving && setEditRow(null)}
+        title="Edit event"
+        subtitle={editRow?.title}
+        icon={<EditOutlinedIcon sx={{ color: "#fff" }} />}
+        maxWidth="md"
+        footer={
+          <Stack direction="row" spacing={1} justifyContent="flex-end" width="100%">
+            <DialogGhostButton onClick={() => setEditRow(null)} disabled={editSaving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={editSaving} onClick={handleEdit}>
+              Save
+            </DialogPrimaryButton>
+          </Stack>
+        }
+      >
+        <EventFormFields
+          form={editForm}
+          setForm={setEditForm}
+          disabled={editSaving}
+          isEdit
+          existingPosterUrl={editRow?.poster_image}
+          allowPosterRegenerate={editRow ? canRegenerateEventPoster(editRow) : true}
+        />
+      </PremiumDialog>
+
+      <PremiumDialog
+        open={!!viewRow}
+        onClose={() => setViewRow(null)}
+        title={viewRow?.title || "Event"}
+        icon={<EventOutlinedIcon sx={{ color: "#fff" }} />}
+        maxWidth="md"
+        footer={<DialogGhostButton onClick={() => setViewRow(null)}>Close</DialogGhostButton>}
+      >
+        {viewRow ? (
+          <Stack spacing={2}>
+            <Stack direction="row" spacing={1} flexWrap="wrap">
+              <HRPublishedChip published={viewRow.is_published} />
+              <Chip size="small" label={labelFor(EVENT_TYPES, viewRow.event_type)} />
+              <Chip size="small" label={labelFor(DELIVERY_MODES, viewRow.delivery_mode)} />
+              <Chip size="small" label={viewRow.session_status || "scheduled"} />
+              {viewRow.is_featured ? <Chip size="small" label="Featured" color="warning" /> : null}
             </Stack>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+            {viewRow.poster_image ? (
+              <Box
+                component="img"
+                src={mediaUrl(viewRow.poster_image)}
+                alt="Poster"
+                sx={{ maxWidth: "100%", maxHeight: 280, borderRadius: "16px", border: `1px solid ${accentLight}` }}
+              />
+            ) : null}
+            <DetailField label="Description" value={viewRow.description} />
+            <DetailField label="Start" value={fmtDate(viewRow.start_date)} />
+            <DetailField label="End" value={fmtDate(viewRow.end_date)} />
+            <DetailField label="Location" value={viewRow.location} />
+            {viewRow.delivery_mode === "online" || viewRow.delivery_mode === "hybrid" ? (
+              <DetailField label="Live room" value={viewRow.live_meeting_id || "Created on save"} />
+            ) : null}
+          </Stack>
+        ) : null}
+      </PremiumDialog>
 
       <EventLiveHostDialog
         open={!!liveHostEvent}
@@ -1613,20 +1474,14 @@ export default function HRNewsEventsTab() {
 
   return (
     <Stack spacing={2}>
-      <Paper elevation={0} sx={{ border: "1px solid #fecaca", borderRadius: 2 }}>
-        <Tabs
-          value={section}
-          onChange={(_, v) => setSection(v)}
-          sx={{
-            px: 1,
-            "& .MuiTab-root": { textTransform: "none", fontWeight: 700 },
-            "& .MuiTabs-indicator": { bgcolor: accent },
-          }}
-        >
-          <Tab label="News" />
-          <Tab label="Events" />
-        </Tabs>
-      </Paper>
+      <HRSubTabs
+        activeTab={section}
+        onChange={setSection}
+        tabs={[
+          { label: "News", value: 0 },
+          { label: "Events", value: 1 },
+        ]}
+      />
       {section === 0 ? <NewsPanel /> : <EventsPanel />}
     </Stack>
   );

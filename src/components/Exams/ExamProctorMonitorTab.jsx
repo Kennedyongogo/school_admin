@@ -21,14 +21,21 @@ import {
   Typography,
 } from "@mui/material";
 
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
+import {
+  ExamFilterBar,
+  FilterField,
+  FilterSelect,
+  ExamSummaryChips,
+  ExamPanelCard,
+  ExamPrimaryButton,
+  PremiumDialog,
+  DialogGhostButton,
+  TabPanelShell,
+} from "./examUi";
+import { authHeaders, PROCTORING_MODE_LABELS, formatDateTime, primaryRed, primaryDark } from "./examShared";
 
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
+const accent = primaryRed;
+const accentDark = primaryDark;
 
 const toDateIso = (d) => {
   if (!d) return "";
@@ -46,12 +53,6 @@ const formatMaybeIso = (iso) => {
 
 /** Modes tracked on this tab (activity signals). Live invigilation uses LiveKit instead. */
 const ACTIVITY_PROCTORING_MODES = ["record_only", "strict_auto"];
-
-const PROCTORING_MODE_LABELS = {
-  record_only: "Monitored online exam",
-  strict_auto: "Strict online exam",
-  live_monitor: "Live invigilation",
-};
 
 const sessionStatusOf = (row) => String(row?.session_status || "").trim();
 
@@ -231,85 +232,28 @@ export default function ExamProctorMonitorTab() {
         py: 1,
       }}
     >
-      <Card
-        elevation={0}
-        sx={{ border: "1px solid #FEE2E2", mb: 2, maxWidth: "100%", overflow: "hidden" }}
-      >
-        <CardContent sx={{ "&:last-child": { pb: 2 }, maxWidth: "100%", overflow: "hidden" }}>
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "repeat(2, minmax(0, 1fr))",
-                lg: "132px 168px 128px minmax(0, 1fr)",
-              },
-              gap: 1.25,
-              width: "100%",
-              maxWidth: "100%",
-              minWidth: 0,
-            }}
-          >
-            <TextField
-              type="date"
-              size="small"
-              label="Date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              sx={{ width: "100%", minWidth: 0, maxWidth: "100%" }}
-            />
-            <FormControl size="small" sx={{ width: "100%", minWidth: 0, maxWidth: "100%", ...selectEllipsisSx }}>
-              <Select value={statusMode} onChange={(e) => setStatusMode(e.target.value)} displayEmpty>
-                <MenuItem value="active">Active only</MenuItem>
-                <MenuItem value="all">All (not cancelled)</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ width: "100%", minWidth: 0, maxWidth: "100%", ...selectEllipsisSx }}>
-              <Select
-                value={autoRefresh ? "on" : "off"}
-                onChange={(e) => setAutoRefresh(e.target.value === "on")}
-                displayEmpty
-              >
-                <MenuItem value="on">Refresh: On</MenuItem>
-                <MenuItem value="off">Refresh: Off</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl
-              size="small"
-              sx={{
-                width: "100%",
-                minWidth: 0,
-                maxWidth: "100%",
-                gridColumn: { xs: "1 / -1", sm: "1 / -1", lg: "auto" },
-                ...selectEllipsisSx,
-              }}
-            >
-              <Select
-                value={selectedScheduleId}
-                onChange={(e) => setSelectedScheduleId(e.target.value)}
-                displayEmpty
-              >
-                {displaySchedules.length ? null : <MenuItem value="">No schedules</MenuItem>}
-                {displaySchedules.map((s) => (
-                  <MenuItem key={s.id} value={s.id}>
-                    {s.title || s.exam?.title || "Exam"} · {s.curriculum_class?.name || s.curriculum_class_level?.name || "Class"}{" "}
-                    · {PROCTORING_MODE_LABELS[s.proctoring_mode] || s.proctoring_mode || "Exam"} ·{" "}
-                    {sessionStatusOf(s) || "scheduled"}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-        </CardContent>
-      </Card>
+      <ExamFilterBar onRefresh={() => void loadSchedules()}>
+        <FilterField type="date" label="Date" value={date} onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} />
+        <FilterSelect label="Show" value={statusMode} onChange={(e) => setStatusMode(e.target.value)}>
+          <MenuItem value="active">Active only</MenuItem>
+          <MenuItem value="all">All (not cancelled)</MenuItem>
+        </FilterSelect>
+        <FilterSelect label="Auto refresh" value={autoRefresh ? "on" : "off"} onChange={(e) => setAutoRefresh(e.target.value === "on")}>
+          <MenuItem value="on">On (8s)</MenuItem>
+          <MenuItem value="off">Off</MenuItem>
+        </FilterSelect>
+        <FilterSelect label="Exam schedule" value={selectedScheduleId} onChange={(e) => setSelectedScheduleId(e.target.value)}>
+          {displaySchedules.length ? null : <MenuItem value="">No schedules</MenuItem>}
+          {displaySchedules.map((s) => (
+            <MenuItem key={s.id} value={s.id}>
+              {s.title || s.exam?.title || "Exam"} · {s.curriculum_class?.name || s.curriculum_class_level?.name || "Class"} ·{" "}
+              {PROCTORING_MODE_LABELS[s.proctoring_mode] || s.proctoring_mode || "Exam"} · {sessionStatusOf(s) || "scheduled"}
+            </MenuItem>
+          ))}
+        </FilterSelect>
+      </ExamFilterBar>
 
-      {schedulesLoading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-          <CircularProgress sx={{ color: accent }} />
-        </Box>
-      ) : schedulesError ? (
-        <Alert severity="error">{schedulesError}</Alert>
-      ) : null}
+      <TabPanelShell loading={schedulesLoading && !schedules.length} error={schedulesError} onDismissError={() => setSchedulesError("")}>
 
       {monitorLoading && !monitor ? (
         <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
@@ -334,36 +278,19 @@ export default function ExamProctorMonitorTab() {
 
       {!monitorLoading && monitor ? (
         <Box sx={{ width: "100%", maxWidth: "100%", minWidth: 0, overflow: "hidden" }}>
-          <Stack
-            direction="row"
-            spacing={1}
-            useFlexGap
-            flexWrap="wrap"
-            sx={{ mb: 2, width: "100%", maxWidth: "100%", minWidth: 0 }}
-          >
-            {monitor?.proctoring_mode_label || selectedSchedule?.proctoring_mode ? (
-              <Chip
-                label={`Mode: ${monitor?.proctoring_mode_label || PROCTORING_MODE_LABELS[selectedSchedule.proctoring_mode] || selectedSchedule.proctoring_mode}`}
-                size="small"
-                color="primary"
-                variant="outlined"
-                sx={{ maxWidth: "100%", "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" } }}
-              />
-            ) : null}
-            <Chip label={`Total: ${summary.total}`} size="small" />
-            <Chip label={`Not started: ${summary.not_started}`} size="small" color="default" />
-            <Chip label={`In progress: ${summary.in_progress}`} size="small" color="warning" />
-            <Chip label={`Submitted: ${summary.submitted}`} size="small" color="success" />
-            {monitorRefreshing ? <Chip label="Updating..." size="small" variant="outlined" /> : null}
-            {lastUpdatedAt ? (
-              <Chip
-                label={`Updated: ${formatMaybeIso(lastUpdatedAt)}`}
-                size="small"
-                variant="outlined"
-                sx={{ maxWidth: { xs: "100%", sm: 280 }, "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" } }}
-              />
-            ) : null}
-          </Stack>
+          <ExamSummaryChips
+            items={[
+              ...(monitor?.proctoring_mode_label || selectedSchedule?.proctoring_mode
+                ? [{ label: "Mode", value: monitor?.proctoring_mode_label || PROCTORING_MODE_LABELS[selectedSchedule.proctoring_mode] || selectedSchedule.proctoring_mode }]
+                : []),
+              { label: "Total", value: summary.total },
+              { label: "Not started", value: summary.not_started },
+              { label: "In progress", value: summary.in_progress, tone: "warn" },
+              { label: "Submitted", value: summary.submitted, tone: "success" },
+              ...(monitorRefreshing ? [{ label: "Status", value: "Updating…" }] : []),
+              ...(lastUpdatedAt ? [{ label: "Updated", value: formatMaybeIso(lastUpdatedAt) }] : []),
+            ]}
+          />
 
           <Divider sx={{ mb: 2 }} />
 
@@ -460,9 +387,16 @@ export default function ExamProctorMonitorTab() {
         </Alert>
       ) : null}
 
-      <Dialog open={logDialogOpen} onClose={() => setLogDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Session log - {logDialogStudent}</DialogTitle>
-        <DialogContent>
+      </TabPanelShell>
+
+      <PremiumDialog
+        open={logDialogOpen}
+        onClose={() => setLogDialogOpen(false)}
+        title="Session log"
+        subtitle={logDialogStudent}
+        maxWidth="md"
+        footer={<DialogGhostButton onClick={() => setLogDialogOpen(false)}>Close</DialogGhostButton>}
+      >
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 1.25 }}>
             <TextField size="small" label="Attempt ID" value={logDialogAttemptId} InputProps={{ readOnly: true }} fullWidth />
             <FormControl size="small" sx={{ width: { xs: "100%", sm: 180 }, minWidth: { sm: 160 }, flexShrink: 0 }}>
@@ -510,11 +444,7 @@ export default function ExamProctorMonitorTab() {
           ) : (
             <Alert severity="info">No session logs found for this attempt.</Alert>
           )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setLogDialogOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      </PremiumDialog>
     </Box>
   );
 }

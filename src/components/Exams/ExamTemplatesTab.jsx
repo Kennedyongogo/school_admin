@@ -27,12 +27,21 @@ import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon, Visibility as V
 import Swal from "sweetalert2";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
+import {
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  PremiumDialog,
+  DialogGhostButton,
+  EmptyTableRow,
+  ExamSectionHeader,
+  ExamActionIcon,
+  ExamToolbar,
+  ExamPrimaryButton,
+  ExamGhostButton,
+  ExamPanelCard,
+} from "./examUi";
+import { authHeaders, examDesignerCanvasSx, warmCream } from "./examShared";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
@@ -602,62 +611,69 @@ ${imageParts}--${boundary}--`;
 
   if (mode === "list") {
     return (
-      <Stack spacing={2}>
-        {error ? <Alert severity="error">{error}</Alert> : null}
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ width: "100%" }}>
-          <Typography sx={{ fontWeight: 800 }}>Exam templates</Typography>
-        </Stack>
-        <Card elevation={0} sx={{ border: "1px solid #fecaca" }}>
-          <CardContent>
-            {loading ? (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
-                <CircularProgress size={28} />
-              </Box>
-            ) : rows.length === 0 ? (
-              <Typography color="text.secondary">No templates yet.</Typography>
-            ) : (
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell width={72}>No</TableCell>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Curriculum</TableCell>
-                    <TableCell>Subject</TableCell>
-                    <TableCell align="right">Action</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {rows.map((r, idx) => (
-                    <TableRow key={r.id} hover>
-                      <TableCell sx={{ color: "text.secondary" }}>{idx + 1}</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>{r.name}</TableCell>
-                      <TableCell>{getTemplateCurriculum(r)}</TableCell>
-                      <TableCell>{getTemplateSubject(r)}</TableCell>
-                      <TableCell align="right">
-                        <IconButton size="small" onClick={() => setViewRow(r)}>
+      <TabPanelShell loading={loading} error={error} onDismissError={() => setError(null)}>
+        <ExamSectionHeader
+          title="Exam templates"
+          subtitle="Design reusable paper layouts with school branding, curriculum fields, and subjects."
+        />
+        <DataTableShell>
+          {rows.length === 0 ? (
+            <EmptyTableRow message="No templates yet. Create your first exam paper layout." />
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={tableHeadRowSx}>
+                  <TableCell width={56}>#</TableCell>
+                  <TableCell>Template</TableCell>
+                  <TableCell>Curriculum</TableCell>
+                  <TableCell>Subject</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {rows.map((r, idx) => (
+                  <TableRow key={r.id} hover sx={{ "&:hover": { bgcolor: "rgba(254,226,226,0.35)" } }}>
+                    <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>{idx + 1}</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>{r.name}</TableCell>
+                    <TableCell>{getTemplateCurriculum(r)}</TableCell>
+                    <TableCell>{getTemplateSubject(r)}</TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={0.25} justifyContent="flex-end">
+                        <ExamActionIcon title="Preview" onClick={() => setViewRow(r)}>
                           <VisibilityIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton size="small" onClick={() => openTemplate(r)}>
+                        </ExamActionIcon>
+                        <ExamActionIcon title="Edit" onClick={() => openTemplate(r)}>
                           <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton size="small" title="Duplicate template" onClick={() => void duplicateTemplate(r)}>
+                        </ExamActionIcon>
+                        <ExamActionIcon title="Duplicate" onClick={() => void duplicateTemplate(r)}>
                           <ContentCopyIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton size="small" color="error" onClick={() => void removeTemplate(r)}>
+                        </ExamActionIcon>
+                        <ExamActionIcon title="Delete" color="error" onClick={() => void removeTemplate(r)}>
                           <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                        </ExamActionIcon>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </DataTableShell>
 
-        <Dialog open={!!viewRow} onClose={() => setViewRow(null)} maxWidth="md" fullWidth>
-          <DialogTitle>Template preview - {viewRow?.name || ""}</DialogTitle>
-          <DialogContent>
+        <PremiumDialog
+          open={!!viewRow}
+          onClose={() => setViewRow(null)}
+          title="Template preview"
+          subtitle={viewRow?.name || ""}
+          maxWidth="md"
+          footer={
+            <>
+              <DialogGhostButton onClick={() => void downloadTemplateWord()}>Download Word</DialogGhostButton>
+              <DialogGhostButton onClick={() => void downloadTemplatePdf()}>Download PDF</DialogGhostButton>
+              <DialogGhostButton onClick={() => setViewRow(null)}>Close</DialogGhostButton>
+            </>
+          }
+        >
             <Stack spacing={2} ref={viewPagesRef}>
               {getLayoutPages(viewRow?.layout_json).map((page, pageIdx) => (
                 <Box
@@ -701,31 +717,29 @@ ${imageParts}--${boundary}--`;
                 </Box>
               ))}
             </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => void downloadTemplateWord()}>Download Word</Button>
-            <Button onClick={() => void downloadTemplatePdf()}>Download PDF</Button>
-            <Button onClick={() => setViewRow(null)}>Close</Button>
-          </DialogActions>
-        </Dialog>
-      </Stack>
+        </PremiumDialog>
+      </TabPanelShell>
     );
   }
 
   return (
     <Stack spacing={2}>
       {error ? <Alert severity="error">{error}</Alert> : null}
+      <ExamToolbar
+        title={editingId ? "Edit template" : "Design template"}
+        subtitle="Drag fields onto the canvas and bind curriculum data."
+        onBack={() => setMode("list")}
+        actions={
+          <>
+            <ExamGhostButton onClick={resetDesigner}>New</ExamGhostButton>
+            <ExamPrimaryButton disabled={saving} onClick={() => void saveTemplate()}>
+              {saving ? "Saving…" : "Save template"}
+            </ExamPrimaryButton>
+          </>
+        }
+      />
       <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap" }}>
         <TextField label="Template name" value={templateName} onChange={(e) => setTemplateName(e.target.value)} size="small" sx={{ minWidth: 240, flex: 1 }} />
-        <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => setMode("list")} sx={{ whiteSpace: "nowrap" }}>
-          Back
-        </Button>
-        <Button variant="outlined" onClick={resetDesigner} sx={{ whiteSpace: "nowrap" }}>
-          New
-        </Button>
-        <Button variant="contained" disabled={saving} onClick={() => void saveTemplate()} sx={{ bgcolor: accent, whiteSpace: "nowrap", "&:hover": { bgcolor: accentDark } }}>
-          {saving ? "Saving..." : "Save template"}
-        </Button>
         <Select size="small" value={currentPage} onChange={(e) => { setCurrentPage(Number(e.target.value) || 0); setSelectedId(null); }} sx={{ minWidth: 110 }}>
           {pages.map((p, idx) => (
             <MenuItem key={p.id || idx} value={idx}>
@@ -821,24 +835,8 @@ ${imageParts}--${boundary}--`;
           </CardContent>
         </Card>
 
-        <Box sx={{ flex: 1, width: "100%", overflow: "auto", p: 1, border: "1px dashed #fca5a5", borderRadius: 2, bgcolor: "#fff" }}>
-          <Box
-            ref={canvasRef}
-            sx={{
-              width: 595,
-              height: 842,
-              position: "relative",
-              mx: "auto",
-              bgcolor: "#fff",
-              border: "1px solid #d1d5db",
-              boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
-              userSelect: "none",
-              overflow: "hidden",
-              backgroundImage:
-                "linear-gradient(to right, rgba(156,163,175,0.2) 1px, transparent 1px), linear-gradient(to bottom, rgba(156,163,175,0.2) 1px, transparent 1px)",
-              backgroundSize: "20px 20px",
-            }}
-          >
+        <Box sx={{ flex: 1, width: "100%", overflow: "auto", p: 1, border: "1px dashed rgba(220,38,38,0.25)", borderRadius: "18px", bgcolor: warmCream }}>
+          <Box ref={canvasRef} sx={examDesignerCanvasSx}>
             {elements.map((el) => (
               <Box
                 key={el.id}

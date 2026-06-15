@@ -1,52 +1,46 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
   Avatar,
   Box,
-  Button,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  FormControl,
-  FormControlLabel,
-  Checkbox,
-  IconButton,
   MenuItem,
-  Select,
-  InputLabel,
   Stack,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TablePagination,
   TableRow,
-  TextField,
-  Tooltip,
   Typography,
 } from "@mui/material";
 import {
   Close as CloseIcon,
   DeleteOutline as DeleteIcon,
-  Edit as EditIcon,
-  Visibility as ViewIcon,
+  EditOutlined as EditIcon,
+  VisibilityOutlined as ViewIcon,
+  GroupsOutlined as GroupsIcon,
 } from "@mui/icons-material";
-import Swal from "sweetalert2";
 import StudentSelectCards from "./StudentSelectCards";
-
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
-const accentLight = "#FEE2E2";
-
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
+import { authHeaders, primaryRed, primaryDark } from "./hrShared";
+import {
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  PremiumDialog,
+  DetailField,
+  FormSection,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+  HRFilterBar,
+  HRFilterTextField,
+  HRFilterSelect,
+  HRActionButton,
+  hrSwal,
+} from "./hrUi";
+import { Checkbox, FormControlLabel } from "@mui/material";
+import { TextField } from "@mui/material";
 
 const RELATIONSHIPS = [
   { value: "father", label: "Father" },
@@ -96,13 +90,6 @@ export default function HRParentsTab() {
   const [editMetaLoading, setEditMetaLoading] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  const swalAboveDialog = {
-    didOpen: () => {
-      const container = Swal.getContainer();
-      if (container) container.style.zIndex = "2000";
-    },
-  };
-
   const fetchParents = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -131,7 +118,7 @@ export default function HRParentsTab() {
       setError(msg);
       setRows([]);
       setTotalCount(0);
-      void Swal.fire({ icon: "error", title: "Could not load parents", text: msg, confirmButtonColor: accent });
+      void hrSwal({ icon: "error", title: "Could not load parents", text: msg });
     } finally {
       setLoading(false);
     }
@@ -215,26 +202,18 @@ export default function HRParentsTab() {
         throw new Error(data.message || "Could not update parent profile.");
       }
       setEditRow(null);
-      await Swal.fire({
+      await hrSwal({
         icon: "success",
         title: "Profile updated",
         text: "Parent profile was saved successfully.",
-        confirmButtonColor: accent,
         timer: 2200,
         showConfirmButton: false,
-        ...swalAboveDialog,
       });
       fetchParents();
     } catch (e) {
       const msg = e.message || "Update failed.";
       setEditError(msg);
-      await Swal.fire({
-        icon: "error",
-        title: "Could not save",
-        text: msg,
-        confirmButtonColor: accent,
-        ...swalAboveDialog,
-      });
+      await hrSwal({ icon: "error", title: "Could not save", text: msg });
     } finally {
       setSaving(false);
     }
@@ -243,16 +222,15 @@ export default function HRParentsTab() {
   const handleDeleteParent = async (row) => {
     const token = localStorage.getItem("token");
     if (!token) {
-      await Swal.fire({ icon: "error", title: "Session expired", text: "Please sign in again.", confirmButtonColor: accent });
+      await hrSwal({ icon: "error", title: "Session expired", text: "Please sign in again." });
       return;
     }
     const name = row.user?.full_name || row.user?.username || "this parent";
-    const confirm = await Swal.fire({
+    const confirm = await hrSwal({
       icon: "warning",
       title: "Remove parent profile?",
       html: `This removes the <strong>parent profile</strong> for <strong>${name}</strong>. The user account with role Parent is kept and can be linked to a new profile later.`,
       showCancelButton: true,
-      confirmButtonColor: accent,
       confirmButtonText: "Yes, remove profile",
       cancelButtonText: "Cancel",
     });
@@ -266,20 +244,18 @@ export default function HRParentsTab() {
         throw new Error(data.message || `Could not remove profile (${res.status})`);
       }
       await fetchParents();
-      await Swal.fire({
+      await hrSwal({
         icon: "success",
         title: "Profile removed",
         text: data.message || "Parent profile was removed.",
         timer: 2200,
         showConfirmButton: false,
-        confirmButtonColor: accent,
       });
     } catch (e) {
-      await Swal.fire({
+      await hrSwal({
         icon: "error",
         title: "Could not remove profile",
         text: e.message || "Request failed.",
-        confirmButtonColor: accent,
       });
     } finally {
       setDeletingId(null);
@@ -287,57 +263,37 @@ export default function HRParentsTab() {
   };
 
   return (
-    <Box>
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={1.25}
-        alignItems={{ xs: "stretch", sm: "center" }}
-        justifyContent="flex-end"
-        sx={{ mb: 2, width: "100%" }}
-      >
-        <TextField
-          size="small"
+    <Stack spacing={2}>
+      <HRFilterBar>
+        <HRFilterTextField
           label="Search parents"
           placeholder="Name, email, student, relationship…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          sx={{
-            minWidth: { xs: "100%", sm: 280 },
-            maxWidth: { sm: 360 },
-            mr: { sm: "auto" },
-            "& .MuiInputBase-root": { height: 36, bgcolor: "#fff" },
-          }}
         />
-      </Stack>
+      </HRFilterBar>
 
-      {error ? (
-        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      ) : null}
-
-      {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-          <CircularProgress sx={{ color: accent }} />
-        </Box>
-      ) : (
-        <TableContainer
-          sx={{
-            borderRadius: 2,
-            border: `1px solid ${accentLight}`,
-            boxShadow: `0 8px 28px -12px ${accent}33`,
-            bgcolor: "rgba(255,255,255,0.98)",
-            overflowX: "auto",
-          }}
+      <TabPanelShell loading={loading} error={error} onDismissError={() => setError(null)}>
+        <DataTableShell
+          pagination={
+            <TablePagination
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              count={totalCount}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(_, newPage) => setPage(newPage)}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              labelRowsPerPage="Rows per page"
+              sx={tablePaginationSx}
+            />
+          }
         >
           <Table size="medium" sx={{ minWidth: 720 }}>
             <TableHead>
-              <TableRow
-                sx={{
-                  background: `linear-gradient(135deg, ${accent} 0%, ${accentDark} 100%)`,
-                  "& .MuiTableCell-head": { color: "#fff", fontWeight: 700, borderBottom: "none" },
-                }}
-              >
+              <TableRow sx={tableHeadRowSx}>
                 <TableCell width={48} align="center">
                   No.
                 </TableCell>
@@ -354,10 +310,8 @@ export default function HRParentsTab() {
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7}>
-                    <Typography color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
-                      No parents yet. Click Create parent profile to get started.
-                    </Typography>
+                  <TableCell colSpan={7} sx={{ border: 0, p: 0 }}>
+                    <EmptyTableRow colSpan={7} message="No parents yet. Click Create parent profile to get started." />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -375,7 +329,7 @@ export default function HRParentsTab() {
                       <TableCell>
                         <Avatar
                           src={photoSrc || undefined}
-                          sx={{ width: 36, height: 36, bgcolor: `${accent}22`, color: accentDark, fontWeight: 700 }}
+                          sx={{ width: 36, height: 36, bgcolor: `${primaryRed}22`, color: primaryDark, fontWeight: 700 }}
                         >
                           {!photoSrc ? name.charAt(0).toUpperCase() : null}
                         </Avatar>
@@ -392,33 +346,24 @@ export default function HRParentsTab() {
                       <TableCell>{r.user?.email || "—"}</TableCell>
                       <TableCell sx={{ textTransform: "capitalize" }}>{relLabel}</TableCell>
                       <TableCell align="right">
-                        <Tooltip title="View">
-                          <IconButton size="small" onClick={() => setViewRow(r)} sx={{ color: accentDark }}>
-                            <ViewIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Edit">
-                          <IconButton size="small" onClick={() => openEdit(r)} sx={{ color: accent }}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Remove profile (keeps user account)">
-                          <span>
-                            <IconButton
-                              size="small"
-                              aria-label="Remove parent profile"
-                              disabled={deletingId === r.id}
-                              onClick={() => handleDeleteParent(r)}
-                              sx={{ color: "error.main" }}
-                            >
-                              {deletingId === r.id ? (
-                                <CircularProgress size={18} color="inherit" />
-                              ) : (
-                                <DeleteIcon fontSize="small" />
-                              )}
-                            </IconButton>
-                          </span>
-                        </Tooltip>
+                        <HRActionButton title="View" onClick={() => setViewRow(r)}>
+                          <ViewIcon fontSize="small" />
+                        </HRActionButton>
+                        <HRActionButton title="Edit" onClick={() => openEdit(r)}>
+                          <EditIcon fontSize="small" />
+                        </HRActionButton>
+                        <HRActionButton
+                          title="Remove profile (keeps user account)"
+                          color="error"
+                          disabled={deletingId === r.id}
+                          onClick={() => handleDeleteParent(r)}
+                        >
+                          {deletingId === r.id ? (
+                            <CircularProgress size={18} />
+                          ) : (
+                            <DeleteIcon fontSize="small" />
+                          )}
+                        </HRActionButton>
                       </TableCell>
                     </TableRow>
                   );
@@ -426,161 +371,172 @@ export default function HRParentsTab() {
               )}
             </TableBody>
           </Table>
-          <TablePagination
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            count={totalCount}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={(_, newPage) => setPage(newPage)}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(parseInt(e.target.value, 10));
-              setPage(0);
-            }}
-            labelRowsPerPage="Rows per page"
-            sx={{
-              borderTop: `1px solid ${accentLight}`,
-              "& .MuiTablePagination-toolbar": { flexWrap: "wrap", gap: 1 },
-            }}
-          />
-        </TableContainer>
-      )}
+        </DataTableShell>
+      </TabPanelShell>
 
-      <Dialog open={!!viewRow} onClose={() => setViewRow(null)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6, bgcolor: "#fff5f5", borderBottom: `1px solid ${accentLight}` }}>
-          Parent profile
-          <IconButton aria-label="Close" onClick={() => setViewRow(null)} sx={{ position: "absolute", right: 8, top: 8 }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {viewRow ? (
-            <Stack spacing={2}>
-              <Box sx={{ p: 2, borderRadius: 2, background: `linear-gradient(135deg, ${accentDark} 0%, ${accent} 100%)`, color: "#fff" }}>
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Avatar
-                    src={profileImageUrl(viewRow.user?.profile_image) || undefined}
-                    sx={{ width: 64, height: 64, bgcolor: "rgba(255,255,255,0.2)", color: "#fff", fontWeight: 700 }}
-                  >
-                    {!profileImageUrl(viewRow.user?.profile_image) ? (viewRow.user?.full_name || "?").charAt(0).toUpperCase() : null}
-                  </Avatar>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                      {viewRow.user?.full_name || viewRow.user?.username || "—"}
-                    </Typography>
-                    <Typography variant="body2" sx={{ opacity: 0.92 }}>
-                      {viewRow.user?.email || "—"}
-                    </Typography>
-                  </Box>
-                </Stack>
-              </Box>
-              <Divider />
-              <Stack spacing={1.2}>
+      <PremiumDialog
+        open={!!viewRow}
+        onClose={() => setViewRow(null)}
+        title="Parent profile"
+        subtitle={viewRow?.user?.email}
+        icon={<GroupsIcon sx={{ color: "#fff" }} />}
+        maxWidth="sm"
+        footer={
+          <Stack direction="row" spacing={1} justifyContent="flex-end" width="100%">
+            <DialogGhostButton onClick={() => setViewRow(null)}>Close</DialogGhostButton>
+            {viewRow ? (
+              <DialogPrimaryButton
+                onClick={() => {
+                  const row = viewRow;
+                  setViewRow(null);
+                  openEdit(row);
+                }}
+              >
+                Edit
+              </DialogPrimaryButton>
+            ) : null}
+          </Stack>
+        }
+      >
+        {viewRow ? (
+          <Stack spacing={2}>
+            <Box
+              sx={{
+                p: 2,
+                borderRadius: "20px",
+                background: `linear-gradient(135deg, ${primaryDark} 0%, ${primaryRed} 100%)`,
+                color: "#fff",
+              }}
+            >
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Avatar
+                  src={profileImageUrl(viewRow.user?.profile_image) || undefined}
+                  sx={{ width: 64, height: 64, bgcolor: "rgba(255,255,255,0.2)", color: "#fff", fontWeight: 700 }}
+                >
+                  {!profileImageUrl(viewRow.user?.profile_image)
+                    ? (viewRow.user?.full_name || "?").charAt(0).toUpperCase()
+                    : null}
+                </Avatar>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                    Students
+                  <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                    {viewRow.user?.full_name || viewRow.user?.username || "—"}
                   </Typography>
-                  <Typography>
-                    {Array.isArray(viewRow.students) && viewRow.students.length
-                      ? viewRow.students.map((s) => s.user?.full_name || s.admission_number).filter(Boolean).join(", ")
-                      : "—"}
+                  <Typography variant="body2" sx={{ opacity: 0.92 }}>
+                    {viewRow.user?.email || "—"}
                   </Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                    Relationship
-                  </Typography>
-                  <Typography sx={{ textTransform: "capitalize" }}>{viewRow.relationship || "—"}</Typography>
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                    Occupation
-                  </Typography>
-                  <Typography>{viewRow.occupation || "—"}</Typography>
                 </Box>
               </Stack>
-            </Stack>
-          ) : null}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setViewRow(null)}>Close</Button>
-          <Button
-            variant="contained"
-            sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark }, fontWeight: 700 }}
-            onClick={() => {
-              if (viewRow) {
-                const row = viewRow;
-                setViewRow(null);
-                openEdit(row);
-              }
-            }}
-          >
-            Edit
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={!!editRow} onClose={() => !saving && setEditRow(null)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, bgcolor: "#fff5f5", borderBottom: `1px solid ${accentLight}` }}>
-          Edit parent profile
-        </DialogTitle>
-        <DialogContent dividers>
-          {editError ? (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {editError}
-            </Alert>
-          ) : null}
-          <Stack spacing={2.5} sx={{ pt: 0.5 }}>
-            <Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: accentDark, mb: 1.5 }}>
-                Linked students
-              </Typography>
-              {editMetaLoading ? (
-                <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
-                  <CircularProgress size={28} sx={{ color: accent }} />
-                </Box>
-              ) : (
-                <StudentSelectCards
-                  students={studentsPicklist}
-                  selectedIds={editForm.student_ids}
-                  onChange={(ids) => setEditForm({ ...editForm, student_ids: ids })}
-                  disabled={saving}
-                />
-              )}
             </Box>
-            <TextField label="Full name" size="small" fullWidth value={editForm.user_full_name} onChange={(e) => setEditForm({ ...editForm, user_full_name: e.target.value })} />
-            <TextField label="Email" size="small" fullWidth value={editForm.user_email} onChange={(e) => setEditForm({ ...editForm, user_email: e.target.value })} />
-            <TextField label="Phone" size="small" fullWidth value={editForm.user_phone} onChange={(e) => setEditForm({ ...editForm, user_phone: e.target.value })} />
-            <FormControl fullWidth size="small">
-              <InputLabel id="edit-rel">Relationship</InputLabel>
-              <Select labelId="edit-rel" label="Relationship" value={editForm.relationship} onChange={(e) => setEditForm({ ...editForm, relationship: e.target.value })}>
+            <DetailField
+              label="Students"
+              value={
+                Array.isArray(viewRow.students) && viewRow.students.length
+                  ? viewRow.students.map((s) => s.user?.full_name || s.admission_number).filter(Boolean).join(", ")
+                  : "—"
+              }
+            />
+            <DetailField label="Relationship" value={viewRow.relationship || "—"} />
+            <DetailField label="Occupation" value={viewRow.occupation || "—"} />
+          </Stack>
+        ) : null}
+      </PremiumDialog>
+
+      <PremiumDialog
+        open={!!editRow}
+        onClose={() => !saving && setEditRow(null)}
+        title="Edit parent profile"
+        subtitle={editRow?.user?.full_name}
+        icon={<EditIcon sx={{ color: "#fff" }} />}
+        maxWidth="md"
+        footer={
+          <Stack direction="row" spacing={1} justifyContent="flex-end" width="100%">
+            <DialogGhostButton onClick={() => setEditRow(null)} disabled={saving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={saving} onClick={handleSaveEdit}>
+              Save
+            </DialogPrimaryButton>
+          </Stack>
+        }
+      >
+        {editError ? (
+          <Typography color="error" sx={{ mb: 2, fontWeight: 600 }}>
+            {editError}
+          </Typography>
+        ) : null}
+        <Stack spacing={2.5}>
+          <FormSection title="Linked students">
+            {editMetaLoading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+                <CircularProgress size={28} sx={{ color: primaryRed }} />
+              </Box>
+            ) : (
+              <StudentSelectCards
+                students={studentsPicklist}
+                selectedIds={editForm.student_ids}
+                onChange={(ids) => setEditForm({ ...editForm, student_ids: ids })}
+                disabled={saving}
+              />
+            )}
+          </FormSection>
+          <FormSection title="Contact details">
+            <Stack spacing={2}>
+              <TextField
+                label="Full name"
+                size="small"
+                fullWidth
+                value={editForm.user_full_name}
+                onChange={(e) => setEditForm({ ...editForm, user_full_name: e.target.value })}
+              />
+              <TextField
+                label="Email"
+                size="small"
+                fullWidth
+                value={editForm.user_email}
+                onChange={(e) => setEditForm({ ...editForm, user_email: e.target.value })}
+              />
+              <TextField
+                label="Phone"
+                size="small"
+                fullWidth
+                value={editForm.user_phone}
+                onChange={(e) => setEditForm({ ...editForm, user_phone: e.target.value })}
+              />
+            </Stack>
+          </FormSection>
+          <FormSection title="Parent details">
+            <Stack spacing={2}>
+              <HRFilterSelect
+                label="Relationship"
+                value={editForm.relationship}
+                onChange={(e) => setEditForm({ ...editForm, relationship: e.target.value })}
+              >
                 {RELATIONSHIPS.map((opt) => (
                   <MenuItem key={opt.value} value={opt.value}>
                     {opt.label}
                   </MenuItem>
                 ))}
-              </Select>
-            </FormControl>
-            <TextField label="Occupation" size="small" fullWidth value={editForm.occupation} onChange={(e) => setEditForm({ ...editForm, occupation: e.target.value })} />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={editForm.newsletter_subscription}
-                  onChange={(e) => setEditForm({ ...editForm, newsletter_subscription: e.target.checked })}
-                />
-              }
-              label="Newsletter subscription"
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button disabled={saving} onClick={() => setEditRow(null)}>
-            Cancel
-          </Button>
-          <Button variant="contained" disabled={saving} onClick={handleSaveEdit} sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark }, fontWeight: 700 }}>
-            {saving ? <CircularProgress size={22} color="inherit" /> : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+              </HRFilterSelect>
+              <TextField
+                label="Occupation"
+                size="small"
+                fullWidth
+                value={editForm.occupation}
+                onChange={(e) => setEditForm({ ...editForm, occupation: e.target.value })}
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={editForm.newsletter_subscription}
+                    onChange={(e) => setEditForm({ ...editForm, newsletter_subscription: e.target.checked })}
+                  />
+                }
+                label="Newsletter subscription"
+              />
+            </Stack>
+          </FormSection>
+        </Stack>
+      </PremiumDialog>
+    </Stack>
   );
 }
