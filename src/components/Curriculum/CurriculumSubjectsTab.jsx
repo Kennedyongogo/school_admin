@@ -10,7 +10,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   TablePagination,
@@ -19,10 +18,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
   Chip,
   List,
@@ -34,40 +29,25 @@ import {
 } from "@mui/material";
 import {
   Delete as DeleteIcon,
-  Close as CloseIcon,
   Visibility as ViewIcon,
   Edit as EditIcon,
   AccountTree as AccountTreeIcon,
   Toc as TocIcon,
+  Subject as SubjectIcon,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
-
-const primaryRed = "#DC2626";
-const primaryDark = "#B91C1C";
-const primaryLight = "#FEE2E2";
-
-const authJsonHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-async function fetchAllCurricula(token) {
-  const out = [];
-  let page = 1;
-  let totalPages = 1;
-  while (page <= totalPages && page <= 100) {
-    const params = new URLSearchParams({ page: String(page), limit: "100" });
-    const res = await fetch(`/api/curricula?${params}`, { headers: authJsonHeaders(token) });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success) throw new Error(data.message || `Could not load curricula (${res.status})`);
-    const chunk = Array.isArray(data.data) ? data.data : [];
-    out.push(...chunk);
-    totalPages = data.pagination?.totalPages ?? 1;
-    page += 1;
-  }
-  return out;
-}
+import { authJsonHeaders, fetchAllCurricula, truncateText, primaryRed, primaryDark, inputSx, actionIconSx } from "./curriculumShared";
+import {
+  PremiumDialog,
+  DetailField,
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+} from "./curriculumUi";
 
 async function fetchClassesForCurriculum(token, curriculumId) {
   const out = [];
@@ -97,13 +77,6 @@ async function fetchLevelsForClass(token, curriculumId, classId) {
   return Array.isArray(data.data) ? data.data : [];
 }
 
-function truncate(text, max = 160) {
-  if (!text || typeof text !== "string") return "—";
-  const t = text.trim();
-  if (!t) return "—";
-  return t.length <= max ? t : `${t.slice(0, max)}…`;
-}
-
 function topicDisplayName(t) {
   return String(t?.name ?? t?.title ?? "").trim();
 }
@@ -128,7 +101,7 @@ function TopicBranch({ nodes }) {
           </Typography>
           {n.description ? (
             <Typography component="span" color="text.secondary" sx={{ display: "block", fontSize: "0.85em", mt: 0.25 }}>
-              {truncate(String(n.description), 120)}
+              {truncateText(String(n.description), 120)}
             </Typography>
           ) : null}
           {n.subtopics?.length ? (
@@ -136,7 +109,7 @@ function TopicBranch({ nodes }) {
               {n.subtopics.map((s) => (
                 <Typography component="li" key={s.id} variant="caption" color="text.secondary" sx={{ display: "list-item", mb: 0.25 }}>
                   {topicDisplayName(s)}
-                  {s.description ? ` — ${truncate(String(s.description), 60)}` : ""}
+                  {s.description ? ` — ${truncateText(String(s.description), 60)}` : ""}
                 </Typography>
               ))}
             </Stack>
@@ -1044,7 +1017,7 @@ const CurriculumSubjectsTab = forwardRef(function CurriculumSubjectsTab(
               justifyContent: "flex-end",
             }}
           >
-            <FormControl size="small" sx={{ width: { xs: "min(100%, 320px)", sm: 260 } }} disabled={curriculaLoading}>
+            <FormControl size="small" sx={{ width: { xs: "min(100%, 320px)", sm: 260 }, ...inputSx }} disabled={curriculaLoading}>
               <InputLabel id="subj-filter-curr-label">Curriculum</InputLabel>
               <Select
                 labelId="subj-filter-curr-label"
@@ -1064,7 +1037,7 @@ const CurriculumSubjectsTab = forwardRef(function CurriculumSubjectsTab(
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ width: { xs: "min(100%, 320px)", sm: 240 } }} disabled={!filterCurriculumId || classesLoading}>
+            <FormControl size="small" sx={{ width: { xs: "min(100%, 320px)", sm: 240 }, ...inputSx }} disabled={!filterCurriculumId || classesLoading}>
               <InputLabel id="subj-filter-class-label">Class filter</InputLabel>
               <Select
                 labelId="subj-filter-class-label"
@@ -1084,7 +1057,7 @@ const CurriculumSubjectsTab = forwardRef(function CurriculumSubjectsTab(
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ width: { xs: "min(100%, 320px)", sm: 220 } }} disabled={!filterClsId || levelsLoading}>
+            <FormControl size="small" sx={{ width: { xs: "min(100%, 320px)", sm: 220 }, ...inputSx }} disabled={!filterClsId || levelsLoading}>
               <InputLabel id="subj-filter-term-label">Term filter</InputLabel>
               <Select
                 labelId="subj-filter-term-label"
@@ -1105,702 +1078,527 @@ const CurriculumSubjectsTab = forwardRef(function CurriculumSubjectsTab(
           </Stack>
         </Box>
 
-        {subjectsError && (
-          <Alert severity="error" sx={{ borderRadius: 2 }} onClose={() => setSubjectsError(null)}>
-            {subjectsError}
-          </Alert>
-        )}
-
-        <TableContainer
-            sx={{
-              borderRadius: 2,
-              overflow: "auto",
-              border: `1px solid ${primaryLight}`,
-              boxShadow: `0 8px 28px -12px ${primaryRed}33`,
-              bgcolor: "rgba(255,255,255,0.98)",
-            }}
-          >
-            <Table size="medium" sx={{ minWidth: 560, tableLayout: "fixed" }}>
-              <TableHead>
-                <TableRow
-                  sx={{
-                    background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-                    "& .MuiTableCell-head": {
-                      color: "#fff",
-                      fontWeight: 700,
-                      fontSize: "0.8rem",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                      borderBottom: "none",
-                    },
+        <TabPanelShell loading={loadingSubjects} error={subjectsError} onDismissError={() => setSubjectsError(null)}>
+          {!loadingSubjects && (
+            <DataTableShell
+              pagination={
+                <TablePagination
+                  component="div"
+                  count={totalRows}
+                  page={page}
+                  onPageChange={(_, p) => setPage(p)}
+                  rowsPerPage={rowsPerPage}
+                  onRowsPerPageChange={(e) => {
+                    setRowsPerPage(parseInt(e.target.value, 10));
+                    setPage(0);
                   }}
-                >
-                  <TableCell width={52}>No.</TableCell>
-                  <TableCell>Curriculum</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Class</TableCell>
-                  <TableCell>Term</TableCell>
-                  <TableCell align="right" sx={{ width: actionsWidth, minWidth: actionsWidth, whiteSpace: "nowrap" }}>
-                    Actions
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loadingSubjects ? (
-                  <TableRow>
-                    <TableCell colSpan={tableColSpan} sx={{ borderBottom: "none" }}>
-                      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-                        <CircularProgress sx={{ color: primaryRed }} />
-                      </Box>
+                  rowsPerPageOptions={[5, 10, 25, 50]}
+                  labelRowsPerPage="Rows per page"
+                  sx={tablePaginationSx}
+                />
+              }
+            >
+              <Table size="medium" sx={{ minWidth: 560, tableLayout: "fixed" }}>
+                <TableHead>
+                  <TableRow sx={tableHeadRowSx}>
+                    <TableCell width={52}>No.</TableCell>
+                    <TableCell>Curriculum</TableCell>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Class</TableCell>
+                    <TableCell>Term</TableCell>
+                    <TableCell align="right" sx={{ width: actionsWidth, minWidth: actionsWidth, whiteSpace: "nowrap" }}>
+                      Actions
                     </TableCell>
                   </TableRow>
-                ) : rows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={tableColSpan}>
-                      <Typography color="text.secondary" sx={{ py: 4, textAlign: "center" }}>
-                        No subjects yet. Use Add subject in the header, or adjust filters.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  rows.map((r, idx) => (
-                    <TableRow key={r.id} hover>
-                      <TableCell sx={{ color: "text.secondary" }}>{page * rowsPerPage + idx + 1}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>{r.curriculum?.name || "—"}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>{r.name}</TableCell>
-                      <TableCell sx={{ color: "text.secondary" }}>{r.curriculum_class?.name || "—"}</TableCell>
-                      <TableCell sx={{ color: "text.secondary" }}>{r.curriculum_class_level?.name || "—"}</TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          width: actionsWidth,
-                          minWidth: actionsWidth,
-                          whiteSpace: "nowrap",
-                          verticalAlign: "middle",
-                          py: 0.5,
-                        }}
-                      >
-                        <Box sx={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 0 }}>
+                </TableHead>
+                <TableBody>
+                  {rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={tableColSpan}>
+                        <EmptyTableRow message="No subjects yet. Use Add subject in the header, or adjust filters." />
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    rows.map((r, idx) => (
+                      <TableRow key={r.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
+                        <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>{page * rowsPerPage + idx + 1}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{r.curriculum?.name || "—"}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{r.name}</TableCell>
+                        <TableCell sx={{ color: "text.secondary" }}>{r.curriculum_class?.name || "—"}</TableCell>
+                        <TableCell sx={{ color: "text.secondary" }}>{r.curriculum_class_level?.name || "—"}</TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{
+                            width: actionsWidth,
+                            minWidth: actionsWidth,
+                            whiteSpace: "nowrap",
+                            verticalAlign: "middle",
+                            py: 0.5,
+                          }}
+                        >
                           <Tooltip title="Topics & subtopics">
-                            <IconButton size="small" aria-label="Topics and subtopics" onClick={() => openTopicsManageDialog(r)} sx={{ color: primaryDark, flexShrink: 0 }}>
+                            <IconButton size="small" aria-label="Topics and subtopics" onClick={() => openTopicsManageDialog(r)} sx={actionIconSx}>
                               <AccountTreeIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="View">
-                            <IconButton size="small" aria-label="View subject" onClick={() => openView(r)} sx={{ color: primaryDark, flexShrink: 0 }}>
+                            <IconButton size="small" aria-label="View subject" onClick={() => openView(r)} sx={actionIconSx}>
                               <ViewIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Edit">
-                            <IconButton size="small" aria-label="Edit subject" onClick={() => openEdit(r)} sx={{ color: primaryRed, flexShrink: 0 }}>
+                            <IconButton size="small" aria-label="Edit subject" onClick={() => openEdit(r)} sx={actionIconSx}>
                               <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Delete">
-                            <IconButton size="small" aria-label="Delete subject" onClick={() => handleDelete(r)} sx={{ color: primaryRed, flexShrink: 0 }}>
+                            <IconButton
+                              size="small"
+                              aria-label="Delete subject"
+                              onClick={() => handleDelete(r)}
+                              sx={{ ...actionIconSx, "&:hover": { bgcolor: "#FEE2E2", color: primaryRed } }}
+                            >
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-            <TablePagination
-              component="div"
-              count={totalRows}
-              page={page}
-              onPageChange={(_, p) => setPage(p)}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={(e) => {
-                setRowsPerPage(parseInt(e.target.value, 10));
-                setPage(0);
-              }}
-              rowsPerPageOptions={[5, 10, 25, 50]}
-              sx={{
-                borderTop: `1px solid ${primaryLight}`,
-                "& .MuiTablePagination-toolbar": { fontWeight: 600 },
-              }}
-            />
-          </TableContainer>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </DataTableShell>
+          )}
+        </TabPanelShell>
       </Stack>
 
-      <Dialog open={dialogOpen} onClose={() => !saving && setDialogOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle
-          sx={{
-            background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mb: 2,
-          }}
-        >
-          New subject
-          <IconButton onClick={() => setDialogOpen(false)} disabled={saving} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2, pb: 2, overflow: "visible" }}>
-          <Stack spacing={2}>
-            <FormControl fullWidth required sx={{ mt: 0.5 }} disabled={curriculaLoading}>
-              <InputLabel id="dlg-subj-curr-label">Curriculum</InputLabel>
-              <Select
-                labelId="dlg-subj-curr-label"
-                label="Curriculum"
-                value={dialogCurriculumId}
-                onChange={(e) => {
-                  setDialogCurriculumId(e.target.value);
-                  setDialogClassId("");
-                  setDialogLevelId("");
-                }}
-              >
-                <MenuItem value="">
-                  <em>Select curriculum</em>
-                </MenuItem>
-                {curriculaOptions.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth disabled={!dialogCurriculumId || dialogClassesLoading}>
-              <InputLabel id="dlg-subj-class-label">Class (optional)</InputLabel>
-              <Select
-                labelId="dlg-subj-class-label"
-                label="Class (optional)"
-                value={dialogClassId}
-                onChange={(e) => {
-                  setDialogClassId(e.target.value);
-                  setDialogLevelId("");
-                }}
-              >
-                <MenuItem value="">
-                  <em>Whole curriculum</em>
-                </MenuItem>
-                {dialogClassOptions.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.name}
-                    {c.code ? ` (${c.code})` : ""}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth disabled={!dialogClassId || dialogLevelsLoading}>
-              <InputLabel id="dlg-subj-term-label">Term (optional)</InputLabel>
-              <Select labelId="dlg-subj-term-label" label="Term (optional)" value={dialogLevelId} onChange={(e) => setDialogLevelId(e.target.value)}>
-                <MenuItem value="">
-                  <em>Not limited to one term</em>
-                </MenuItem>
-                {dialogLevelOptions.map((l) => (
-                  <MenuItem key={l.id} value={l.id}>
-                    {l.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField label="Name" fullWidth required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} helperText="Unique per curriculum, or per term if a term is selected" />
-            <TextField label="Description" fullWidth multiline minRows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
-            <Stack direction="row" alignItems="center" spacing={2}>
-              <Chip
-                label={form.is_core ? "Core" : "Non-core"}
-                onClick={() => setForm((f) => ({ ...f, is_core: !f.is_core }))}
-                color={form.is_core ? "primary" : "default"}
-                sx={{ fontWeight: 600, cursor: "pointer" }}
-              />
-              <Chip
-                label={form.is_active ? "Active" : "Inactive"}
-                onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
-                color={form.is_active ? "success" : "default"}
-                sx={{ fontWeight: 600, cursor: "pointer" }}
-              />
-            </Stack>
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setDialogOpen(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleCreateSubmit} disabled={saving} sx={{ bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }}>
-            {saving ? "Saving…" : "Create"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={!!viewRow} onClose={() => setViewRow(null)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle
-          sx={{
-            background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mb: 2,
-          }}
-        >
-          Subject details
-          <IconButton onClick={() => setViewRow(null)} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2, pb: 2 }}>
-          {viewRow && (
-            <Stack spacing={1.5}>
-              <Typography variant="body2" color="text.secondary">
-                Curriculum
-              </Typography>
-              <Typography sx={{ fontWeight: 700 }}>{viewRow.curriculum?.name || "—"}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
-                Name
-              </Typography>
-              <Typography sx={{ fontWeight: 700 }}>{viewRow.name}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
-                Class / Term
-              </Typography>
-              <Typography>
-                {viewRow.curriculum_class?.name || "—"}
-                {viewRow.curriculum_class_level?.name ? ` · ${viewRow.curriculum_class_level.name}` : ""}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Description
-              </Typography>
-              <Typography sx={{ whiteSpace: "pre-wrap" }}>{truncate(viewRow.description, 400)}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Topics and subtopics
-              </Typography>
-              {viewLoading ? (
-                <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-                  <CircularProgress size={28} sx={{ color: primaryRed }} />
-                </Box>
-              ) : viewTopics.length === 0 ? (
-                <Typography color="text.secondary">None defined yet.</Typography>
-              ) : (
-                <TopicBranch nodes={viewTopics} />
-              )}
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setViewRow(null)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={editOpen} onClose={() => !editSaving && setEditOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle
-          sx={{
-            background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mb: 2,
-          }}
-        >
-          Edit subject
-          <IconButton onClick={() => setEditOpen(false)} disabled={editSaving} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2, pb: 2, overflow: "visible" }}>
-          <Stack spacing={2}>
-            <FormControl fullWidth disabled={editClassesLoading}>
-              <InputLabel id="edit-subj-class-label">Class (optional)</InputLabel>
-              <Select
-                labelId="edit-subj-class-label"
-                label="Class (optional)"
-                value={editClassId}
-                onChange={(e) => {
-                  setEditClassId(e.target.value);
-                  setEditLevelId("");
-                }}
-              >
-                <MenuItem value="">
-                  <em>Whole curriculum</em>
-                </MenuItem>
-                {editClassOptions.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.name}
-                    {c.code ? ` (${c.code})` : ""}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth disabled={!editClassId || editLevelsLoading}>
-              <InputLabel id="edit-subj-term-label">Term (optional)</InputLabel>
-              <Select labelId="edit-subj-term-label" label="Term (optional)" value={editLevelId} onChange={(e) => setEditLevelId(e.target.value)}>
-                <MenuItem value="">
-                  <em>Not limited to one term</em>
-                </MenuItem>
-                {editLevelOptions.map((l) => (
-                  <MenuItem key={l.id} value={l.id}>
-                    {l.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField label="Name" fullWidth required value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
-            <TextField label="Description" fullWidth multiline minRows={2} value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} />
-            <Stack direction="row" alignItems="center" spacing={2}>
-              <Chip
-                label={editForm.is_core ? "Core" : "Non-core"}
-                onClick={() => !editSaving && setEditForm((f) => ({ ...f, is_core: !f.is_core }))}
-                color={editForm.is_core ? "primary" : "default"}
-                sx={{ fontWeight: 600, cursor: editSaving ? "default" : "pointer" }}
-              />
-              <Chip
-                label={editForm.is_active ? "Active" : "Inactive"}
-                onClick={() => !editSaving && setEditForm((f) => ({ ...f, is_active: !f.is_active }))}
-                color={editForm.is_active ? "success" : "default"}
-                sx={{ fontWeight: 600, cursor: editSaving ? "default" : "pointer" }}
-              />
-            </Stack>
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setEditOpen(false)} disabled={editSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleEditSubmit} disabled={editSaving} sx={{ bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }}>
-            {editSaving ? "Saving…" : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={topicsDialogOpen}
-        onClose={closeTopicsManageDialog}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 3 } }}
+      <PremiumDialog
+        open={dialogOpen}
+        onClose={() => !saving && setDialogOpen(false)}
+        title="New subject"
+        subtitle="Add a subject to a curriculum"
+        icon={<SubjectIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !saving && setDialogOpen(false)} disabled={saving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={saving} onClick={handleCreateSubmit}>
+              Create
+            </DialogPrimaryButton>
+          </>
+        }
       >
-        <DialogTitle
-          sx={{
-            background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 1,
-            mb: 1,
-          }}
-        >
-          <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
-            <AccountTreeIcon sx={{ flexShrink: 0 }} />
-            <Typography component="span" sx={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis" }}>
-              Topics — {topicsDialogSubject?.name || ""}
-            </Typography>
+        <Stack spacing={2}>
+          <FormControl fullWidth required sx={inputSx} disabled={curriculaLoading}>
+            <InputLabel id="dlg-subj-curr-label">Curriculum</InputLabel>
+            <Select
+              labelId="dlg-subj-curr-label"
+              label="Curriculum"
+              value={dialogCurriculumId}
+              onChange={(e) => {
+                setDialogCurriculumId(e.target.value);
+                setDialogClassId("");
+                setDialogLevelId("");
+              }}
+            >
+              <MenuItem value="">
+                <em>Select curriculum</em>
+              </MenuItem>
+              {curriculaOptions.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth sx={inputSx} disabled={!dialogCurriculumId || dialogClassesLoading}>
+            <InputLabel id="dlg-subj-class-label">Class (optional)</InputLabel>
+            <Select
+              labelId="dlg-subj-class-label"
+              label="Class (optional)"
+              value={dialogClassId}
+              onChange={(e) => {
+                setDialogClassId(e.target.value);
+                setDialogLevelId("");
+              }}
+            >
+              <MenuItem value="">
+                <em>Whole curriculum</em>
+              </MenuItem>
+              {dialogClassOptions.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                  {c.code ? ` (${c.code})` : ""}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth sx={inputSx} disabled={!dialogClassId || dialogLevelsLoading}>
+            <InputLabel id="dlg-subj-term-label">Term (optional)</InputLabel>
+            <Select labelId="dlg-subj-term-label" label="Term (optional)" value={dialogLevelId} onChange={(e) => setDialogLevelId(e.target.value)}>
+              <MenuItem value="">
+                <em>Not limited to one term</em>
+              </MenuItem>
+              {dialogLevelOptions.map((l) => (
+                <MenuItem key={l.id} value={l.id}>
+                  {l.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField label="Name" fullWidth required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} helperText="Unique per curriculum, or per term if a term is selected" sx={inputSx} />
+          <TextField label="Description" fullWidth multiline minRows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} sx={inputSx} />
+          <Stack direction="row" alignItems="center" spacing={2}>
+            <Chip
+              label={form.is_core ? "Core" : "Non-core"}
+              onClick={() => setForm((f) => ({ ...f, is_core: !f.is_core }))}
+              color={form.is_core ? "primary" : "default"}
+              sx={{ fontWeight: 600, cursor: "pointer" }}
+            />
+            <Chip
+              label={form.is_active ? "Active" : "Inactive"}
+              onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
+              color={form.is_active ? "success" : "default"}
+              sx={{ fontWeight: 600, cursor: "pointer" }}
+            />
           </Stack>
-          <IconButton onClick={closeTopicsManageDialog} disabled={topicAddSaving || topicEditSaving || subtopicSaving} sx={{ color: "#fff", flexShrink: 0 }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 1, pb: 2 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Use <strong>Edit</strong> (pencil) or click a topic row to change name, description, and order. Use the list icon to show or hide subtopics for that topic. Click the list icon again to hide.
-          </Typography>
-          <Paper variant="outlined" sx={{ mb: 2, maxHeight: 240, overflow: "auto", borderRadius: 2 }}>
-            {topicsLoading ? (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+        </Stack>
+      </PremiumDialog>
+
+      <PremiumDialog
+        open={!!viewRow}
+        onClose={() => setViewRow(null)}
+        title={viewRow?.name || "Subject details"}
+        subtitle="Subject overview"
+        icon={<SubjectIcon />}
+        footer={<DialogGhostButton onClick={() => setViewRow(null)}>Close</DialogGhostButton>}
+      >
+        {viewRow && (
+          <Stack spacing={1.5}>
+            <DetailField label="Curriculum" value={viewRow.curriculum?.name} />
+            <DetailField label="Name" value={viewRow.name} />
+            <DetailField
+              label="Class / Term"
+              value={`${viewRow.curriculum_class?.name || "—"}${viewRow.curriculum_class_level?.name ? ` · ${viewRow.curriculum_class_level.name}` : ""}`}
+            />
+            <DetailField label="Description" value={truncateText(viewRow.description, 400)} />
+            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+              Topics and subtopics
+            </Typography>
+            {viewLoading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
                 <CircularProgress size={28} sx={{ color: primaryRed }} />
               </Box>
-            ) : sortedTopicsDisplay.length === 0 ? (
-              <Typography color="text.secondary" sx={{ py: 3, px: 2, textAlign: "center" }}>
-                No topics yet. Add one below.
-              </Typography>
+            ) : viewTopics.length === 0 ? (
+              <Typography color="text.secondary">None defined yet.</Typography>
             ) : (
-              <List dense disablePadding>
-                {sortedTopicsDisplay.map((t) => (
-                  <ListItem
-                    key={t.id}
-                    disablePadding
-                    sx={{
-                      bgcolor: subtopicsTopic?.id === t.id ? "action.selected" : undefined,
-                    }}
-                    secondaryAction={
-                      <Stack direction="row" spacing={0} alignItems="center" sx={{ pr: 0.5 }}>
-                        <Tooltip title="Edit topic">
-                          <IconButton
-                            size="small"
-                            aria-label="Edit topic"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openTopicEditDialog(t);
-                            }}
-                            disabled={topicAddSaving}
-                            sx={{ color: primaryRed }}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title={subtopicsTopic?.id === t.id ? "Hide subtopics" : "Subtopics — add here"}>
-                          <IconButton
-                            edge="end"
-                            size="small"
-                            aria-label={subtopicsTopic?.id === t.id ? "Hide subtopics" : "Show subtopics"}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleSubtopicsPanelForTopic(t);
-                            }}
-                            disabled={topicAddSaving}
-                            sx={{ color: subtopicsTopic?.id === t.id ? primaryRed : primaryDark }}
-                          >
-                            <TocIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Stack>
-                    }
-                  >
-                    <ListItemButton onClick={() => openTopicEditDialog(t)} disabled={topicAddSaving}>
+              <TopicBranch nodes={viewTopics} />
+            )}
+          </Stack>
+        )}
+      </PremiumDialog>
+
+      <PremiumDialog
+        open={editOpen}
+        onClose={() => !editSaving && setEditOpen(false)}
+        title="Edit subject"
+        subtitle="Update subject details"
+        icon={<SubjectIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={editSaving} onClick={handleEditSubmit}>
+              Save
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        <Stack spacing={2}>
+          <FormControl fullWidth sx={inputSx} disabled={editClassesLoading}>
+            <InputLabel id="edit-subj-class-label">Class (optional)</InputLabel>
+            <Select
+              labelId="edit-subj-class-label"
+              label="Class (optional)"
+              value={editClassId}
+              onChange={(e) => {
+                setEditClassId(e.target.value);
+                setEditLevelId("");
+              }}
+            >
+              <MenuItem value="">
+                <em>Whole curriculum</em>
+              </MenuItem>
+              {editClassOptions.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                  {c.code ? ` (${c.code})` : ""}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth sx={inputSx} disabled={!editClassId || editLevelsLoading}>
+            <InputLabel id="edit-subj-term-label">Term (optional)</InputLabel>
+            <Select labelId="edit-subj-term-label" label="Term (optional)" value={editLevelId} onChange={(e) => setEditLevelId(e.target.value)}>
+              <MenuItem value="">
+                <em>Not limited to one term</em>
+              </MenuItem>
+              {editLevelOptions.map((l) => (
+                <MenuItem key={l.id} value={l.id}>
+                  {l.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField label="Name" fullWidth required value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} sx={inputSx} />
+          <TextField label="Description" fullWidth multiline minRows={2} value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} sx={inputSx} />
+          <Stack direction="row" alignItems="center" spacing={2}>
+            <Chip
+              label={editForm.is_core ? "Core" : "Non-core"}
+              onClick={() => !editSaving && setEditForm((f) => ({ ...f, is_core: !f.is_core }))}
+              color={editForm.is_core ? "primary" : "default"}
+              sx={{ fontWeight: 600, cursor: editSaving ? "default" : "pointer" }}
+            />
+            <Chip
+              label={editForm.is_active ? "Active" : "Inactive"}
+              onClick={() => !editSaving && setEditForm((f) => ({ ...f, is_active: !f.is_active }))}
+              color={editForm.is_active ? "success" : "default"}
+              sx={{ fontWeight: 600, cursor: editSaving ? "default" : "pointer" }}
+            />
+          </Stack>
+        </Stack>
+      </PremiumDialog>
+
+      <PremiumDialog
+        open={topicsDialogOpen}
+        onClose={closeTopicsManageDialog}
+        title={`Topics — ${topicsDialogSubject?.name || ""}`}
+        subtitle="Manage topics and subtopics"
+        icon={<AccountTreeIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={closeTopicsManageDialog} disabled={topicAddSaving}>
+              Close
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={topicAddSaving} onClick={handleAddTopic}>
+              Add topic
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          Use <strong>Edit</strong> (pencil) or click a topic row to change name, description, and order. Use the list icon to show or hide subtopics for that topic. Click the list icon again to hide.
+        </Typography>
+        <Paper variant="outlined" sx={{ mb: 2, maxHeight: 240, overflow: "auto", borderRadius: 2 }}>
+          {topicsLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+              <CircularProgress size={28} sx={{ color: primaryRed }} />
+            </Box>
+          ) : sortedTopicsDisplay.length === 0 ? (
+            <Typography color="text.secondary" sx={{ py: 3, px: 2, textAlign: "center" }}>
+              No topics yet. Add one below.
+            </Typography>
+          ) : (
+            <List dense disablePadding>
+              {sortedTopicsDisplay.map((t) => (
+                <ListItem
+                  key={t.id}
+                  disablePadding
+                  sx={{
+                    bgcolor: subtopicsTopic?.id === t.id ? "action.selected" : undefined,
+                  }}
+                  secondaryAction={
+                    <Stack direction="row" spacing={0} alignItems="center" sx={{ pr: 0.5 }}>
+                      <Tooltip title="Edit topic">
+                        <IconButton
+                          size="small"
+                          aria-label="Edit topic"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openTopicEditDialog(t);
+                          }}
+                          disabled={topicAddSaving}
+                          sx={actionIconSx}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={subtopicsTopic?.id === t.id ? "Hide subtopics" : "Subtopics — add here"}>
+                        <IconButton
+                          edge="end"
+                          size="small"
+                          aria-label={subtopicsTopic?.id === t.id ? "Hide subtopics" : "Show subtopics"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSubtopicsPanelForTopic(t);
+                          }}
+                          disabled={topicAddSaving}
+                          sx={{ ...actionIconSx, color: subtopicsTopic?.id === t.id ? primaryRed : undefined }}
+                        >
+                          <TocIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  }
+                >
+                  <ListItemButton onClick={() => openTopicEditDialog(t)} disabled={topicAddSaving}>
+                    <ListItemText
+                      primary={topicDisplayName(t)}
+                      secondary={t.description ? truncateText(String(t.description), 80) : undefined}
+                      primaryTypographyProps={{ variant: "body2", fontWeight: 600 }}
+                      secondaryTypographyProps={{ variant: "caption" }}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </Paper>
+        {subtopicsTopic ? (
+          <Paper variant="outlined" sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: "rgba(254, 226, 226, 0.35)" }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                Subtopics — {topicDisplayName(subtopicsTopic)}
+              </Typography>
+              <Button size="small" onClick={closeSubtopicsPanel} disabled={subtopicSaving}>
+                Hide
+              </Button>
+            </Stack>
+            <Paper variant="outlined" sx={{ mb: 2, maxHeight: 180, overflow: "auto", borderRadius: 2, bgcolor: "#fff" }}>
+              {subtopicsLoading ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+                  <CircularProgress size={24} sx={{ color: primaryRed }} />
+                </Box>
+              ) : subtopicsList.length === 0 ? (
+                <Typography color="text.secondary" sx={{ py: 2, px: 2, textAlign: "center" }} variant="body2">
+                  No subtopics yet. Add one below.
+                </Typography>
+              ) : (
+                <List dense disablePadding>
+                  {subtopicsList.map((s) => (
+                    <ListItem
+                      key={s.id}
+                      secondaryAction={
+                        <Stack direction="row" spacing={0}>
+                          <Tooltip title="Edit">
+                            <IconButton
+                              size="small"
+                              aria-label="Edit subtopic"
+                              onClick={() => {
+                                setSubtopicEditingId(s.id);
+                                setSubtopicForm({
+                                  name: topicDisplayName(s),
+                                  description: s.description != null ? String(s.description) : "",
+                                  order_index: String(s.order_index ?? 0),
+                                });
+                              }}
+                              disabled={subtopicSaving}
+                              sx={actionIconSx}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete">
+                            <IconButton
+                              size="small"
+                              aria-label="Delete subtopic"
+                              onClick={() => handleSubtopicDelete(s)}
+                              disabled={subtopicSaving}
+                              sx={{ ...actionIconSx, "&:hover": { bgcolor: "#FEE2E2", color: primaryRed } }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      }
+                    >
                       <ListItemText
-                        primary={topicDisplayName(t)}
-                        secondary={t.description ? truncate(String(t.description), 80) : undefined}
+                        primary={topicDisplayName(s)}
+                        secondary={s.description ? truncateText(String(s.description), 72) : `Order: ${s.order_index ?? 0}`}
                         primaryTypographyProps={{ variant: "body2", fontWeight: 600 }}
                         secondaryTypographyProps={{ variant: "caption" }}
                       />
-                    </ListItemButton>
-                  </ListItem>
-                ))}
-              </List>
-            )}
-          </Paper>
-          {subtopicsTopic ? (
-            <Paper variant="outlined" sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: "rgba(254, 226, 226, 0.35)" }}>
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                  Subtopics — {topicDisplayName(subtopicsTopic)}
-                </Typography>
-                <Button size="small" onClick={closeSubtopicsPanel} disabled={subtopicSaving}>
-                  Hide
-                </Button>
-              </Stack>
-              <Paper variant="outlined" sx={{ mb: 2, maxHeight: 180, overflow: "auto", borderRadius: 2, bgcolor: "#fff" }}>
-                {subtopicsLoading ? (
-                  <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
-                    <CircularProgress size={24} sx={{ color: primaryRed }} />
-                  </Box>
-                ) : subtopicsList.length === 0 ? (
-                  <Typography color="text.secondary" sx={{ py: 2, px: 2, textAlign: "center" }} variant="body2">
-                    No subtopics yet. Add one below.
-                  </Typography>
-                ) : (
-                  <List dense disablePadding>
-                    {subtopicsList.map((s) => (
-                      <ListItem
-                        key={s.id}
-                        secondaryAction={
-                          <Stack direction="row" spacing={0}>
-                            <Tooltip title="Edit">
-                              <IconButton
-                                size="small"
-                                aria-label="Edit subtopic"
-                                onClick={() => {
-                                  setSubtopicEditingId(s.id);
-                                  setSubtopicForm({
-                                    name: topicDisplayName(s),
-                                    description: s.description != null ? String(s.description) : "",
-                                    order_index: String(s.order_index ?? 0),
-                                  });
-                                }}
-                                disabled={subtopicSaving}
-                              >
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Delete">
-                              <IconButton
-                                size="small"
-                                aria-label="Delete subtopic"
-                                onClick={() => handleSubtopicDelete(s)}
-                                disabled={subtopicSaving}
-                                sx={{ color: primaryRed }}
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Stack>
-                        }
-                      >
-                        <ListItemText
-                          primary={topicDisplayName(s)}
-                          secondary={s.description ? truncate(String(s.description), 72) : `Order: ${s.order_index ?? 0}`}
-                          primaryTypographyProps={{ variant: "body2", fontWeight: 600 }}
-                          secondaryTypographyProps={{ variant: "caption" }}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                )}
-              </Paper>
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
-                {subtopicEditingId ? "Edit subtopic" : "Add subtopic"}
-              </Typography>
-              <Stack spacing={1.5}>
-                <TextField
-                  label="Name"
-                  fullWidth
-                  required
-                  size="small"
-                  value={subtopicForm.name}
-                  onChange={(e) => setSubtopicForm((f) => ({ ...f, name: e.target.value }))}
-                  disabled={subtopicSaving}
-                />
-                <TextField
-                  label="Description"
-                  fullWidth
-                  multiline
-                  minRows={2}
-                  size="small"
-                  value={subtopicForm.description}
-                  onChange={(e) => setSubtopicForm((f) => ({ ...f, description: e.target.value }))}
-                  disabled={subtopicSaving}
-                />
-                <TextField
-                  label="Order"
-                  fullWidth
-                  size="small"
-                  type="number"
-                  value={subtopicForm.order_index}
-                  onChange={(e) => setSubtopicForm((f) => ({ ...f, order_index: e.target.value }))}
-                  disabled={subtopicSaving}
-                  helperText="Lower numbers appear first"
-                />
-              </Stack>
-              <Stack direction="row" alignItems="center" justifyContent="flex-end" spacing={1} sx={{ mt: 2, flexWrap: "wrap" }}>
-                {subtopicEditingId ? (
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      setSubtopicEditingId(null);
-                      setSubtopicForm({ name: "", description: "", order_index: "0" });
-                    }}
-                    disabled={subtopicSaving}
-                  >
-                    Cancel edit
-                  </Button>
-                ) : null}
-                <Button variant="contained" onClick={handleSubtopicFormSave} disabled={subtopicSaving} sx={{ bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }}>
-                  {subtopicSaving ? "Saving…" : subtopicEditingId ? "Save subtopic" : "Add subtopic"}
-                </Button>
-              </Stack>
+                    </ListItem>
+                  ))}
+                </List>
+              )}
             </Paper>
-          ) : null}
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700 }}>
-            Add topic
-          </Typography>
-          <Stack spacing={2}>
-            <TextField
-              label="Name"
-              fullWidth
-              required
-              size="small"
-              value={topicForm.name}
-              onChange={(e) => setTopicForm((f) => ({ ...f, name: e.target.value }))}
-              disabled={topicAddSaving}
-            />
-            <TextField
-              label="Description"
-              fullWidth
-              multiline
-              minRows={2}
-              size="small"
-              value={topicForm.description}
-              onChange={(e) => setTopicForm((f) => ({ ...f, description: e.target.value }))}
-              disabled={topicAddSaving}
-            />
-            <TextField
-              label="Order"
-              fullWidth
-              size="small"
-              type="number"
-              value={topicForm.order_index}
-              onChange={(e) => setTopicForm((f) => ({ ...f, order_index: e.target.value }))}
-              disabled={topicAddSaving}
-              helperText="Lower numbers appear first"
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2, pt: 0 }}>
-          <Button onClick={closeTopicsManageDialog} disabled={topicAddSaving}>
-            Close
-          </Button>
-          <Button variant="contained" onClick={handleAddTopic} disabled={topicAddSaving} sx={{ bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }}>
-            {topicAddSaving ? "Saving…" : "Add topic"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
+              {subtopicEditingId ? "Edit subtopic" : "Add subtopic"}
+            </Typography>
+            <Stack spacing={1.5}>
+              <TextField label="Name" fullWidth required size="small" value={subtopicForm.name} onChange={(e) => setSubtopicForm((f) => ({ ...f, name: e.target.value }))} disabled={subtopicSaving} sx={inputSx} />
+              <TextField label="Description" fullWidth multiline minRows={2} size="small" value={subtopicForm.description} onChange={(e) => setSubtopicForm((f) => ({ ...f, description: e.target.value }))} disabled={subtopicSaving} sx={inputSx} />
+              <TextField label="Order" fullWidth size="small" type="number" value={subtopicForm.order_index} onChange={(e) => setSubtopicForm((f) => ({ ...f, order_index: e.target.value }))} disabled={subtopicSaving} helperText="Lower numbers appear first" sx={inputSx} />
+            </Stack>
+            <Stack direction="row" alignItems="center" justifyContent="flex-end" spacing={1} sx={{ mt: 2, flexWrap: "wrap" }}>
+              {subtopicEditingId ? (
+                <DialogGhostButton
+                  size="small"
+                  onClick={() => {
+                    setSubtopicEditingId(null);
+                    setSubtopicForm({ name: "", description: "", order_index: "0" });
+                  }}
+                  disabled={subtopicSaving}
+                >
+                  Cancel edit
+                </DialogGhostButton>
+              ) : null}
+              <DialogPrimaryButton size="small" loading={subtopicSaving} onClick={handleSubtopicFormSave}>
+                {subtopicEditingId ? "Save subtopic" : "Add subtopic"}
+              </DialogPrimaryButton>
+            </Stack>
+          </Paper>
+        ) : null}
+        <Divider sx={{ my: 2 }} />
+        <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700 }}>
+          Add topic
+        </Typography>
+        <Stack spacing={2}>
+          <TextField label="Name" fullWidth required size="small" value={topicForm.name} onChange={(e) => setTopicForm((f) => ({ ...f, name: e.target.value }))} disabled={topicAddSaving} sx={inputSx} />
+          <TextField label="Description" fullWidth multiline minRows={2} size="small" value={topicForm.description} onChange={(e) => setTopicForm((f) => ({ ...f, description: e.target.value }))} disabled={topicAddSaving} sx={inputSx} />
+          <TextField label="Order" fullWidth size="small" type="number" value={topicForm.order_index} onChange={(e) => setTopicForm((f) => ({ ...f, order_index: e.target.value }))} disabled={topicAddSaving} helperText="Lower numbers appear first" sx={inputSx} />
+        </Stack>
+      </PremiumDialog>
 
-      <Dialog open={topicEditOpen} onClose={closeTopicEditDialog} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle
-          sx={{
-            background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mb: 2,
-          }}
-        >
-          Edit topic
-          <IconButton onClick={closeTopicEditDialog} disabled={topicEditSaving} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2, pb: 2, overflow: "visible" }}>
-          <Stack spacing={2}>
-            <TextField
-              label="Name"
-              fullWidth
-              required
-              value={topicEditForm.name}
-              onChange={(e) => setTopicEditForm((f) => ({ ...f, name: e.target.value }))}
-              disabled={topicEditSaving}
-            />
-            <TextField
-              label="Description"
-              fullWidth
-              multiline
-              minRows={2}
-              value={topicEditForm.description}
-              onChange={(e) => setTopicEditForm((f) => ({ ...f, description: e.target.value }))}
-              disabled={topicEditSaving}
-            />
-            <TextField
-              label="Order"
-              fullWidth
-              type="number"
-              value={topicEditForm.order_index}
-              onChange={(e) => setTopicEditForm((f) => ({ ...f, order_index: e.target.value }))}
-              disabled={topicEditSaving}
-              helperText="Lower numbers appear first"
-            />
-            <Stack direction="row" alignItems="center" spacing={2}>
-              <Chip
-                label={topicEditForm.is_active ? "Active" : "Inactive"}
-                onClick={() => !topicEditSaving && setTopicEditForm((f) => ({ ...f, is_active: !f.is_active }))}
-                color={topicEditForm.is_active ? "success" : "default"}
-                sx={{ fontWeight: 600, cursor: topicEditSaving ? "default" : "pointer" }}
-              />
+      <PremiumDialog
+        open={topicEditOpen}
+        onClose={closeTopicEditDialog}
+        title="Edit topic"
+        subtitle="Update topic details"
+        icon={<AccountTreeIcon />}
+        footer={
+          <Stack direction="row" justifyContent="space-between" width="100%" alignItems="center">
+            <Button color="error" onClick={handleTopicEditDelete} disabled={topicEditSaving} sx={{ textTransform: "none", fontWeight: 700 }}>
+              Delete topic
+            </Button>
+            <Stack direction="row" spacing={1}>
+              <DialogGhostButton onClick={closeTopicEditDialog} disabled={topicEditSaving}>
+                Cancel
+              </DialogGhostButton>
+              <DialogPrimaryButton loading={topicEditSaving} onClick={handleTopicEditSave}>
+                Save
+              </DialogPrimaryButton>
             </Stack>
           </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2, justifyContent: "space-between" }}>
-          <Button color="error" onClick={handleTopicEditDelete} disabled={topicEditSaving}>
-            Delete topic
-          </Button>
-          <Stack direction="row" spacing={1}>
-            <Button onClick={closeTopicEditDialog} disabled={topicEditSaving}>
-              Cancel
-            </Button>
-            <Button variant="contained" onClick={handleTopicEditSave} disabled={topicEditSaving} sx={{ bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }}>
-              {topicEditSaving ? "Saving…" : "Save"}
-            </Button>
+        }
+      >
+        <Stack spacing={2}>
+          <TextField label="Name" fullWidth required value={topicEditForm.name} onChange={(e) => setTopicEditForm((f) => ({ ...f, name: e.target.value }))} disabled={topicEditSaving} sx={inputSx} />
+          <TextField label="Description" fullWidth multiline minRows={2} value={topicEditForm.description} onChange={(e) => setTopicEditForm((f) => ({ ...f, description: e.target.value }))} disabled={topicEditSaving} sx={inputSx} />
+          <TextField label="Order" fullWidth type="number" value={topicEditForm.order_index} onChange={(e) => setTopicEditForm((f) => ({ ...f, order_index: e.target.value }))} disabled={topicEditSaving} helperText="Lower numbers appear first" sx={inputSx} />
+          <Stack direction="row" alignItems="center" spacing={2}>
+            <Chip
+              label={topicEditForm.is_active ? "Active" : "Inactive"}
+              onClick={() => !topicEditSaving && setTopicEditForm((f) => ({ ...f, is_active: !f.is_active }))}
+              color={topicEditForm.is_active ? "success" : "default"}
+              sx={{ fontWeight: 600, cursor: topicEditSaving ? "default" : "pointer" }}
+            />
           </Stack>
-        </DialogActions>
-      </Dialog>
+        </Stack>
+      </PremiumDialog>
     </>
   );
 });

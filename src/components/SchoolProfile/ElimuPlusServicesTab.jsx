@@ -2,21 +2,14 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useStat
 import {
   Box,
   Typography,
-  Button,
   Alert,
-  CircularProgress,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   IconButton,
   Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
   Stack,
   TablePagination,
@@ -27,7 +20,6 @@ import {
 } from "@mui/material";
 import {
   Delete as DeleteIcon,
-  Close as CloseIcon,
   Visibility as VisibilityIcon,
   Edit as EditIcon,
   MenuBook as MenuBookIcon,
@@ -39,10 +31,18 @@ import {
   School as SchoolIcon,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
-
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
-const accentLight = "#FEE2E2";
+import { authHeaders, inputSx, primaryRed, primaryDark, actionIconSx } from "./elimuPlusShared";
+import {
+  PremiumDialog,
+  DetailField,
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+} from "./elimuPlusUi";
 
 const ICON_OPTIONS = [
   { key: "MenuBook", label: "Academic", Icon: MenuBookIcon },
@@ -53,12 +53,6 @@ const ICON_OPTIONS = [
   { key: "Computer", label: "Digital", Icon: ComputerIcon },
   { key: "School", label: "School", Icon: SchoolIcon },
 ];
-
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
 
 function resolveIcon(iconKey) {
   const found = ICON_OPTIONS.find((o) => o.key === iconKey);
@@ -88,6 +82,7 @@ function ServiceFormFields({ values, onChange, idPrefix }) {
         fullWidth
         value={values.name}
         onChange={(e) => onChange({ name: e.target.value })}
+        sx={inputSx}
       />
       <TextField
         label="Description"
@@ -98,8 +93,9 @@ function ServiceFormFields({ values, onChange, idPrefix }) {
         value={values.description}
         onChange={(e) => onChange({ description: e.target.value })}
         helperText="Shown in the home page Programmes & services carousel"
+        sx={inputSx}
       />
-      <FormControl fullWidth>
+      <FormControl fullWidth sx={inputSx}>
         <InputLabel id={`${idPrefix}-icon`}>Icon</InputLabel>
         <Select
           labelId={`${idPrefix}-icon`}
@@ -134,6 +130,7 @@ function ServiceFormFields({ values, onChange, idPrefix }) {
         value={values.sort_order}
         onChange={(e) => onChange({ sort_order: e.target.value })}
         helperText="Lower numbers appear first in the carousel"
+        sx={inputSx}
       />
     </Stack>
   );
@@ -317,7 +314,7 @@ const ElimuPlusServicesTab = forwardRef(function ElimuPlusServicesTab({ active }
       title: "Delete service?",
       text: row?.name ? `"${row.name}" will be removed from the public site.` : undefined,
       showCancelButton: true,
-      confirmButtonColor: accent,
+      confirmButtonColor: primaryRed,
       cancelButtonColor: "#6B7280",
       confirmButtonText: "Delete",
     });
@@ -345,34 +342,29 @@ const ElimuPlusServicesTab = forwardRef(function ElimuPlusServicesTab({ active }
   const ViewIcon = viewRow ? resolveIcon(viewRow.icon_key) : SchoolIcon;
 
   return (
-    <Box sx={{ pt: 2 }}>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-          <CircularProgress sx={{ color: accent }} />
-        </Box>
-      ) : (
-        <TableContainer
-          sx={{
-            borderRadius: 2,
-            border: `1px solid ${accentLight}`,
-            boxShadow: `0 8px 28px -12px ${accent}33`,
-            bgcolor: "rgba(255,255,255,0.98)",
-          }}
+    <TabPanelShell loading={loading} error={error} onDismissError={() => setError(null)}>
+      {!loading && (
+        <DataTableShell
+          pagination={
+            <TablePagination
+              component="div"
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              count={totalCount}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(_, newPage) => setPage(newPage)}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              labelRowsPerPage="Rows per page"
+              sx={tablePaginationSx}
+            />
+          }
         >
           <Table size="medium">
             <TableHead>
-              <TableRow
-                sx={{
-                  background: `linear-gradient(135deg, ${accent} 0%, ${accentDark} 100%)`,
-                  "& .MuiTableCell-head": { color: "#fff", fontWeight: 700, borderBottom: "none" },
-                }}
-              >
+              <TableRow sx={tableHeadRowSx}>
                 <TableCell width={56}>#</TableCell>
                 <TableCell width={56}>Icon</TableCell>
                 <TableCell>Name</TableCell>
@@ -387,16 +379,14 @@ const ElimuPlusServicesTab = forwardRef(function ElimuPlusServicesTab({ active }
               {rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6}>
-                    <Typography color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
-                      No services yet. Use Add service in the header.
-                    </Typography>
+                    <EmptyTableRow message="No services yet. Use Add service in the header." />
                   </TableCell>
                 </TableRow>
               ) : (
                 rows.map((r, idx) => {
                   const RowIcon = resolveIcon(r.icon_key);
                   return (
-                    <TableRow key={r.id} hover>
+                    <TableRow key={r.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
                       <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>
                         {page * rowsPerPage + idx + 1}
                       </TableCell>
@@ -406,11 +396,11 @@ const ElimuPlusServicesTab = forwardRef(function ElimuPlusServicesTab({ active }
                             width: 36,
                             height: 36,
                             borderRadius: "50%",
-                            bgcolor: `${accent}14`,
+                            bgcolor: `${primaryRed}14`,
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            color: accentDark,
+                            color: primaryDark,
                           }}
                         >
                           <RowIcon fontSize="small" />
@@ -431,17 +421,22 @@ const ElimuPlusServicesTab = forwardRef(function ElimuPlusServicesTab({ active }
                       <TableCell sx={{ fontWeight: 600 }}>{r.sort_order}</TableCell>
                       <TableCell align="right">
                         <Tooltip title="View">
-                          <IconButton size="small" aria-label="View service" onClick={() => openView(r)} sx={{ color: accentDark }}>
+                          <IconButton size="small" aria-label="View service" onClick={() => openView(r)} sx={actionIconSx}>
                             <VisibilityIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Edit">
-                          <IconButton size="small" aria-label="Edit service" onClick={() => openEdit(r)} sx={{ color: accentDark }}>
+                          <IconButton size="small" aria-label="Edit service" onClick={() => openEdit(r)} sx={actionIconSx}>
                             <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Delete">
-                          <IconButton size="small" aria-label="Delete service" onClick={() => handleDelete(r)} sx={{ color: accent }}>
+                          <IconButton
+                            size="small"
+                            aria-label="Delete service"
+                            onClick={() => handleDelete(r)}
+                            sx={{ ...actionIconSx, "&:hover": { bgcolor: "#FEE2E2", color: primaryRed } }}
+                          >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
@@ -452,137 +447,82 @@ const ElimuPlusServicesTab = forwardRef(function ElimuPlusServicesTab({ active }
               )}
             </TableBody>
           </Table>
-          <TablePagination
-            component="div"
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            count={totalCount}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={(_, newPage) => setPage(newPage)}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(parseInt(e.target.value, 10));
-              setPage(0);
-            }}
-            labelRowsPerPage="Rows per page"
-            sx={{
-              borderTop: `1px solid ${accentLight}`,
-              "& .MuiTablePagination-toolbar": { flexWrap: "wrap", gap: 1 },
-            }}
-          />
-        </TableContainer>
+        </DataTableShell>
       )}
 
-      <Dialog open={dialogOpen} onClose={() => !saving && setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
-          New service
-          <IconButton aria-label="Close" onClick={() => !saving && setDialogOpen(false)} sx={{ position: "absolute", right: 8, top: 8 }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {dialogError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {dialogError}
-            </Alert>
-          )}
-          <ServiceFormFields values={form} onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))} idPrefix="create" />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => !saving && setDialogOpen(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button variant="contained" disabled={saving} onClick={handleCreateSubmit} sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark }, fontWeight: 700 }}>
-            {saving ? <CircularProgress size={22} color="inherit" /> : "Create"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <PremiumDialog
+        open={dialogOpen}
+        onClose={() => !saving && setDialogOpen(false)}
+        title="New service"
+        subtitle="Add a programme or service for the public site"
+        icon={<SchoolIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !saving && setDialogOpen(false)} disabled={saving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={saving} onClick={handleCreateSubmit}>
+              Create
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        {dialogError ? <Alert severity="error" sx={{ mb: 2, borderRadius: "12px" }}>{dialogError}</Alert> : null}
+        <ServiceFormFields values={form} onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))} idPrefix="create" />
+      </PremiumDialog>
 
-      <Dialog open={viewOpen} onClose={() => setViewOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Box
-              sx={{
-                width: 40,
-                height: 40,
-                borderRadius: "50%",
-                bgcolor: `${accent}14`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: accentDark,
-              }}
-            >
-              <ViewIcon />
-            </Box>
-            <span>{viewRow?.name || "Service"}</span>
+      <PremiumDialog
+        open={viewOpen}
+        onClose={() => setViewOpen(false)}
+        title={viewRow?.name || "Service"}
+        subtitle="Service overview"
+        icon={<ViewIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => setViewOpen(false)}>Close</DialogGhostButton>
+            {viewRow ? (
+              <DialogPrimaryButton
+                startIcon={<EditIcon />}
+                onClick={() => {
+                  setViewOpen(false);
+                  openEdit(viewRow);
+                }}
+              >
+                Edit
+              </DialogPrimaryButton>
+            ) : null}
+          </>
+        }
+      >
+        {viewRow ? (
+          <Stack spacing={1.5}>
+            <DetailField label="Description" value={viewRow.description} />
+            <DetailField label="Order" value={viewRow.sort_order} />
           </Stack>
-          <IconButton aria-label="Close" onClick={() => setViewOpen(false)} sx={{ position: "absolute", right: 8, top: 8 }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {viewRow && (
-            <Stack spacing={1.5}>
-              <Box>
-                <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                  Description
-                </Typography>
-                <Typography sx={{ whiteSpace: "pre-wrap" }}>{viewRow.description || "—"}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                  Order
-                </Typography>
-                <Typography fontWeight={600}>{viewRow.sort_order}</Typography>
-              </Box>
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setViewOpen(false)} sx={{ fontWeight: 700 }}>
-            Close
-          </Button>
-          {viewRow && (
-            <Button
-              variant="contained"
-              startIcon={<EditIcon />}
-              onClick={() => {
-                setViewOpen(false);
-                openEdit(viewRow);
-              }}
-              sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark }, fontWeight: 700 }}
-            >
-              Edit
-            </Button>
-          )}
-        </DialogActions>
-      </Dialog>
+        ) : null}
+      </PremiumDialog>
 
-      <Dialog open={editOpen} onClose={() => !editSaving && setEditOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
-          Edit service
-          <IconButton aria-label="Close" onClick={() => !editSaving && setEditOpen(false)} sx={{ position: "absolute", right: 8, top: 8 }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {editError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {editError}
-            </Alert>
-          )}
-          <ServiceFormFields values={editForm} onChange={(patch) => setEditForm((prev) => ({ ...prev, ...patch }))} idPrefix="edit" />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" disabled={editSaving} onClick={handleEditSubmit} sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark }, fontWeight: 700 }}>
-            {editSaving ? <CircularProgress size={22} color="inherit" /> : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+      <PremiumDialog
+        open={editOpen}
+        onClose={() => !editSaving && setEditOpen(false)}
+        title="Edit service"
+        subtitle="Update service details"
+        icon={<SchoolIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={editSaving} onClick={handleEditSubmit}>
+              Save
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        {editError ? <Alert severity="error" sx={{ mb: 2, borderRadius: "12px" }}>{editError}</Alert> : null}
+        <ServiceFormFields values={editForm} onChange={(patch) => setEditForm((prev) => ({ ...prev, ...patch }))} idPrefix="edit" />
+      </PremiumDialog>
+    </TabPanelShell>
   );
 });
 

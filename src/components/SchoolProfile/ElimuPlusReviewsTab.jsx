@@ -3,21 +3,14 @@ import {
   Box,
   Typography,
   Button,
-  Alert,
-  CircularProgress,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   Chip,
   IconButton,
   Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Stack,
   TablePagination,
   Rating,
@@ -26,17 +19,25 @@ import {
   Tab,
 } from "@mui/material";
 import {
-  Close as CloseIcon,
   Visibility as VisibilityIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   Delete as DeleteIcon,
+  RateReview as ReviewIcon,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
-
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
-const accentLight = "#FEE2E2";
+import { authHeaders, primaryRed, primaryDark, actionIconSx } from "./elimuPlusShared";
+import {
+  PremiumDialog,
+  DetailField,
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+} from "./elimuPlusUi";
 
 const STATUS_TABS = [
   { value: "pending", label: "Pending" },
@@ -44,12 +45,6 @@ const STATUS_TABS = [
   { value: "rejected", label: "Rejected" },
   { value: "", label: "All" },
 ];
-
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
 
 function resolveMediaUrl(url) {
   if (!url || typeof url !== "string") return null;
@@ -83,7 +78,7 @@ function ReviewerAvatar({ row, size = 40 }) {
     <Avatar
       src={src || undefined}
       alt={name}
-      sx={{ width: size, height: size, bgcolor: accentDark, fontSize: size < 44 ? "0.9rem" : "1rem", fontWeight: 700 }}
+      sx={{ width: size, height: size, bgcolor: primaryDark, fontSize: size < 44 ? "0.9rem" : "1rem", fontWeight: 700 }}
     >
       {name.charAt(0)}
     </Avatar>
@@ -194,7 +189,7 @@ export default function ElimuPlusReviewsTab({ active }) {
       title: "Delete review?",
       text: "This cannot be undone.",
       showCancelButton: true,
-      confirmButtonColor: accent,
+      confirmButtonColor: primaryRed,
     });
     if (!ok.isConfirmed) return;
     const token = localStorage.getItem("token");
@@ -216,7 +211,7 @@ export default function ElimuPlusReviewsTab({ active }) {
   if (!active) return null;
 
   return (
-    <Box sx={{ pt: 2 }}>
+    <TabPanelShell loading={loading} error={error} onDismissError={() => setError(null)}>
       <Tabs
         value={statusTabIndex}
         onChange={handleStatusTab}
@@ -227,33 +222,28 @@ export default function ElimuPlusReviewsTab({ active }) {
         ))}
       </Tabs>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-          <CircularProgress sx={{ color: accent }} />
-        </Box>
-      ) : (
-        <TableContainer
-          sx={{
-            borderRadius: 2,
-            border: `1px solid ${accentLight}`,
-            boxShadow: `0 8px 28px -12px ${accent}33`,
-            bgcolor: "rgba(255,255,255,0.98)",
-          }}
+      {!loading && (
+        <DataTableShell
+          pagination={
+            <TablePagination
+              component="div"
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              count={totalCount}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(_, newPage) => setPage(newPage)}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              labelRowsPerPage="Rows per page"
+              sx={tablePaginationSx}
+            />
+          }
         >
           <Table size="medium">
             <TableHead>
-              <TableRow
-                sx={{
-                  background: `linear-gradient(135deg, ${accent} 0%, ${accentDark} 100%)`,
-                  "& .MuiTableCell-head": { color: "#fff", fontWeight: 700, borderBottom: "none" },
-                }}
-              >
+              <TableRow sx={tableHeadRowSx}>
                 <TableCell width={56}>No.</TableCell>
                 <TableCell>Reviewer</TableCell>
                 <TableCell width={120}>Rating</TableCell>
@@ -268,14 +258,12 @@ export default function ElimuPlusReviewsTab({ active }) {
               {rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6}>
-                    <Typography color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
-                      No reviews in this list.
-                    </Typography>
+                    <EmptyTableRow message="No reviews in this list." />
                   </TableCell>
                 </TableRow>
               ) : (
                 rows.map((r, idx) => (
-                  <TableRow key={r.id} hover>
+                  <TableRow key={r.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
                     <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>
                       {page * rowsPerPage + idx + 1}
                     </TableCell>
@@ -292,7 +280,7 @@ export default function ElimuPlusReviewsTab({ active }) {
                       </Stack>
                     </TableCell>
                     <TableCell>
-                      <Rating value={Number(r.rating) || 0} readOnly size="small" sx={{ color: accent }} />
+                      <Rating value={Number(r.rating) || 0} readOnly size="small" sx={{ color: primaryRed }} />
                     </TableCell>
                     <TableCell sx={{ display: { xs: "none", md: "table-cell" }, maxWidth: 280 }} noWrap title={r.comment}>
                       {r.comment}
@@ -306,7 +294,7 @@ export default function ElimuPlusReviewsTab({ active }) {
                             setViewRow(r);
                             setViewOpen(true);
                           }}
-                          sx={{ color: accentDark }}
+                          sx={actionIconSx}
                         >
                           <VisibilityIcon fontSize="small" />
                         </IconButton>
@@ -318,7 +306,7 @@ export default function ElimuPlusReviewsTab({ active }) {
                               size="small"
                               disabled={acting}
                               onClick={() => patchReview(r.id, "approve")}
-                              sx={{ color: "success.main" }}
+                              sx={{ ...actionIconSx, color: "success.main", "&:hover": { bgcolor: "#DCFCE7", color: "success.dark" } }}
                             >
                               <CheckCircleIcon fontSize="small" />
                             </IconButton>
@@ -328,7 +316,7 @@ export default function ElimuPlusReviewsTab({ active }) {
                               size="small"
                               disabled={acting}
                               onClick={() => patchReview(r.id, "reject")}
-                              sx={{ color: "error.main" }}
+                              sx={{ ...actionIconSx, color: "error.main", "&:hover": { bgcolor: "#FEE2E2", color: "error.dark" } }}
                             >
                               <CancelIcon fontSize="small" />
                             </IconButton>
@@ -336,7 +324,11 @@ export default function ElimuPlusReviewsTab({ active }) {
                         </>
                       )}
                       <Tooltip title="Delete">
-                        <IconButton size="small" onClick={() => handleDelete(r)} sx={{ color: accent }}>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDelete(r)}
+                          sx={{ ...actionIconSx, "&:hover": { bgcolor: "#FEE2E2", color: primaryRed } }}
+                        >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
@@ -346,76 +338,50 @@ export default function ElimuPlusReviewsTab({ active }) {
               )}
             </TableBody>
           </Table>
-          <TablePagination
-            component="div"
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            count={totalCount}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={(_, newPage) => setPage(newPage)}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(parseInt(e.target.value, 10));
-              setPage(0);
-            }}
-            labelRowsPerPage="Rows per page"
-            sx={{
-              borderTop: `1px solid ${accentLight}`,
-              "& .MuiTablePagination-toolbar": { flexWrap: "wrap", gap: 1 },
-            }}
-          />
-        </TableContainer>
+        </DataTableShell>
       )}
 
-      <Dialog open={viewOpen} onClose={() => !acting && setViewOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
-          Review
-          <IconButton
-            aria-label="Close"
-            onClick={() => !acting && setViewOpen(false)}
-            sx={{ position: "absolute", right: 8, top: 8 }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {viewRow && (
-            <Stack spacing={2}>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <ReviewerAvatar row={viewRow} size={56} />
-                <Box>
-                  <Typography fontWeight={700}>{viewRow.display_name}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {viewRow.reviewer_role} · {viewRow.user?.email || "—"}
-                  </Typography>
-                </Box>
-              </Stack>
-              <Rating value={Number(viewRow.rating) || 0} readOnly sx={{ color: accent }} />
-              <Typography sx={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{viewRow.comment}</Typography>
-              {statusChip(viewRow.status)}
+      <PremiumDialog
+        open={viewOpen}
+        onClose={() => !acting && setViewOpen(false)}
+        title="Review"
+        subtitle={viewRow ? `${viewRow.reviewer_role} feedback` : undefined}
+        icon={<ReviewIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => setViewOpen(false)} disabled={acting}>
+              Close
+            </DialogGhostButton>
+            {viewRow?.status === "pending" && (
+              <>
+                <Button color="error" disabled={acting} onClick={() => patchReview(viewRow.id, "reject")} sx={{ fontWeight: 700, textTransform: "none" }}>
+                  Reject
+                </Button>
+                <DialogPrimaryButton disabled={acting} loading={acting} onClick={() => patchReview(viewRow.id, "approve")}>
+                  Approve
+                </DialogPrimaryButton>
+              </>
+            )}
+          </>
+        }
+      >
+        {viewRow && (
+          <Stack spacing={2}>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <ReviewerAvatar row={viewRow} size={56} />
+              <Box>
+                <Typography fontWeight={700}>{viewRow.display_name}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {viewRow.reviewer_role} · {viewRow.user?.email || "—"}
+                </Typography>
+              </Box>
             </Stack>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setViewOpen(false)} disabled={acting}>
-            Close
-          </Button>
-          {viewRow?.status === "pending" && (
-            <>
-              <Button color="error" disabled={acting} onClick={() => patchReview(viewRow.id, "reject")}>
-                Reject
-              </Button>
-              <Button
-                variant="contained"
-                disabled={acting}
-                onClick={() => patchReview(viewRow.id, "approve")}
-                sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark } }}
-              >
-                Approve
-              </Button>
-            </>
-          )}
-        </DialogActions>
-      </Dialog>
-    </Box>
+            <Rating value={Number(viewRow.rating) || 0} readOnly sx={{ color: primaryRed }} />
+            <DetailField label="Comment" value={viewRow.comment} />
+            <Box>{statusChip(viewRow.status)}</Box>
+          </Stack>
+        )}
+      </PremiumDialog>
+    </TabPanelShell>
   );
 }

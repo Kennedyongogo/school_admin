@@ -1,24 +1,20 @@
 import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
   Box,
   Typography,
   Button,
   TextField,
-  Card,
   CircularProgress,
   InputAdornment,
   IconButton,
-  FormControlLabel,
-  Checkbox,
   useTheme,
   useMediaQuery,
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogContentText,
-  DialogActions,
   Chip,
+  Fade,
 } from "@mui/material";
 import {
   Visibility,
@@ -27,33 +23,353 @@ import {
   Lock,
   Login as LoginIcon,
   School,
+  Shield,
+  AutoStories,
+  Groups,
+  TrendingUp,
+  Close,
+  MarkEmailRead,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
 
 // ============================================
-// ELIMU PLUS HOMESCHOOL - RED COLOR PALETTE
+// ELIMU PLUS — PREMIUM ADMIN PORTAL PALETTE
 // ============================================
 const primaryRed = "#DC2626";
-const primaryDark = "#B91C1C";
+const primaryDark = "#991B1B";
 const primaryLight = "#FEE2E2";
-/** Highlights on dark hero (red family, no gold) */
 const accentRose = "#FCA5A5";
 const accentRoseBright = "#F87171";
-const backgroundLight = "#FEF2F2";
-const textPrimary = "#1F2937";
-const textSecondary = "#6B7280";
+const warmCream = "#FFFBF7";
+const textPrimary = "#1C1917";
+const textSecondary = "#78716C";
+const textMuted = "#A8A29E";
+
+const fontDisplay = '"Fraunces", "Georgia", serif';
+const fontBody = '"Plus Jakarta Sans", "Inter", system-ui, sans-serif';
 
 /** Matches school_api `ADMIN_PORTAL_LOGIN_BLOCKED_ROLES` inverse — blocked: parent, student */
 const ADMIN_PORTAL_LOGIN_BLOCKED_ROLES = ["parent", "student"];
 
-// Left panel: rotating hero backgrounds (files in public/images/images/)
 const LEFT_PANEL_IMAGES = [
   "/images/images/anilsharma26-children-7047124_1920.jpg",
   "/images/images/ernestoeslava-bus-2690793_1920.jpg",
   "/images/images/startupstockphotos-children-593313_1920.jpg",
 ];
 
+const HERO_FEATURES = [
+  { icon: AutoStories, label: "Curriculum tools" },
+  { icon: Groups, label: "Staff management" },
+  { icon: TrendingUp, label: "Live analytics" },
+];
+
+const STATS = [
+  { number: "10,000+", label: "Active Students" },
+  { number: "500+", label: "Expert Teachers" },
+  { number: "98%", label: "Satisfaction" },
+];
+
 const SLIDE_INTERVAL_MS = 7000;
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 28 },
+  visible: (i = 0) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.1, duration: 0.65, ease: [0.22, 1, 0.36, 1] },
+  }),
+};
+
+const staggerContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08, delayChildren: 0.15 } },
+};
+
+function AmbientOrbs() {
+  return (
+    <Box sx={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }} aria-hidden>
+      <Box
+        sx={{
+          position: "absolute",
+          width: "min(520px, 80vw)",
+          height: "min(520px, 80vw)",
+          top: "-18%",
+          right: "-12%",
+          borderRadius: "50%",
+          background: `radial-gradient(circle, ${primaryLight} 0%, transparent 68%)`,
+          opacity: 0.55,
+          animation: "orbFloat1 14s ease-in-out infinite",
+          "@keyframes orbFloat1": {
+            "0%, 100%": { transform: "translate(0, 0) scale(1)" },
+            "50%": { transform: "translate(-24px, 18px) scale(1.06)" },
+          },
+        }}
+      />
+      <Box
+        sx={{
+          position: "absolute",
+          width: "min(380px, 65vw)",
+          height: "min(380px, 65vw)",
+          bottom: "-8%",
+          left: "-10%",
+          borderRadius: "50%",
+          background: `radial-gradient(circle, rgba(252, 165, 165, 0.35) 0%, transparent 70%)`,
+          opacity: 0.5,
+          animation: "orbFloat2 18s ease-in-out infinite",
+          "@keyframes orbFloat2": {
+            "0%, 100%": { transform: "translate(0, 0)" },
+            "50%": { transform: "translate(20px, -16px)" },
+          },
+        }}
+      />
+      <Box
+        sx={{
+          position: "absolute",
+          inset: 0,
+          opacity: 0.035,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+        }}
+      />
+    </Box>
+  );
+}
+
+function HeroPanel({ leftBgIndex, compact = false }) {
+  return (
+    <Box
+      component={motion.div}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.8 }}
+      sx={{
+        position: "relative",
+        overflow: "hidden",
+        height: compact ? "clamp(200px, 32vh, 280px)" : "100%",
+        minHeight: compact ? undefined : "100dvh",
+        flexShrink: 0,
+        bgcolor: "#111111",
+      }}
+    >
+      <Box sx={{ position: "absolute", inset: 0, bgcolor: "#111111" }} aria-hidden />
+      {LEFT_PANEL_IMAGES.map((src, idx) => (
+        <Box
+          key={src}
+          sx={{
+            position: "absolute",
+            inset: 0,
+            backgroundImage: `url(${src})`,
+            backgroundSize: "cover",
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "center",
+            opacity: idx === leftBgIndex ? 1 : 0,
+            transition: "opacity 1.5s ease-in-out",
+            zIndex: idx === leftBgIndex ? 1 : 0,
+            pointerEvents: "none",
+          }}
+          aria-hidden
+        />
+      ))}
+
+      {/* Bottom-only darkening so photos stay clear */}
+      <Box
+        sx={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 2,
+          background:
+            "linear-gradient(to top, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.18) 38%, rgba(0, 0, 0, 0) 62%)",
+          pointerEvents: "none",
+        }}
+        aria-hidden
+      />
+
+      <Box
+        component={motion.div}
+        variants={staggerContainer}
+        initial="hidden"
+        animate="visible"
+        sx={{
+          position: "relative",
+          zIndex: 3,
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: compact ? "flex-end" : "space-between",
+          p: compact ? "20px 24px" : "clamp(28px, 4vh, 48px) clamp(24px, 4vw, 56px)",
+          color: "white",
+          boxSizing: "border-box",
+        }}
+      >
+        {!compact && (
+          <Box component={motion.div} variants={fadeUp} custom={0}>
+            <Box
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 1.25,
+                px: 2,
+                py: 1,
+                borderRadius: "100px",
+                bgcolor: "rgba(255,255,255,0.08)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid rgba(255,255,255,0.12)",
+              }}
+            >
+              <School sx={{ fontSize: 20, color: accentRoseBright }} />
+              <Typography
+                sx={{
+                  fontFamily: fontBody,
+                  fontSize: "0.8rem",
+                  fontWeight: 600,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Elimu Plus
+              </Typography>
+            </Box>
+          </Box>
+        )}
+
+        <Box sx={{ mt: compact ? 0 : "auto" }}>
+          <Box component={motion.div} variants={fadeUp} custom={compact ? 0 : 1}>
+            <Chip
+              label="Admin Portal"
+              size="small"
+              sx={{
+                bgcolor: "rgba(220, 38, 38, 0.35)",
+                backdropFilter: "blur(10px)",
+                color: "white",
+                fontFamily: fontBody,
+                fontWeight: 700,
+                fontSize: "0.68rem",
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                mb: compact ? 1 : 2,
+                border: "1px solid rgba(255,255,255,0.2)",
+                borderRadius: "6px",
+                height: 26,
+              }}
+            />
+            <Typography
+              component="h1"
+              sx={{
+                fontFamily: fontDisplay,
+                fontSize: compact ? "clamp(1.35rem, 5vw, 1.75rem)" : "clamp(1.75rem, 3.8vh, 2.85rem)",
+                fontWeight: 700,
+                lineHeight: 1.15,
+                letterSpacing: "-0.03em",
+                mb: compact ? 0.75 : 1.5,
+                textShadow: "0 2px 24px rgba(0,0,0,0.35)",
+              }}
+            >
+              Shape the future of{" "}
+              <Box
+                component="span"
+                sx={{
+                  background: `linear-gradient(120deg, #FFF1F2 0%, ${accentRose} 40%, ${primaryRed} 100%)`,
+                  backgroundClip: "text",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                }}
+              >
+                learning
+              </Box>
+            </Typography>
+            {!compact && (
+              <Typography
+                sx={{
+                  fontFamily: fontBody,
+                  fontSize: "clamp(0.85rem, 1.5vh, 1.05rem)",
+                  color: "rgba(255,255,255,0.78)",
+                  lineHeight: 1.6,
+                  maxWidth: 420,
+                  mb: 3,
+                }}
+              >
+                Africa&apos;s premier online homeschool platform — empowering educators and administrators to deliver excellence at scale.
+              </Typography>
+            )}
+          </Box>
+
+          {!compact && (
+            <>
+              <Box
+                component={motion.div}
+                variants={fadeUp}
+                custom={2}
+                sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 3 }}
+              >
+                {HERO_FEATURES.map(({ icon: Icon, label }) => (
+                  <Box
+                    key={label}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.75,
+                      px: 1.5,
+                      py: 0.75,
+                      borderRadius: "10px",
+                      bgcolor: "rgba(255,255,255,0.07)",
+                      backdropFilter: "blur(8px)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                    }}
+                  >
+                    <Icon sx={{ fontSize: 16, color: accentRoseBright }} />
+                    <Typography sx={{ fontFamily: fontBody, fontSize: "0.75rem", fontWeight: 500 }}>
+                      {label}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+
+              <Box
+                component={motion.div}
+                variants={fadeUp}
+                custom={3}
+                sx={{
+                  display: "flex",
+                  gap: 3,
+                  flexWrap: "wrap",
+                  pt: 2,
+                  borderTop: "1px solid rgba(255,255,255,0.12)",
+                }}
+              >
+                {STATS.map((stat) => (
+                  <Box key={stat.label}>
+                    <Typography
+                      sx={{
+                        fontFamily: fontDisplay,
+                        fontSize: "clamp(1.1rem, 2.2vh, 1.5rem)",
+                        fontWeight: 700,
+                        color: accentRoseBright,
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      {stat.number}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontFamily: fontBody,
+                        fontSize: "0.65rem",
+                        color: "rgba(255,255,255,0.55)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                        mt: 0.25,
+                      }}
+                    >
+                      {stat.label}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </>
+          )}
+        </Box>
+      </Box>
+    </Box>
+  );
+}
 
 export default function LoginPage() {
   const theme = useTheme();
@@ -67,18 +383,30 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [body, updateBody] = useState({ email: null });
   const [openResetDialog, setOpenResetDialog] = useState(false);
   const [leftBgIndex, setLeftBgIndex] = useState(0);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [resetEmailFocused, setResetEmailFocused] = useState(false);
 
   useEffect(() => {
-    if (!isDesktop) return undefined;
     const id = setInterval(() => {
       setLeftBgIndex((i) => (i + 1) % LEFT_PANEL_IMAGES.length);
     }, SLIDE_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [isDesktop]);
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => rfEmail.current?.focus(), 400);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!openResetDialog) return undefined;
+    const t = setTimeout(() => rsEmail.current?.focus(), 150);
+    return () => clearTimeout(t);
+  }, [openResetDialog]);
 
   const login = async (e) => {
     if (e) e.preventDefault();
@@ -247,24 +575,35 @@ export default function LoginPage() {
 
   const inputSx = {
     "& .MuiOutlinedInput-root": {
-      borderRadius: "12px",
-      bgcolor: "white",
-      transition: "all 0.2s ease",
-      "& fieldset": { borderColor: "#FCA5A5" },
-      "&:hover fieldset": { borderColor: primaryRed, borderWidth: "2px" },
+      borderRadius: "14px",
+      bgcolor: warmCream,
+      fontFamily: fontBody,
+      transition: "all 0.25s cubic-bezier(0.22, 1, 0.36, 1)",
+      "& fieldset": {
+        borderColor: "rgba(220, 38, 38, 0.15)",
+        borderWidth: "1.5px",
+        transition: "all 0.25s ease",
+      },
+      "&:hover fieldset": { borderColor: accentRose },
       "&.Mui-focused fieldset": {
         borderColor: primaryRed,
         borderWidth: "2px",
-        boxShadow: `0 0 0 3px ${primaryLight}`,
+        boxShadow: `0 0 0 4px rgba(220, 38, 38, 0.1)`,
       },
     },
     "& .MuiInputLabel-root": {
-      color: textSecondary,
+      fontFamily: fontBody,
+      color: textMuted,
+      fontWeight: 500,
       "&.Mui-focused": { color: primaryRed, fontWeight: 600 },
     },
     "& .MuiInputBase-input": {
-      py: "clamp(6px, 1.2vh, 11px)",
-      pl: "clamp(36px, 8vw, 48px)",
+      py: "14px",
+      pl: "52px",
+      fontSize: "0.95rem",
+      fontWeight: 500,
+      color: textPrimary,
+      "&::placeholder": { color: textMuted, opacity: 0.7 },
     },
   };
 
@@ -272,585 +611,465 @@ export default function LoginPage() {
     <Box
       sx={{
         display: "flex",
+        flexDirection: isDesktop ? "row" : "column",
         height: "100dvh",
         maxHeight: "100dvh",
-        minHeight: "100dvh",
         width: "100%",
         overflow: "hidden",
-        fontFamily: '"Inter", "Poppins", "Roboto", sans-serif',
-        bgcolor: backgroundLight,
+        fontFamily: fontBody,
+        bgcolor: warmCream,
       }}
     >
-      {/* Left: Visual anchor with premium education theme */}
-      {isDesktop && (
-        <Box
-          sx={{
-            width: "50%",
-            position: "relative",
-            flexShrink: 0,
-            overflow: "hidden",
-            height: "100dvh",
-            maxHeight: "100dvh",
-            minHeight: 0,
-          }}
-        >
-          <Box sx={{ position: "absolute", inset: 0, bgcolor: "#111111" }} aria-hidden />
-          {LEFT_PANEL_IMAGES.map((src, idx) => (
-            <Box
-              key={src}
-              sx={{
-                position: "absolute",
-                inset: 0,
-                backgroundImage: `url(${src})`,
-                backgroundSize: "cover",
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "center",
-                opacity: idx === leftBgIndex ? 1 : 0,
-                transition: "opacity 1.5s ease-in-out",
-                zIndex: idx === leftBgIndex ? 1 : 0,
-                pointerEvents: "none",
-              }}
-              aria-hidden
-            />
-          ))}
-          {/* Bottom-only darkening (neutral black, no blue tint) — keeps photos clear */}
-          <Box
-            sx={{
-              position: "absolute",
-              inset: 0,
-              zIndex: 2,
-              background:
-                "linear-gradient(to top, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.18) 38%, rgba(0, 0, 0, 0) 62%)",
-              pointerEvents: "none",
-            }}
-            aria-hidden
-          />
-          <Box
-            sx={{
-              position: "relative",
-              zIndex: 3,
-              height: "100%",
-              maxHeight: "100dvh",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "flex-end",
-              padding: "clamp(12px, 2.5vh, 32px) clamp(16px, 4vw, 40px)",
-              color: "white",
-              minHeight: 0,
-              overflow: "hidden",
-              boxSizing: "border-box",
-            }}
-          >
-            <Box
-              sx={{
-                maxWidth: 400,
-                width: "100%",
-                flexShrink: 0,
-                mt: "auto",
-                boxSizing: "border-box",
-                textShadow: "0 1px 2px rgba(0,0,0,0.25), 0 2px 12px rgba(0,0,0,0.35)",
-              }}
-            >
-              <Chip
-                label="ADMIN PORTAL"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.22)",
-                  backdropFilter: "blur(8px)",
-                  color: "white",
-                  fontWeight: 700,
-                  fontSize: "0.7rem",
-                  letterSpacing: "1px",
-                  mb: "clamp(8px, 1.5vh, 16px)",
-                  borderRadius: "8px",
-                }}
-              />
-              <Typography
-                variant="h2"
-                sx={{
-                  fontSize: "clamp(1.25rem, 3.5vh, 2.5rem)",
-                  fontWeight: 800,
-                  lineHeight: 1.2,
-                  mb: "clamp(8px, 1.2vh, 14px)",
-                  overflow: "visible",
-                  wordBreak: "break-word",
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                Welcome to{" "}
-                <Box
-                  component="span"
-                  sx={{
-                    background: `linear-gradient(135deg, #FFE4E6 0%, ${accentRose} 38%, ${primaryRed} 72%, ${primaryDark} 100%)`,
-                    backgroundClip: "text",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                  }}
-                >
-                  Elimu Plus
-                </Box>
-              </Typography>
-              <Typography
-                sx={{
-                  fontSize: "clamp(0.75rem, 1.4vh, 1rem)",
-                  color: "rgba(255,255,255,0.85)",
-                  overflow: "hidden",
-                  display: "-webkit-box",
-                  WebkitLineClamp: 3,
-                  WebkitBoxOrient: "vertical",
-                  wordBreak: "break-word",
-                  lineHeight: 1.45,
-                  mb: "clamp(8px, 1.5vh, 16px)",
-                }}
-              >
-                Africa's Premier Online Homeschool Platform — Empowering the next generation of leaders through quality, accessible education.
-              </Typography>
-              <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
-                {[
-                  { number: "10,000+", label: "Active Students" },
-                  { number: "500+", label: "Expert Teachers" },
-                  { number: "98%", label: "Parent Satisfaction" },
-                ].map((stat, idx) => (
-                  <Box key={idx} sx={{ textAlign: "center", minWidth: 72 }}>
-                    <Typography
-                      sx={{
-                        fontSize: "clamp(1rem, 2.2vh, 1.35rem)",
-                        fontWeight: 800,
-                        color: accentRoseBright,
-                      }}
-                    >
-                      {stat.number}
-                    </Typography>
-                    <Typography
-                      sx={{
-                        fontSize: "0.62rem",
-                        color: "rgba(255,255,255,0.7)",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {stat.label}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-              <Box
-                sx={{
-                  display: "flex",
-                  gap: 1,
-                  mt: "clamp(10px, 2vh, 18px)",
-                  justifyContent: "flex-start",
-                }}
-                aria-label="Background slide indicators"
-              >
-                {LEFT_PANEL_IMAGES.map((_, idx) => (
-                  <Box
-                    key={idx}
-                    onClick={() => setLeftBgIndex(idx)}
-                    role="tab"
-                    aria-selected={idx === leftBgIndex}
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setLeftBgIndex(idx);
-                      }
-                    }}
-                    sx={{
-                      width: idx === leftBgIndex ? 28 : 8,
-                      height: 8,
-                      borderRadius: 4,
-                      bgcolor: idx === leftBgIndex ? "white" : "rgba(255,255,255,0.35)",
-                      cursor: "pointer",
-                      transition: "all 0.35s ease",
-                      "&:focus-visible": { outline: "2px solid white", outlineOffset: 2 },
-                    }}
-                  />
-                ))}
-              </Box>
-            </Box>
-          </Box>
+      {isDesktop ? (
+        <Box sx={{ width: "52%", flexShrink: 0 }}>
+          <HeroPanel leftBgIndex={leftBgIndex} />
         </Box>
+      ) : (
+        <HeroPanel leftBgIndex={leftBgIndex} compact />
       )}
 
-      {/* Right: Login form */}
       <Box
+        component={motion.div}
+        initial={{ opacity: 0, x: isDesktop ? 40 : 0, y: isDesktop ? 0 : 24 }}
+        animate={{ opacity: 1, x: 0, y: 0 }}
+        transition={{ duration: 0.7, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
         sx={{
-          width: isDesktop ? "50%" : "100%",
-          height: "100dvh",
-          maxHeight: "100dvh",
+          flex: 1,
           minHeight: 0,
           minWidth: 0,
           display: "flex",
           flexDirection: "column",
-          bgcolor: "white",
+          position: "relative",
+          bgcolor: warmCream,
+          mt: isDesktop ? 0 : -3,
+          borderRadius: isDesktop ? 0 : "24px 24px 0 0",
+          boxShadow: isDesktop ? "none" : "0 -8px 40px rgba(12,10,9,0.12)",
           overflow: "hidden",
-          boxSizing: "border-box",
+          zIndex: 4,
         }}
       >
+        <AmbientOrbs />
+
         <Box
           sx={{
             flex: 1,
             minHeight: 0,
             display: "flex",
             flexDirection: "column",
-            padding: "clamp(10px, 1.8vh, 24px) clamp(14px, 4vw, 40px)",
-            overflow: "hidden",
+            px: "clamp(20px, 5vw, 56px)",
+            py: "clamp(20px, 3vh, 40px)",
+            position: "relative",
+            zIndex: 1,
+            overflow: "auto",
           }}
         >
-          {/* Brand header */}
           <Box
-            sx={{
-              flexShrink: 0,
-              textAlign: "center",
-              marginBottom: "clamp(6px, 1.2vh, 14px)",
-            }}
+            component={motion.div}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35, duration: 0.5 }}
+            sx={{ textAlign: "center", mb: "clamp(16px, 3vh, 32px)", flexShrink: 0 }}
           >
             <Box
               sx={{
-                width: "clamp(40px, 7vw, 64px)",
-                height: "clamp(40px, 7vw, 64px)",
-                minWidth: 40,
-                minHeight: 40,
-                background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-                borderRadius: "16px",
+                width: 56,
+                height: 56,
+                background: `linear-gradient(145deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
+                borderRadius: "18px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 mx: "auto",
-                mb: "clamp(6px, 1vh, 12px)",
-                boxShadow: `0 8px 20px -5px ${primaryRed}40`,
+                mb: 1.5,
+                boxShadow: `0 12px 32px -8px rgba(220, 38, 38, 0.45)`,
+                position: "relative",
+                "&::after": {
+                  content: '""',
+                  position: "absolute",
+                  inset: -2,
+                  borderRadius: "20px",
+                  background: `linear-gradient(145deg, ${accentRose}, transparent)`,
+                  zIndex: -1,
+                  opacity: 0.4,
+                },
               }}
             >
-              <School
-                sx={{
-                  color: "white",
-                  fontSize: "clamp(22px, 4vw, 36px)",
-                }}
-              />
+              <School sx={{ color: "white", fontSize: 30 }} />
             </Box>
             <Typography
-              variant="h1"
               sx={{
-                fontSize: "clamp(1.05rem, 2vw + 0.45rem, 1.65rem)",
-                fontWeight: 800,
+                fontFamily: fontDisplay,
+                fontSize: "clamp(1.25rem, 2.5vw, 1.65rem)",
+                fontWeight: 700,
                 color: textPrimary,
-                lineHeight: 1.2,
                 letterSpacing: "-0.02em",
+                lineHeight: 1.2,
               }}
             >
-              Elimu Plus Homeschool
+              Welcome back
             </Typography>
             <Typography
               sx={{
-                fontFamily: "'Inter', sans-serif",
-                color: primaryRed,
-                fontSize: "clamp(0.72rem, 1vw + 0.35rem, 0.9rem)",
-                mt: 0.25,
+                fontFamily: fontBody,
+                color: textSecondary,
+                fontSize: "0.9rem",
+                mt: 0.5,
                 fontWeight: 500,
               }}
             >
-              Excellence in Online Education
+              Sign in to your admin dashboard
             </Typography>
           </Box>
 
-          {/* Form area — flex center, no nested scroll */}
           <Box
             sx={{
               flex: 1,
-              minHeight: 0,
-              overflow: "hidden",
               display: "flex",
-              flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
+              minHeight: 0,
             }}
           >
             <Box
+              component={motion.div}
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.45, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
               sx={{
                 width: "100%",
-                maxWidth: "min(440px, 92vw)",
-                flexShrink: 1,
-                minHeight: 0,
-                display: "flex",
-                flexDirection: "column",
+                maxWidth: 420,
               }}
             >
               <Box
                 sx={{
-                  position: "relative",
-                  width: "100%",
-                  borderRadius: "20px",
-                  p: "3px",
-                  overflow: "hidden",
-                  flexShrink: 1,
-                  boxShadow: `0 4px 28px -6px ${primaryRed}33, 0 0 0 1px rgba(220, 38, 38, 0.06)`,
-                  "@media (prefers-reduced-motion: reduce)": {
-                    "&::before": { animation: "none" },
-                  },
-                  "@keyframes loginSnakeSpin": {
-                    "0%": { transform: "rotate(0deg)" },
-                    "100%": { transform: "rotate(360deg)" },
-                  },
-                  "&::before": {
-                    content: '""',
-                    position: "absolute",
-                    left: "50%",
-                    top: "50%",
-                    width: "180%",
-                    height: "180%",
-                    marginLeft: "-90%",
-                    marginTop: "-90%",
-                    zIndex: 0,
-                    background: `conic-gradient(
-                      from 0deg,
-                      transparent 0deg 52deg,
-                      rgba(254, 226, 226, 0.35) 62deg,
-                      rgba(252, 165, 165, 0.75) 88deg,
-                      ${primaryRed} 118deg,
-                      rgba(252, 165, 165, 0.85) 148deg,
-                      rgba(254, 226, 226, 0.45) 168deg,
-                      transparent 182deg 360deg
-                    )`,
-                    animation: "loginSnakeSpin 4.5s linear infinite",
-                    willChange: "transform",
-                    pointerEvents: "none",
-                  },
+                  borderRadius: "24px",
+                  p: "1px",
+                  background: `linear-gradient(145deg, rgba(220,38,38,0.25) 0%, rgba(252,165,165,0.15) 50%, rgba(220,38,38,0.08) 100%)`,
+                  boxShadow: "0 20px 60px -12px rgba(12,10,9,0.12), 0 0 0 1px rgba(220,38,38,0.06)",
                 }}
               >
-                <Card
-                  elevation={0}
+                <Box
                   sx={{
-                    position: "relative",
-                    zIndex: 1,
-                    boxShadow: "none",
-                    borderRadius: "17px",
-                    px: "clamp(18px, 2.5vw, 28px)",
-                    py: "clamp(22px, 3.2vh, 36px)",
-                    minHeight: "clamp(268px, 36dvh, 400px)",
-                    border: `1px solid ${primaryLight}`,
-                    bgcolor: "white",
-                    flexShrink: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "center",
+                    borderRadius: "23px",
+                    bgcolor: "rgba(255,255,255,0.85)",
+                    backdropFilter: "blur(20px)",
+                    WebkitBackdropFilter: "blur(20px)",
+                    px: "clamp(22px, 4vw, 32px)",
+                    py: "clamp(28px, 4vh, 36px)",
                   }}
                 >
-                <Box sx={{ mb: "clamp(8px, 1.5vh, 16px)", flexShrink: 0 }}>
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontWeight: 700,
-                      color: textPrimary,
-                      fontSize: "clamp(0.95rem, 1.2vw + 0.45rem, 1.1rem)",
-                    }}
-                  >
-                    Admin Access
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ fontSize: "clamp(0.7rem, 0.9vw + 0.35rem, 0.8rem)", lineHeight: 1.35 }}
-                  >
-                    Secure portal for school administrators
-                  </Typography>
-                </Box>
-
-                <form onSubmit={login} style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
-                  <TextField
-                    inputRef={rfEmail}
-                    type="email"
-                    label="Email Address"
-                    placeholder="admin@elimuplus.education"
-                    size="small"
-                    fullWidth
-                    required
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <EmailIcon sx={{ color: primaryRed, fontSize: 22 }} />
-                        </InputAdornment>
-                      ),
-                    }}
-                    sx={{ ...inputSx, mb: "clamp(8px, 1.2vh, 12px)" }}
-                  />
-
-                  <TextField
-                    inputRef={rfPassword}
-                    type={showPassword ? "text" : "password"}
-                    label="Password"
-                    placeholder="••••••••"
-                    size="small"
-                    fullWidth
-                    required
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Lock sx={{ color: primaryRed, fontSize: 22 }} />
-                        </InputAdornment>
-                      ),
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            onClick={() => setShowPassword(!showPassword)}
-                            edge="end"
-                            size="small"
-                            aria-label={showPassword ? "Hide password" : "Show password"}
-                          >
-                            {showPassword ? (
-                              <VisibilityOff fontSize="small" />
-                            ) : (
-                              <Visibility fontSize="small" />
-                            )}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                    sx={{ ...inputSx, mb: "clamp(4px, 0.8vh, 8px)" }}
-                  />
-
-                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={rememberMe}
-                          onChange={(e) => setRememberMe(e.target.checked)}
-                          sx={{
-                            color: "#FCA5A5",
-                            "&.Mui-checked": { color: primaryRed },
-                          }}
-                        />
-                      }
-                      label={
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.75rem" }}>
-                          Remember this device
-                        </Typography>
-                      }
-                    />
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2.5 }}>
+                    <Shield sx={{ fontSize: 18, color: primaryRed }} />
                     <Typography
-                      component="button"
-                      type="button"
-                      variant="caption"
-                      onClick={() => setOpenResetDialog(true)}
                       sx={{
-                        fontSize: "0.75rem",
-                        border: "none",
-                        background: "none",
-                        cursor: "pointer",
+                        fontFamily: fontBody,
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
                         color: primaryRed,
-                        fontWeight: 600,
-                        "&:hover": { textDecoration: "underline" },
+                        letterSpacing: "0.1em",
+                        textTransform: "uppercase",
                       }}
                     >
-                      Forgot password?
+                      Secure access
                     </Typography>
                   </Box>
 
-                  <Button
-                    type="submit"
-                    fullWidth
-                    variant="contained"
-                    disabled={loading}
-                    startIcon={
-                      loading ? (
-                        <CircularProgress size={22} color="inherit" />
-                      ) : (
-                        <LoginIcon sx={{ fontSize: 22 }} />
-                      )
-                    }
-                    sx={{
-                      mt: "clamp(10px, 1.8vh, 18px)",
-                      py: "clamp(8px, 1.4vh, 11px)",
-                      bgcolor: primaryRed,
-                      color: "white",
-                      fontWeight: 700,
-                      fontSize: "clamp(0.8rem, 1.5vw + 0.4rem, 0.875rem)",
-                      letterSpacing: "0.03em",
-                      borderRadius: "60px",
-                      textTransform: "none",
-                      boxShadow: `0 4px 14px 0 ${primaryRed}40`,
-                      transition: "all 0.2s ease",
-                      "&:hover": {
-                        bgcolor: primaryDark,
-                        transform: "translateY(-2px)",
-                        boxShadow: `0 8px 20px 0 ${primaryRed}60`,
-                      },
-                      "&:active": { transform: "scale(0.98)" },
-                    }}
-                  >
-                    {loading ? "Signing in..." : "Access Dashboard"}
-                  </Button>
-                </form>
-                </Card>
+                  <form onSubmit={login}>
+                    <Box sx={{ position: "relative", mb: 2 }}>
+                      <TextField
+                        inputRef={rfEmail}
+                        type="email"
+                        label="Email address"
+                        placeholder="admin@elimuplus.education"
+                        fullWidth
+                        required
+                        onFocus={() => setEmailFocused(true)}
+                        onBlur={() => setEmailFocused(false)}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <EmailIcon
+                                sx={{
+                                  color: emailFocused ? primaryRed : textMuted,
+                                  fontSize: 22,
+                                  transition: "color 0.2s",
+                                }}
+                              />
+                            </InputAdornment>
+                          ),
+                        }}
+                        sx={inputSx}
+                      />
+                    </Box>
+
+                    <Box sx={{ position: "relative", mb: 1 }}>
+                      <TextField
+                        inputRef={rfPassword}
+                        type={showPassword ? "text" : "password"}
+                        label="Password"
+                        placeholder="Enter your password"
+                        fullWidth
+                        required
+                        onFocus={() => setPasswordFocused(true)}
+                        onBlur={() => setPasswordFocused(false)}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <Lock
+                                sx={{
+                                  color: passwordFocused ? primaryRed : textMuted,
+                                  fontSize: 22,
+                                  transition: "color 0.2s",
+                                }}
+                              />
+                            </InputAdornment>
+                          ),
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton
+                                onClick={() => setShowPassword(!showPassword)}
+                                edge="end"
+                                size="small"
+                                aria-label={showPassword ? "Hide password" : "Show password"}
+                                sx={{
+                                  color: textMuted,
+                                  "&:hover": { color: primaryRed, bgcolor: primaryLight },
+                                }}
+                              >
+                                {showPassword ? (
+                                  <VisibilityOff fontSize="small" />
+                                ) : (
+                                  <Visibility fontSize="small" />
+                                )}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        }}
+                        sx={inputSx}
+                      />
+                    </Box>
+
+                    <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
+                      <Typography
+                        component="button"
+                        type="button"
+                        onClick={() => setOpenResetDialog(true)}
+                        sx={{
+                          fontFamily: fontBody,
+                          fontSize: "0.85rem",
+                          border: "none",
+                          background: "none",
+                          cursor: "pointer",
+                          color: primaryRed,
+                          fontWeight: 600,
+                          px: 1,
+                          py: 0.5,
+                          borderRadius: "8px",
+                          transition: "all 0.2s",
+                          "&:hover": {
+                            bgcolor: primaryLight,
+                            textDecoration: "none",
+                          },
+                        }}
+                      >
+                        Forgot password?
+                      </Typography>
+                    </Box>
+
+                    <Button
+                      component={motion.button}
+                      whileHover={{ scale: loading ? 1 : 1.01, y: loading ? 0 : -2 }}
+                      whileTap={{ scale: loading ? 1 : 0.98 }}
+                      type="submit"
+                      fullWidth
+                      variant="contained"
+                      disabled={loading}
+                      startIcon={
+                        loading ? (
+                          <CircularProgress size={22} color="inherit" />
+                        ) : (
+                          <LoginIcon sx={{ fontSize: 22 }} />
+                        )
+                      }
+                      sx={{
+                        mt: 3,
+                        py: 1.6,
+                        fontFamily: fontBody,
+                        bgcolor: primaryRed,
+                        background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
+                        color: "white",
+                        fontWeight: 700,
+                        fontSize: "0.95rem",
+                        letterSpacing: "0.02em",
+                        borderRadius: "14px",
+                        textTransform: "none",
+                        boxShadow: `0 8px 24px -4px rgba(220, 38, 38, 0.45)`,
+                        transition: "box-shadow 0.25s ease",
+                        "&:hover": {
+                          background: `linear-gradient(135deg, ${primaryDark} 0%, #7F1D1D 100%)`,
+                          boxShadow: `0 12px 32px -4px rgba(220, 38, 38, 0.55)`,
+                        },
+                        "&.Mui-disabled": {
+                          background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
+                          color: "white",
+                          opacity: 0.7,
+                        },
+                      }}
+                    >
+                      {loading ? "Signing in..." : "Access Dashboard"}
+                    </Button>
+                  </form>
+                </Box>
               </Box>
+
+              <Fade in timeout={800}>
+                <Typography
+                  sx={{
+                    fontFamily: fontBody,
+                    textAlign: "center",
+                    fontSize: "0.75rem",
+                    color: textMuted,
+                    mt: 2.5,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 0.75,
+                  }}
+                >
+                  <Shield sx={{ fontSize: 14 }} />
+                  Encrypted connection · Staff &amp; teachers only
+                </Typography>
+              </Fade>
             </Box>
           </Box>
 
-          {/* Footer — single line on all breakpoints; scroll if needed on very narrow screens */}
           <Box
-            sx={{
-              flexShrink: 0,
-              paddingTop: "clamp(6px, 1vh, 12px)",
-              width: "100%",
-              minWidth: 0,
-              display: "flex",
-              justifyContent: "center",
-              overflowX: "auto",
-              WebkitOverflowScrolling: "touch",
-              "&::-webkit-scrollbar": { height: 4 },
-              "&::-webkit-scrollbar-thumb": {
-                background: `${primaryRed}40`,
-                borderRadius: 2,
-              },
-            }}
+            component={motion.div}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.7 }}
+            sx={{ flexShrink: 0, pt: 2, textAlign: "center" }}
           >
             <Typography
-              variant="caption"
-              component="div"
               sx={{
-                flexShrink: 0,
-                whiteSpace: "nowrap",
-                color: primaryDark,
-                fontWeight: 600,
-                letterSpacing: { xs: "0.02em", sm: "0.04em" },
-                fontSize: "clamp(0.5rem, 1.35vw + 0.28rem, 0.75rem)",
-                lineHeight: 1.45,
-                px: { xs: 0.5, sm: 1 },
-                py: 0.5,
-                borderRadius: "8px",
-                background: `linear-gradient(180deg, ${primaryLight} 0%, rgba(254, 226, 226, 0.65) 100%)`,
-                border: `1px solid rgba(220, 38, 38, 0.22)`,
-                boxShadow: `0 1px 3px ${primaryRed}18`,
-                textAlign: "center",
+                fontFamily: fontBody,
+                fontSize: "0.72rem",
+                color: textMuted,
+                fontWeight: 500,
+                lineHeight: 1.5,
               }}
             >
               <Box component="span" sx={{ color: primaryRed, fontWeight: 700 }}>
-                ©2026
-              </Box>
-              <Box component="span" sx={{ color: primaryDark }}>
-                {" "}
-                by Elimu Plus Homeschooling and Online Education.
-              </Box>
+                © 2026
+              </Box>{" "}
+              Elimu Plus Homeschooling &amp; Online Education
             </Typography>
           </Box>
         </Box>
       </Box>
 
-      {/* Forgot password dialog */}
       <Dialog
         open={openResetDialog}
         onClose={() => !resetLoading && setOpenResetDialog(false)}
-        maxWidth="sm"
+        maxWidth="xs"
         fullWidth
+        slotProps={{
+          backdrop: {
+            sx: { bgcolor: "transparent" },
+          },
+        }}
         PaperProps={{
-          sx: { borderRadius: 3, p: 1 },
+          component: motion.div,
+          initial: { opacity: 0, scale: 0.96, y: 12 },
+          animate: { opacity: 1, scale: 1, y: 0 },
+          transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+          sx: {
+            borderRadius: "24px",
+            overflow: "hidden",
+            bgcolor: "white",
+            boxShadow: "0 24px 64px -12px rgba(28,25,23,0.22), 0 0 0 1px rgba(220,38,38,0.08)",
+            m: 2,
+          },
         }}
       >
-        <DialogTitle sx={{ fontWeight: 700, color: textPrimary, pb: 1 }}>
-          Reset Your Password
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2, color: textSecondary }}>
-            Enter your registered email address and we'll send you a secure link to reset your password.
-          </DialogContentText>
+        <Box sx={{ position: "relative", px: 3, pt: 3, pb: 1 }}>
+          <IconButton
+            onClick={() => !resetLoading && setOpenResetDialog(false)}
+            disabled={resetLoading}
+            aria-label="Close"
+            sx={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              color: textMuted,
+              bgcolor: warmCream,
+              "&:hover": { bgcolor: primaryLight, color: primaryRed },
+            }}
+          >
+            <Close fontSize="small" />
+          </IconButton>
+
+          <Box
+            sx={{
+              width: 52,
+              height: 52,
+              borderRadius: "16px",
+              background: `linear-gradient(145deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              mb: 2,
+              boxShadow: `0 10px 28px -8px rgba(220, 38, 38, 0.45)`,
+            }}
+          >
+            <Lock sx={{ color: "white", fontSize: 26 }} />
+          </Box>
+
+          <Typography
+            sx={{
+              fontFamily: fontDisplay,
+              fontWeight: 700,
+              color: textPrimary,
+              fontSize: "1.4rem",
+              letterSpacing: "-0.02em",
+              lineHeight: 1.25,
+              pr: 4,
+            }}
+          >
+            Reset your password
+          </Typography>
+          <Typography
+            sx={{
+              fontFamily: fontBody,
+              color: textSecondary,
+              fontSize: "0.9rem",
+              lineHeight: 1.6,
+              mt: 1,
+            }}
+          >
+            Enter your registered email and we&apos;ll send a secure link to reset your password.
+          </Typography>
+        </Box>
+
+        <DialogContent sx={{ px: 3, pt: 2, pb: 1 }}>
+          <Box
+            sx={{
+              display: "flex",
+              gap: 1.25,
+              alignItems: "flex-start",
+              p: 1.75,
+              mb: 2.5,
+              borderRadius: "14px",
+              bgcolor: warmCream,
+              border: `1px solid ${primaryLight}`,
+            }}
+          >
+            <MarkEmailRead sx={{ fontSize: 20, color: primaryRed, mt: 0.15, flexShrink: 0 }} />
+            <Typography sx={{ fontFamily: fontBody, fontSize: "0.8rem", color: textSecondary, lineHeight: 1.55 }}>
+              Check your inbox and spam folder. The link expires after a short time for your security.
+            </Typography>
+          </Box>
+
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -860,49 +1079,70 @@ export default function LoginPage() {
             <TextField
               inputRef={rsEmail}
               type="email"
-              label="Email Address"
+              label="Email address"
               placeholder="admin@elimuplus.education"
               fullWidth
-              sx={{
-                ...inputSx,
-                mb: 2,
-                "& .MuiOutlinedInput-root": {
-                  ...inputSx["& .MuiOutlinedInput-root"],
-                  borderRadius: "12px",
-                },
+              required
+              onFocus={() => setResetEmailFocused(true)}
+              onBlur={() => setResetEmailFocused(false)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <EmailIcon
+                      sx={{
+                        color: resetEmailFocused ? primaryRed : textMuted,
+                        fontSize: 22,
+                        transition: "color 0.2s",
+                      }}
+                    />
+                  </InputAdornment>
+                ),
               }}
+              sx={inputSx}
             />
-            <DialogActions sx={{ px: 0, pt: 2 }}>
-              <Button
-                variant="outlined"
-                onClick={() => setOpenResetDialog(false)}
-                disabled={resetLoading}
-                sx={{
-                  borderRadius: "10px",
-                  textTransform: "none",
-                  borderColor: "#FCA5A5",
-                  color: textSecondary,
-                }}
-              >
-                Cancel
-              </Button>
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25, pt: 3, pb: 2 }}>
               <Button
                 type="submit"
                 variant="contained"
+                fullWidth
                 disabled={resetLoading}
-                startIcon={resetLoading ? <CircularProgress size={18} color="inherit" /> : null}
+                startIcon={
+                  resetLoading ? <CircularProgress size={18} color="inherit" /> : <MarkEmailRead sx={{ fontSize: 20 }} />
+                }
                 sx={{
-                  bgcolor: primaryRed,
+                  fontFamily: fontBody,
+                  background: `linear-gradient(135deg, ${primaryRed}, ${primaryDark})`,
                   color: "white",
-                  borderRadius: "10px",
+                  borderRadius: "14px",
                   textTransform: "none",
-                  px: 3,
-                  "&:hover": { bgcolor: primaryDark },
+                  fontWeight: 700,
+                  py: 1.4,
+                  fontSize: "0.95rem",
+                  boxShadow: `0 8px 24px -4px rgba(220, 38, 38, 0.4)`,
+                  "&:hover": { background: `linear-gradient(135deg, ${primaryDark}, #7F1D1D)` },
                 }}
               >
-                {resetLoading ? "Sending..." : "Send Reset Link"}
+                {resetLoading ? "Sending..." : "Send reset link"}
               </Button>
-            </DialogActions>
+              <Button
+                variant="text"
+                onClick={() => setOpenResetDialog(false)}
+                disabled={resetLoading}
+                fullWidth
+                sx={{
+                  fontFamily: fontBody,
+                  borderRadius: "12px",
+                  textTransform: "none",
+                  color: textSecondary,
+                  fontWeight: 600,
+                  py: 1,
+                  "&:hover": { bgcolor: warmCream, color: textPrimary },
+                }}
+              >
+                Back to sign in
+              </Button>
+            </Box>
           </form>
         </DialogContent>
       </Dialog>

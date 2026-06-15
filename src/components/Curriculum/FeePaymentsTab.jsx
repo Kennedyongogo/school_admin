@@ -1,48 +1,41 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
   Box,
-  Card,
   CircularProgress,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  Divider,
   IconButton,
   Stack,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TablePagination,
   TableRow,
   Tooltip,
   Typography,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
+import PaidIcon from "@mui/icons-material/Paid";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
-
-const primaryRed = "#DC2626";
-const primaryDark = "#B91C1C";
-const accentLight = "#FEE2E2";
-
-const authJsonHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-function formatKes(n) {
-  return `KES ${Number(n || 0).toLocaleString()}`;
-}
-
-function formatDateTime(value) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString();
-}
+import {
+  authJsonHeaders,
+  formatKes,
+  formatDateTime,
+  fontBody,
+  actionIconSx,
+  primaryRed,
+} from "../Accounting/accountingShared";
+import {
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  PremiumDialog,
+  DetailField,
+  FormSection,
+  DialogGhostButton,
+  EmptyTableRow,
+  PaymentMethodChip,
+  InvoiceStatusChip,
+} from "../Accounting/accountingUi";
 
 function studentName(row) {
   return row?.student?.user?.full_name || row?.student?.admission_number || "—";
@@ -50,19 +43,6 @@ function studentName(row) {
 
 function parentName(row) {
   return row?.parent?.user?.full_name || row?.parent?.user?.username || "—";
-}
-
-function DetailRow({ label, value }) {
-  return (
-    <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ py: 0.75 }}>
-      <Typography variant="body2" color="text.secondary" sx={{ minWidth: { sm: 160 }, fontWeight: 600 }}>
-        {label}
-      </Typography>
-      <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
-        {value ?? "—"}
-      </Typography>
-    </Stack>
-  );
 }
 
 export default function FeePaymentsTab() {
@@ -118,24 +98,35 @@ export default function FeePaymentsTab() {
     }
   };
 
-  if (loading && rows.length === 0) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-        <CircularProgress sx={{ color: primaryRed }} />
-      </Box>
-    );
-  }
-
   const inv = viewRow?.fee_invoice;
 
   return (
-    <Stack spacing={2}>
-      {error ? <Alert severity="error">{error}</Alert> : null}
-
-      <TableContainer component={Card} variant="outlined">
-        <Table size="small">
+    <TabPanelShell
+      loading={loading && rows.length === 0}
+      error={error || null}
+      onDismissError={() => setError("")}
+    >
+      <DataTableShell
+        pagination={
+          <TablePagination
+            rowsPerPageOptions={[10, 20, 50]}
+            component="div"
+            count={totalCount}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={(_, newPage) => setPage(newPage)}
+            onRowsPerPageChange={(e) => {
+              setRowsPerPage(parseInt(e.target.value, 10));
+              setPage(0);
+            }}
+            labelRowsPerPage="Rows per page"
+            sx={tablePaginationSx}
+          />
+        }
+      >
+        <Table size="medium" sx={{ minWidth: 900 }}>
           <TableHead>
-            <TableRow>
+            <TableRow sx={tableHeadRowSx}>
               <TableCell align="center" width={56}>
                 No
               </TableCell>
@@ -145,35 +136,42 @@ export default function FeePaymentsTab() {
               <TableCell>Amount</TableCell>
               <TableCell>Method</TableCell>
               <TableCell>Reference</TableCell>
-              <TableCell align="right">Action</TableCell>
+              <TableCell align="right" width={80}>
+                Action
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8}>
-                  <Typography color="text.secondary" sx={{ py: 2 }}>
-                    No fee payments recorded yet.
-                  </Typography>
+                  <EmptyTableRow message="No fee payments recorded yet." />
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((r, idx) => {
                 const rowNo = page * rowsPerPage + idx + 1;
                 return (
-                  <TableRow key={r.id} hover>
-                    <TableCell align="center" sx={{ color: "text.secondary", fontWeight: 600 }}>
+                  <TableRow key={r.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
+                    <TableCell align="center" sx={{ color: "text.secondary", fontWeight: 600, fontFamily: fontBody }}>
                       {rowNo}
                     </TableCell>
-                    <TableCell>{formatDateTime(r.paid_at)}</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>{studentName(r)}</TableCell>
-                    <TableCell>{r.fee_invoice?.invoice_number || "—"}</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>{formatKes(r.amount)}</TableCell>
-                    <TableCell sx={{ textTransform: "capitalize" }}>{r.payment_method || "—"}</TableCell>
-                    <TableCell>{r.reference || "—"}</TableCell>
+                    <TableCell sx={{ fontFamily: fontBody }}>{formatDateTime(r.paid_at)}</TableCell>
+                    <TableCell sx={{ fontWeight: 600, fontFamily: fontBody }}>{studentName(r)}</TableCell>
+                    <TableCell sx={{ fontFamily: fontBody }}>{r.fee_invoice?.invoice_number || "—"}</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontFamily: fontBody }}>{formatKes(r.amount)}</TableCell>
+                    <TableCell>
+                      <PaymentMethodChip method={r.payment_method} />
+                    </TableCell>
+                    <TableCell sx={{ fontFamily: fontBody }}>{r.reference || "—"}</TableCell>
                     <TableCell align="right">
                       <Tooltip title="View payment">
-                        <IconButton size="small" onClick={() => void openView(r)} sx={{ color: primaryDark }}>
+                        <IconButton
+                          size="small"
+                          aria-label="View payment"
+                          onClick={() => void openView(r)}
+                          sx={actionIconSx}
+                        >
                           <VisibilityOutlinedIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
@@ -184,74 +182,78 @@ export default function FeePaymentsTab() {
             )}
           </TableBody>
         </Table>
-        <TablePagination
-          rowsPerPageOptions={[10, 20, 50]}
-          component="div"
-          count={totalCount}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={(_, newPage) => setPage(newPage)}
-          onRowsPerPageChange={(e) => {
-            setRowsPerPage(parseInt(e.target.value, 10));
-            setPage(0);
-          }}
-          labelRowsPerPage="Rows per page"
-          sx={{
-            borderTop: `1px solid ${accentLight}`,
-            "& .MuiTablePagination-toolbar": { flexWrap: "wrap", gap: 1 },
-          }}
-        />
-      </TableContainer>
+      </DataTableShell>
 
-      <Dialog open={Boolean(viewRow)} onClose={() => setViewRow(null)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6, bgcolor: "#fff5f5", borderBottom: `1px solid ${accentLight}` }}>
-          Fee payment details
-          <IconButton aria-label="Close" onClick={() => setViewRow(null)} sx={{ position: "absolute", right: 8, top: 8 }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {viewLoading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
-              <CircularProgress size={28} sx={{ color: primaryRed }} />
-            </Box>
-          ) : viewRow ? (
-            <Stack spacing={1} divider={<Divider flexItem />}>
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: primaryDark, mb: 0.5 }}>
-                  Payment
-                </Typography>
-                <DetailRow label="Amount" value={formatKes(viewRow.amount)} />
-                <DetailRow label="Paid at" value={formatDateTime(viewRow.paid_at)} />
-                <DetailRow label="Method" value={viewRow.payment_method} />
-                <DetailRow label="Reference" value={viewRow.reference} />
-                <DetailRow label="Notes" value={viewRow.notes} />
-                <DetailRow label="Recorded by" value={viewRow.recorded_by_user?.full_name || viewRow.recorded_by_user?.username} />
-                <DetailRow label="Recorded on" value={formatDateTime(viewRow.created_at)} />
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: primaryDark, mb: 0.5 }}>
-                  Student
-                </Typography>
-                <DetailRow label="Name" value={studentName(viewRow)} />
-                <DetailRow label="Admission no." value={viewRow.student?.admission_number} />
-                <DetailRow label="Level" value={viewRow.curriculum_class_level?.name} />
-                <DetailRow label="Parent" value={parentName(viewRow)} />
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: primaryDark, mb: 0.5 }}>
-                  Invoice
-                </Typography>
-                <DetailRow label="Invoice no." value={inv?.invoice_number} />
-                <DetailRow label="Status" value={inv?.status} />
-                <DetailRow label="Amount due" value={inv ? formatKes(inv.amount_due) : "—"} />
-                <DetailRow label="Amount paid (total)" value={inv ? formatKes(inv.amount_paid) : "—"} />
-                <DetailRow label="Balance" value={inv ? formatKes(inv.balance) : "—"} />
-              </Box>
-            </Stack>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-    </Stack>
+      <PremiumDialog
+        open={Boolean(viewRow)}
+        onClose={() => setViewRow(null)}
+        title="Fee payment details"
+        subtitle={viewRow ? formatKes(viewRow.amount) : "Payment information"}
+        icon={<PaidIcon />}
+        maxWidth="sm"
+        footer={<DialogGhostButton onClick={() => setViewRow(null)}>Close</DialogGhostButton>}
+      >
+        {viewLoading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+            <CircularProgress size={28} sx={{ color: primaryRed }} />
+          </Box>
+        ) : viewRow ? (
+          <Stack spacing={2}>
+            <FormSection title="Payment">
+              <Stack spacing={1.25}>
+                <DetailField label="Amount" value={formatKes(viewRow.amount)} />
+                <DetailField label="Paid at" value={formatDateTime(viewRow.paid_at)} />
+                <Box>
+                  <Typography
+                    sx={{
+                      fontFamily: fontBody,
+                      fontSize: "0.68rem",
+                      fontWeight: 700,
+                      color: "text.secondary",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      mb: 0.5,
+                    }}
+                  >
+                    Method
+                  </Typography>
+                  <PaymentMethodChip method={viewRow.payment_method} />
+                </Box>
+                <DetailField label="Reference" value={viewRow.reference} />
+                <DetailField label="Notes" value={viewRow.notes} />
+                <DetailField
+                  label="Recorded by"
+                  value={viewRow.recorded_by_user?.full_name || viewRow.recorded_by_user?.username}
+                />
+                <DetailField label="Recorded on" value={formatDateTime(viewRow.created_at)} />
+              </Stack>
+            </FormSection>
+            <FormSection title="Student">
+              <Stack spacing={1.25}>
+                <DetailField label="Name" value={studentName(viewRow)} />
+                <DetailField label="Admission no." value={viewRow.student?.admission_number} />
+                <DetailField label="Level" value={viewRow.curriculum_class_level?.name} />
+                <DetailField label="Parent" value={parentName(viewRow)} />
+              </Stack>
+            </FormSection>
+            <FormSection title="Invoice">
+              <Stack spacing={1.25}>
+                <DetailField label="Invoice no." value={inv?.invoice_number} />
+                {inv?.status ? (
+                  <Box>
+                    <InvoiceStatusChip status={inv.status} />
+                  </Box>
+                ) : (
+                  <DetailField label="Status" value="—" />
+                )}
+                <DetailField label="Amount due" value={inv ? formatKes(inv.amount_due) : "—"} />
+                <DetailField label="Amount paid (total)" value={inv ? formatKes(inv.amount_paid) : "—"} />
+                <DetailField label="Balance" value={inv ? formatKes(inv.balance) : "—"} />
+              </Stack>
+            </FormSection>
+          </Stack>
+        ) : null}
+      </PremiumDialog>
+    </TabPanelShell>
   );
 }

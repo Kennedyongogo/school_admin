@@ -1,26 +1,20 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import Swal from "sweetalert2";
 import {
   Box,
   Stack,
   Typography,
-  Card,
-  CardActions,
-  CardContent,
-  CardHeader,
-  Divider,
-  FormControl,
-  InputLabel,
-  OutlinedInput,
   Button,
-  Alert,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
   IconButton,
   Tooltip,
   Chip,
   CircularProgress,
+  Avatar,
+  TextField,
+  InputAdornment,
+  LinearProgress,
 } from "@mui/material";
 import {
   Check,
@@ -35,17 +29,21 @@ import {
   Phone as PhoneIcon,
   Badge as BadgeIcon,
   Home as HomeIcon,
+  Shield,
+  VerifiedUser,
 } from "@mui/icons-material";
 
-// Elimu Plus — align with LoginPage red palette
 const primaryRed = "#DC2626";
 const primaryDark = "#B91C1C";
 const primaryLight = "#FEE2E2";
-const backgroundLight = "#FEF2F2";
-const textPrimary = "#1F2937";
-const textSecondary = "#6B7280";
+const warmCream = "#FFFBF7";
+const textPrimary = "#1C1917";
+const textSecondary = "#78716C";
+const textMuted = "#A8A29E";
 const successGreen = "#16A34A";
-const failRed = "#DC2626";
+
+const fontBody = '"Plus Jakarta Sans", "Inter", system-ui, sans-serif';
+const fontDisplay = '"Fraunces", "Georgia", serif';
 
 const authHeaders = (token) => ({
   "Content-Type": "application/json",
@@ -53,7 +51,152 @@ const authHeaders = (token) => ({
   Authorization: `Bearer ${token}`,
 });
 
+const fadeUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: (i = 0) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.08, duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+  }),
+};
+
+function getInitials(name) {
+  if (!name) return "U";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+function SettingsSection({ icon, title, subtitle, accent = primaryRed, children, delay = 0, footer }) {
+  return (
+    <Box
+      component={motion.div}
+      variants={fadeUp}
+      custom={delay}
+      initial="hidden"
+      animate="visible"
+      sx={{
+        borderRadius: "22px",
+        bgcolor: "#fff",
+        border: "1px solid rgba(220,38,38,0.08)",
+        boxShadow: "0 16px 48px -16px rgba(28,25,23,0.1)",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+      }}
+    >
+      <Box
+        sx={{
+          px: { xs: 2, sm: 2.5 },
+          py: 2,
+          borderBottom: "1px solid rgba(220,38,38,0.06)",
+          background: `linear-gradient(135deg, ${warmCream} 0%, #fff 100%)`,
+        }}
+      >
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Box
+            sx={{
+              width: 44,
+              height: 44,
+              borderRadius: "13px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: `linear-gradient(145deg, ${accent} 0%, ${primaryDark} 100%)`,
+              color: "#fff",
+              boxShadow: `0 6px 16px ${accent}40`,
+            }}
+          >
+            {icon}
+          </Box>
+          <Box>
+            <Typography sx={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: "1.15rem", color: textPrimary, letterSpacing: "-0.02em" }}>
+              {title}
+            </Typography>
+            <Typography sx={{ fontFamily: fontBody, fontSize: "0.82rem", color: textSecondary, mt: 0.15 }}>
+              {subtitle}
+            </Typography>
+          </Box>
+        </Stack>
+      </Box>
+      <Box sx={{ p: { xs: 2, sm: 2.5 }, flex: 1 }}>{children}</Box>
+      {footer ? (
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            borderTop: "1px solid rgba(220,38,38,0.06)",
+            bgcolor: warmCream,
+            display: "flex",
+            justifyContent: "flex-end",
+          }}
+        >
+          {footer}
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
+function PasswordCriterion({ met, label }) {
+  return (
+    <Chip
+      size="small"
+      icon={met ? <Check sx={{ fontSize: "14px !important" }} /> : <Close sx={{ fontSize: "14px !important" }} />}
+      label={label}
+      sx={{
+        fontFamily: fontBody,
+        fontSize: "0.72rem",
+        fontWeight: 600,
+        height: 28,
+        bgcolor: met ? "rgba(22,163,74,0.1)" : "rgba(28,25,23,0.05)",
+        color: met ? successGreen : textMuted,
+        border: `1px solid ${met ? "rgba(22,163,74,0.25)" : "rgba(28,25,23,0.08)"}`,
+        "& .MuiChip-icon": { color: met ? successGreen : textMuted },
+      }}
+    />
+  );
+}
+
+const inputSx = {
+  "& .MuiOutlinedInput-root": {
+    borderRadius: "14px",
+    bgcolor: warmCream,
+    fontFamily: fontBody,
+    transition: "all 0.22s ease",
+    "& fieldset": { borderColor: "rgba(220,38,38,0.15)", borderWidth: "1.5px" },
+    "&:hover fieldset": { borderColor: "#FCA5A5" },
+    "&.Mui-focused fieldset": {
+      borderColor: primaryRed,
+      borderWidth: "2px",
+      boxShadow: "0 0 0 4px rgba(220,38,38,0.1)",
+    },
+  },
+  "& .MuiInputLabel-root": {
+    fontFamily: fontBody,
+    fontWeight: 500,
+    color: textMuted,
+    "&.Mui-focused": { color: primaryRed, fontWeight: 600 },
+  },
+  "& .MuiInputBase-input": { fontWeight: 500, color: textPrimary },
+};
+
+const primaryBtnSx = {
+  fontFamily: fontBody,
+  fontWeight: 700,
+  textTransform: "none",
+  borderRadius: "14px",
+  px: 3,
+  py: 1.25,
+  background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
+  color: "#fff",
+  boxShadow: "0 8px 24px -4px rgba(220,38,38,0.4)",
+  "&:hover": { background: `linear-gradient(135deg, ${primaryDark} 0%, #7F1D1D 100%)` },
+};
+
 export default function Settings({ user }) {
+  const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(user);
   const [form, setForm] = useState({
     username: "",
@@ -65,11 +208,8 @@ export default function Settings({ user }) {
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [message, setMessage] = useState(null);
-  const [severity, setSeverity] = useState("success");
   const [dloading, setDLoading] = useState(false);
   const [ploading, setPLoading] = useState(false);
-  const [usr, setUsr] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [passwordCriteria, setPasswordCriteria] = useState({
     length: false,
@@ -83,6 +223,7 @@ export default function Settings({ user }) {
     newPassword: false,
     confirmPassword: false,
   });
+
   const applyUserToForm = useCallback((u) => {
     if (!u) return;
     setForm({
@@ -144,23 +285,34 @@ export default function Settings({ user }) {
     checkPasswordCriteria(newPassword);
   }, [newPassword]);
 
+  const passwordStrength = useMemo(() => {
+    const met = Object.values(passwordCriteria).filter(Boolean).length;
+    return Math.round((met / 5) * 100);
+  }, [passwordCriteria]);
+
   const togglePasswordVisibility = (field) => {
-    setShowPasswords((prev) => ({
-      ...prev,
-      [field]: !prev[field],
-    }));
+    setShowPasswords((prev) => ({ ...prev, [field]: !prev[field] }));
   };
 
   const effectiveId = currentUser?.id || user?.id;
+  const roleLabel = (currentUser?.role || user?.role || "staff").replace(/_/g, " ");
+
+  const logoutAndRedirect = () => {
+    localStorage.clear();
+    navigate("/");
+    fetch("/api/admin/logout", { method: "GET", credentials: "include" }).catch(() => {});
+  };
 
   const handlePasswordUpdate = async (event) => {
     event.preventDefault();
-    setUsr(false);
-    setMessage(null);
 
     if (newPassword !== confirmPassword) {
-      setMessage("Passwords do not match");
-      setSeverity("error");
+      Swal.fire({
+        icon: "error",
+        title: "Passwords do not match",
+        text: "Please make sure your new password and confirmation are identical.",
+        confirmButtonColor: primaryRed,
+      });
       return;
     }
 
@@ -171,8 +323,12 @@ export default function Settings({ user }) {
       !passwordCriteria.special ||
       !passwordCriteria.uppercase
     ) {
-      setMessage("Enter a strong password matching all requirements.");
-      setSeverity("error");
+      Swal.fire({
+        icon: "error",
+        title: "Weak password",
+        text: "Enter a strong password matching all requirements.",
+        confirmButtonColor: primaryRed,
+      });
       return;
     }
 
@@ -180,8 +336,12 @@ export default function Settings({ user }) {
     try {
       const token = localStorage.getItem("token");
       if (!token || !effectiveId) {
-        setMessage("Not authenticated");
-        setSeverity("error");
+        Swal.fire({
+          icon: "error",
+          title: "Not authenticated",
+          text: "Please sign in again.",
+          confirmButtonColor: primaryRed,
+        });
         setPLoading(false);
         return;
       }
@@ -198,31 +358,49 @@ export default function Settings({ user }) {
       const data = await response.json();
 
       if (data.success) {
-        setMessage(data.message || "Password updated successfully.");
-        setSeverity("success");
         setOldPassword("");
         setNewPassword("");
         setConfirmPassword("");
+        await Swal.fire({
+          icon: "success",
+          title: "Password updated",
+          html: "Your password has been changed.<br/><br/>You will be signed out in a few seconds — please sign in again with your <strong>new password</strong>.",
+          confirmButtonColor: primaryRed,
+          timer: 4000,
+          timerProgressBar: true,
+          allowOutsideClick: false,
+        });
+        logoutAndRedirect();
       } else {
-        setMessage(data.message || "Failed to update password.");
-        setSeverity("error");
+        Swal.fire({
+          icon: "error",
+          title: "Update failed",
+          text: data.message || "Failed to update password.",
+          confirmButtonColor: primaryRed,
+        });
       }
-    } catch (error) {
-      setMessage("Failed to update password.");
-      setSeverity("error");
+    } catch {
+      Swal.fire({
+        icon: "error",
+        title: "Update failed",
+        text: "Something went wrong. Please try again.",
+        confirmButtonColor: primaryRed,
+      });
     }
     setPLoading(false);
   };
 
   const handleUserUpdate = async () => {
     setDLoading(true);
-    setUsr(true);
-    setMessage(null);
     try {
       const token = localStorage.getItem("token");
       if (!token || !effectiveId) {
-        setMessage("Not authenticated");
-        setSeverity("error");
+        Swal.fire({
+          icon: "error",
+          title: "Not authenticated",
+          text: "Please sign in again.",
+          confirmButtonColor: primaryRed,
+        });
         setDLoading(false);
         return;
       }
@@ -245,528 +423,402 @@ export default function Settings({ user }) {
         setCurrentUser(data.data);
         applyUserToForm(data.data);
         localStorage.setItem("user", JSON.stringify(data.data));
-        setMessage(data.message || "Profile updated successfully.");
-        setSeverity("success");
+        Swal.fire({
+          icon: "success",
+          title: "Profile saved",
+          text: data.message || "Your profile has been updated successfully.",
+          confirmButtonColor: primaryRed,
+        });
       } else {
-        setMessage(data.message || "Failed to update profile.");
-        setSeverity("error");
+        Swal.fire({
+          icon: "error",
+          title: "Update failed",
+          text: data.message || "Failed to update profile.",
+          confirmButtonColor: primaryRed,
+        });
       }
     } catch (error) {
       console.error("Error updating user:", error);
-      setMessage("Failed to update profile.");
-      setSeverity("error");
+      Swal.fire({
+        icon: "error",
+        title: "Update failed",
+        text: "Failed to update profile. Please try again.",
+        confirmButtonColor: primaryRed,
+      });
     }
     setDLoading(false);
   };
 
-  const labelSx = {
-    color: primaryDark,
-    fontWeight: 600,
-    "&.Mui-focused": { color: primaryRed },
+  const buildImageUrl = (imageUrl) => {
+    if (!imageUrl) return "";
+    if (imageUrl.startsWith("http")) return imageUrl;
+    if (imageUrl.startsWith("uploads/")) return `/${imageUrl}`;
+    if (imageUrl.startsWith("/uploads/")) return imageUrl;
+    return imageUrl;
   };
-
-  const outlinedSx = {
-    width: "100%",
-    "& .MuiOutlinedInput-root": {
-      width: "100%",
-      borderRadius: 2,
-      bgcolor: "rgba(255,255,255,0.95)",
-      "& fieldset": { borderColor: "#FECACA" },
-      "&:hover fieldset": { borderColor: primaryRed },
-      "&.Mui-focused fieldset": {
-        borderColor: primaryRed,
-        boxShadow: `0 0 0 2px ${primaryLight}`,
-      },
-    },
-  };
-
-  const roleLabel = currentUser?.role || user?.role || "";
-
-  /** Full width of the main content column (cancels PageRoutes `main` padding `p: 3`). */
-  const fullMainBleedSx = (theme) => ({
-    width: `calc(100% + ${theme.spacing(6)})`,
-    maxWidth: "none",
-    marginLeft: theme.spacing(-3),
-    marginRight: theme.spacing(-3),
-    boxSizing: "border-box",
-  });
 
   return (
     <Box
-      sx={(theme) => ({
-        ...fullMainBleedSx(theme),
-        /** Pull up into `main`’s default padding so less gap under the fixed top bar. */
-        marginTop: theme.spacing(-2.5),
-        marginBottom: "1px",
-        marginLeft: `calc(${theme.spacing(-3)} + 1px)`,
-        marginRight: `calc(${theme.spacing(-3)} + 1px)`,
-        width: `calc(100% + ${theme.spacing(6)} - 2px)`,
+      sx={{
         minHeight: "100%",
-        background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
-      })}
+        background: `linear-gradient(180deg, ${warmCream} 0%, #FFFFFF 45%, rgba(254,226,226,0.2) 100%)`,
+        mx: { xs: -1.5, sm: -2, md: -3 },
+        mt: { xs: -1, sm: -1.5 },
+        px: { xs: 1.5, sm: 2, md: 3 },
+        py: { xs: 2, sm: 3 },
+        boxSizing: "border-box",
+      }}
     >
-      {/* Header */}
-      <Box
-        sx={{
-          background: `linear-gradient(135deg, ${primaryDark} 0%, ${primaryRed} 55%, #EF4444 100%)`,
-          px: { xs: 2, sm: 3 },
-          py: { xs: 1.75, sm: 2.25 },
-          color: "white",
-          position: "relative",
-          overflow: "hidden",
-          boxShadow: `0 8px 24px ${primaryRed}33`,
-        }}
-      >
-        <Box
-          sx={{
-            position: "absolute",
-            top: -40,
-            right: -40,
-            width: 160,
-            height: 160,
-            background: "rgba(255,255,255,0.12)",
-            borderRadius: "50%",
-          }}
-        />
-        <Box
-          display="flex"
-          flexDirection={{ xs: "column", sm: "row" }}
-          justifyContent="space-between"
-          alignItems={{ xs: "flex-start", sm: "center" }}
-          gap={2}
-          position="relative"
-          zIndex={1}
-        >
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5, fontSize: { xs: "1.35rem", sm: "2rem" } }}>
-              Account settings
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.92 }}>
-              Profile and security — synced with Elimu Plus
-            </Typography>
-          </Box>
-          <Chip
-            icon={<PersonIcon sx={{ color: "white !important" }} />}
-            label={roleLabel.replace(/_/g, " ") || "Staff"}
-            sx={{
-              bgcolor: "rgba(255,255,255,0.22)",
-              color: "white",
-              fontWeight: 700,
-              borderRadius: 2,
-              textTransform: "capitalize",
-            }}
-          />
+      {fetching ? (
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 10, gap: 2 }}>
+          <CircularProgress sx={{ color: primaryRed }} />
+          <Typography sx={{ fontFamily: fontBody, color: textSecondary }}>Loading your settings…</Typography>
         </Box>
-      </Box>
-
-      <Box sx={{ width: "100%", py: { xs: 1, sm: 2 } }}>
-        {fetching ? (
-          <Box display="flex" justifyContent="center" py={6}>
-            <CircularProgress sx={{ color: primaryRed }} />
-          </Box>
-        ) : (
-          <Stack spacing={0} sx={{ width: "100%" }}>
-            {/* 1) Profile — edge-to-edge of main column; inputs full width */}
-            <Card
-              elevation={0}
-              sx={{
-                width: "100%",
-                borderRadius: 0,
-                border: "none",
-                borderBottom: `1px solid ${primaryLight}`,
-                boxShadow: "none",
-                overflow: "hidden",
-                display: "flex",
-                flexDirection: "column",
-              }}
+      ) : (
+        <Stack spacing={3}>
+          {/* Hero */}
+          <Box
+            component={motion.div}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            sx={{
+              borderRadius: "24px",
+              p: { xs: 2.5, sm: 3 },
+              background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 55%, #7F1D1D 100%)`,
+              color: "#fff",
+              position: "relative",
+              overflow: "hidden",
+              boxShadow: "0 20px 60px -12px rgba(220,38,38,0.45)",
+            }}
+          >
+            <Box sx={{ position: "absolute", top: -30, right: -20, width: 180, height: 180, borderRadius: "50%", bgcolor: "rgba(255,255,255,0.08)" }} />
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={2.5}
+              alignItems={{ xs: "flex-start", sm: "center" }}
+              sx={{ position: "relative", zIndex: 1 }}
             >
-                <CardHeader
-                  sx={{
-                    background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-                    color: "white",
-                    py: 2,
-                    px: { xs: 2, sm: 3 },
-                  }}
-                  title={
-                    <Box display="flex" alignItems="center" gap={1.5}>
-                      <Box
-                        sx={{
-                          p: 1,
-                          borderRadius: "50%",
-                          bgcolor: "rgba(255,255,255,0.2)",
-                          display: "flex",
-                        }}
-                      >
-                        <PersonIcon />
-                      </Box>
-                      <Box>
-                        <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                          Profile
-                        </Typography>
-                        <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                          Name, username, contact — from your account
-                        </Typography>
-                      </Box>
-                    </Box>
-                  }
-                />
-                <CardContent
-                  sx={{
-                    flex: 1,
-                    pt: 3,
-                    pb: 2,
-                    width: "100%",
-                    boxSizing: "border-box",
-                    px: { xs: 2, sm: 3 },
-                  }}
-                >
-                  <Stack spacing={2.5} sx={{ width: "100%", maxWidth: "100%" }}>
-                    <FormControl fullWidth sx={{ width: "100%" }}>
-                      <InputLabel sx={labelSx}>Username</InputLabel>
-                      <OutlinedInput
-                        fullWidth
-                        label="Username"
-                        value={form.username}
-                        onChange={(e) => setForm({ ...form, username: e.target.value })}
-                        startAdornment={
-                          <Box sx={{ mr: 1, color: primaryRed }}>
-                            <BadgeIcon fontSize="small" />
-                          </Box>
-                        }
-                        sx={outlinedSx}
-                      />
-                    </FormControl>
-                    <FormControl fullWidth sx={{ width: "100%" }}>
-                      <InputLabel sx={labelSx}>Full name</InputLabel>
-                      <OutlinedInput
-                        fullWidth
-                        label="Full name"
-                        value={form.full_name}
-                        onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                        startAdornment={
-                          <Box sx={{ mr: 1, color: primaryRed }}>
-                            <PersonIcon fontSize="small" />
-                          </Box>
-                        }
-                        sx={outlinedSx}
-                      />
-                    </FormControl>
-                    <FormControl fullWidth sx={{ width: "100%" }}>
-                      <InputLabel sx={labelSx}>Email</InputLabel>
-                      <OutlinedInput
-                        fullWidth
-                        label="Email"
-                        type="email"
-                        value={form.email}
-                        onChange={(e) => setForm({ ...form, email: e.target.value })}
-                        startAdornment={
-                          <Box sx={{ mr: 1, color: primaryRed }}>
-                            <EmailIcon fontSize="small" />
-                          </Box>
-                        }
-                        sx={outlinedSx}
-                      />
-                    </FormControl>
-                    <FormControl fullWidth sx={{ width: "100%" }}>
-                      <InputLabel sx={labelSx}>Phone</InputLabel>
-                      <OutlinedInput
-                        fullWidth
-                        label="Phone"
-                        value={form.phone}
-                        onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                        startAdornment={
-                          <Box sx={{ mr: 1, color: primaryRed }}>
-                            <PhoneIcon fontSize="small" />
-                          </Box>
-                        }
-                        sx={outlinedSx}
-                      />
-                    </FormControl>
-                    <FormControl fullWidth sx={{ width: "100%" }}>
-                      <InputLabel sx={labelSx}>Address</InputLabel>
-                      <OutlinedInput
-                        fullWidth
-                        label="Address"
-                        multiline
-                        minRows={2}
-                        value={form.address}
-                        onChange={(e) => setForm({ ...form, address: e.target.value })}
-                        startAdornment={
-                          <Box sx={{ mr: 1, color: primaryRed, alignSelf: "flex-start", mt: 1 }}>
-                            <HomeIcon fontSize="small" />
-                          </Box>
-                        }
-                        sx={outlinedSx}
-                      />
-                    </FormControl>
-
-                    <Box
-                      sx={{
-                        p: 1.5,
-                        borderRadius: 2,
-                        bgcolor: primaryLight,
-                        border: `1px solid #FECACA`,
-                      }}
-                    >
-                      <Typography variant="caption" sx={{ color: textSecondary, fontWeight: 600 }}>
-                        Role (read-only)
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: textPrimary, fontWeight: 700, textTransform: "capitalize" }}>
-                        {roleLabel.replace(/_/g, " ") || "—"}
-                      </Typography>
-                    </Box>
-
-                    {usr && message && (
-                      <Alert severity={severity} sx={{ borderRadius: 2 }}>
-                        {message}
-                      </Alert>
-                    )}
-                  </Stack>
-                </CardContent>
-                <Divider />
-                <CardActions
-                  sx={{
-                    px: { xs: 2, sm: 3 },
-                    py: 2.5,
-                    justifyContent: "flex-end",
-                    bgcolor: backgroundLight,
-                  }}
-                >
-                  <Button
-                    variant="contained"
-                    onClick={handleUserUpdate}
-                    disabled={dloading}
-                    startIcon={dloading ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
-                    sx={{
-                      bgcolor: primaryRed,
-                      color: "white",
-                      fontWeight: 700,
-                      textTransform: "none",
-                      borderRadius: 2,
-                      px: 3,
-                      boxShadow: `0 4px 14px ${primaryRed}44`,
-                      "&:hover": { bgcolor: primaryDark },
-                    }}
-                  >
-                    {dloading ? "Saving…" : "Save profile"}
-                  </Button>
-                </CardActions>
-              </Card>
-
-            {/* 2) Security — full width below profile */}
-            <form onSubmit={handlePasswordUpdate} style={{ width: "100%" }}>
-              <Card
-                elevation={0}
+              <Avatar
+                src={buildImageUrl(currentUser?.profile_image)}
+                alt={form.full_name}
                 sx={{
-                  width: "100%",
-                  borderRadius: 0,
-                  border: "none",
-                  boxShadow: "none",
-                  overflow: "hidden",
-                  display: "flex",
-                  flexDirection: "column",
+                  width: 72,
+                  height: 72,
+                  fontSize: "1.5rem",
+                  fontWeight: 700,
+                  fontFamily: fontDisplay,
+                  border: "3px solid rgba(255,255,255,0.35)",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+                  bgcolor: "rgba(255,255,255,0.15)",
                 }}
               >
-                  <CardHeader
+                {getInitials(form.full_name)}
+              </Avatar>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center" sx={{ mb: 0.75 }}>
+                  <Chip
+                    icon={<VerifiedUser sx={{ fontSize: "16px !important", color: "rgba(255,255,255,0.9) !important" }} />}
+                    label={roleLabel}
+                    size="small"
                     sx={{
-                      background: `linear-gradient(135deg, #991B1B 0%, ${primaryDark} 100%)`,
-                      color: "white",
-                      py: 2,
-                      px: { xs: 2, sm: 3 },
+                      bgcolor: "rgba(255,255,255,0.15)",
+                      color: "#fff",
+                      fontFamily: fontBody,
+                      fontWeight: 700,
+                      fontSize: "0.72rem",
+                      textTransform: "capitalize",
+                      border: "1px solid rgba(255,255,255,0.22)",
                     }}
-                    title={
-                      <Box display="flex" alignItems="center" gap={1.5}>
-                        <Box
-                          sx={{
-                            p: 1,
-                            borderRadius: "50%",
-                            bgcolor: "rgba(255,255,255,0.2)",
-                            display: "flex",
-                          }}
-                        >
-                          <SecurityIcon />
-                        </Box>
-                        <Box>
-                          <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                            Security
-                          </Typography>
-                          <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                            Change your password securely
-                          </Typography>
-                        </Box>
-                      </Box>
-                    }
                   />
-                  <CardContent
+                  <Chip
+                    icon={<Shield sx={{ fontSize: "16px !important", color: "rgba(255,255,255,0.9) !important" }} />}
+                    label="Secure account"
+                    size="small"
                     sx={{
-                      flex: 1,
-                      pt: 3,
-                      pb: 2,
-                      width: "100%",
-                      boxSizing: "border-box",
-                      px: { xs: 2, sm: 3 },
+                      bgcolor: "rgba(255,255,255,0.1)",
+                      color: "rgba(255,255,255,0.9)",
+                      fontFamily: fontBody,
+                      fontWeight: 600,
+                      fontSize: "0.68rem",
+                      border: "1px solid rgba(255,255,255,0.15)",
+                    }}
+                  />
+                </Stack>
+                <Typography sx={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: { xs: "1.5rem", sm: "1.85rem" }, letterSpacing: "-0.03em", lineHeight: 1.15 }}>
+                  {form.full_name || "Your account"}
+                </Typography>
+                <Typography sx={{ fontFamily: fontBody, fontSize: "0.9rem", opacity: 0.85, mt: 0.5 }}>
+                  {form.email || "Manage your profile and security preferences"}
+                </Typography>
+              </Box>
+            </Stack>
+          </Box>
+
+          {/* Content grid */}
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" },
+              gap: 2.5,
+              alignItems: "start",
+            }}
+          >
+            {/* Profile */}
+            <SettingsSection
+              icon={<PersonIcon />}
+              title="Profile"
+              subtitle="Your personal information and contact details"
+              delay={1}
+              footer={
+                <Button
+                  variant="contained"
+                  onClick={handleUserUpdate}
+                  disabled={dloading}
+                  startIcon={dloading ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
+                  sx={primaryBtnSx}
+                >
+                  {dloading ? "Saving…" : "Save profile"}
+                </Button>
+              }
+            >
+              <Stack spacing={2}>
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                    gap: 2,
+                  }}
+                >
+                  <TextField
+                    label="Username"
+                    value={form.username}
+                    onChange={(e) => setForm({ ...form, username: e.target.value })}
+                    fullWidth
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <BadgeIcon sx={{ color: primaryRed, fontSize: 20 }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={inputSx}
+                  />
+                  <TextField
+                    label="Full name"
+                    value={form.full_name}
+                    onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                    fullWidth
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <PersonIcon sx={{ color: primaryRed, fontSize: 20 }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={inputSx}
+                  />
+                </Box>
+
+                <TextField
+                  label="Email address"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  fullWidth
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <EmailIcon sx={{ color: primaryRed, fontSize: 20 }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={inputSx}
+                />
+
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                    gap: 2,
+                  }}
+                >
+                  <TextField
+                    label="Phone"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    fullWidth
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <PhoneIcon sx={{ color: primaryRed, fontSize: 20 }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={inputSx}
+                  />
+                  <Box
+                    sx={{
+                      p: 1.75,
+                      borderRadius: "14px",
+                      bgcolor: warmCream,
+                      border: `1px solid ${primaryLight}`,
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
                     }}
                   >
-                    <Stack spacing={2.5} sx={{ width: "100%", maxWidth: "100%" }}>
-                      <Box
-                        sx={{
-                          bgcolor: primaryLight,
-                          borderRadius: 2,
-                          p: 2,
-                          border: `1px solid #FECACA`,
-                        }}
-                      >
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: primaryDark, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
-                          <LockIcon fontSize="small" />
-                          Password requirements
-                        </Typography>
-                        <List dense disablePadding>
-                          {[
-                            { key: "length", text: "At least 8 characters" },
-                            { key: "uppercase", text: "One uppercase letter" },
-                            { key: "lowercase", text: "One lowercase letter" },
-                            { key: "digit", text: "One digit" },
-                            { key: "special", text: "One special character" },
-                          ].map(({ key, text }) => (
-                            <ListItem key={key} sx={{ py: 0.35, px: 0 }}>
-                              <ListItemIcon sx={{ minWidth: 28 }}>
-                                {passwordCriteria[key] ? (
-                                  <Check sx={{ color: successGreen }} fontSize="small" />
-                                ) : (
-                                  <Close sx={{ color: failRed }} fontSize="small" />
-                                )}
-                              </ListItemIcon>
-                              <ListItemText
-                                primary={text}
-                                primaryTypographyProps={{
-                                  fontSize: "0.8rem",
-                                  color: passwordCriteria[key] ? successGreen : textSecondary,
-                                  fontWeight: passwordCriteria[key] ? 600 : 400,
-                                }}
-                              />
-                            </ListItem>
-                          ))}
-                        </List>
-                      </Box>
+                    <Typography sx={{ fontFamily: fontBody, fontSize: "0.7rem", fontWeight: 700, color: textMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      Role
+                    </Typography>
+                    <Typography sx={{ fontFamily: fontBody, fontWeight: 700, color: textPrimary, textTransform: "capitalize", mt: 0.25 }}>
+                      {roleLabel}
+                    </Typography>
+                  </Box>
+                </Box>
 
-                      <FormControl fullWidth sx={{ width: "100%" }}>
-                        <InputLabel sx={labelSx}>Current password</InputLabel>
-                        <OutlinedInput
-                          fullWidth
-                          label="Current password"
-                          type={showPasswords.oldPassword ? "text" : "password"}
-                          value={oldPassword}
-                          onChange={(e) => setOldPassword(e.target.value)}
-                          startAdornment={
-                            <Box sx={{ mr: 1, color: primaryRed }}>
-                              <LockIcon fontSize="small" />
-                            </Box>
-                          }
-                          endAdornment={
-                            <Tooltip title={showPasswords.oldPassword ? "Hide" : "Show"}>
-                              <IconButton onClick={() => togglePasswordVisibility("oldPassword")} sx={{ color: primaryRed }}>
-                                {showPasswords.oldPassword ? <VisibilityOff /> : <Visibility />}
-                              </IconButton>
-                            </Tooltip>
-                          }
-                          sx={outlinedSx}
-                        />
-                      </FormControl>
+                <TextField
+                  label="Address"
+                  multiline
+                  minRows={2}
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  fullWidth
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start" sx={{ alignSelf: "flex-start", mt: 1.5 }}>
+                        <HomeIcon sx={{ color: primaryRed, fontSize: 20 }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={inputSx}
+                />
+              </Stack>
+            </SettingsSection>
 
-                      <FormControl fullWidth sx={{ width: "100%" }}>
-                        <InputLabel sx={labelSx}>New password</InputLabel>
-                        <OutlinedInput
-                          fullWidth
-                          label="New password"
-                          type={showPasswords.newPassword ? "text" : "password"}
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          startAdornment={
-                            <Box sx={{ mr: 1, color: primaryRed }}>
-                              <LockIcon fontSize="small" />
-                            </Box>
-                          }
-                          endAdornment={
-                            <Tooltip title={showPasswords.newPassword ? "Hide" : "Show"}>
-                              <IconButton onClick={() => togglePasswordVisibility("newPassword")} sx={{ color: primaryRed }}>
-                                {showPasswords.newPassword ? <VisibilityOff /> : <Visibility />}
-                              </IconButton>
-                            </Tooltip>
-                          }
-                          sx={outlinedSx}
-                        />
-                      </FormControl>
-
-                      <FormControl fullWidth sx={{ width: "100%" }}>
-                        <InputLabel sx={labelSx}>Confirm password</InputLabel>
-                        <OutlinedInput
-                          fullWidth
-                          label="Confirm password"
-                          type={showPasswords.confirmPassword ? "text" : "password"}
-                          value={confirmPassword}
-                          onChange={(e) => {
-                            setConfirmPassword(e.target.value);
-                            if (e.target.value && e.target.value !== newPassword) {
-                              setMessage("Passwords do not match");
-                              setSeverity("error");
-                            } else if (!usr) setMessage(null);
-                          }}
-                          startAdornment={
-                            <Box sx={{ mr: 1, color: primaryRed }}>
-                              <LockIcon fontSize="small" />
-                            </Box>
-                          }
-                          endAdornment={
-                            <Tooltip title={showPasswords.confirmPassword ? "Hide" : "Show"}>
-                              <IconButton onClick={() => togglePasswordVisibility("confirmPassword")} sx={{ color: primaryRed }}>
-                                {showPasswords.confirmPassword ? <VisibilityOff /> : <Visibility />}
-                              </IconButton>
-                            </Tooltip>
-                          }
-                          sx={outlinedSx}
-                        />
-                      </FormControl>
-
-                      {!usr && message && (
-                        <Alert severity={severity} sx={{ borderRadius: 2 }}>
-                          {message}
-                        </Alert>
-                      )}
+            {/* Security */}
+            <SettingsSection
+              icon={<SecurityIcon />}
+              title="Security"
+              subtitle="Update your password to keep your account safe"
+              accent="#991B1B"
+              delay={2}
+              footer={
+                <Button
+                  type="submit"
+                  form="password-form"
+                  variant="contained"
+                  disabled={ploading}
+                  startIcon={ploading ? <CircularProgress size={18} color="inherit" /> : <LockIcon />}
+                  sx={primaryBtnSx}
+                >
+                  {ploading ? "Updating…" : "Update password"}
+                </Button>
+              }
+            >
+              <Box component="form" id="password-form" onSubmit={handlePasswordUpdate}>
+                <Stack spacing={2}>
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: "16px",
+                      bgcolor: warmCream,
+                      border: `1px solid ${primaryLight}`,
+                    }}
+                  >
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                      <Typography sx={{ fontFamily: fontBody, fontWeight: 700, fontSize: "0.85rem", color: primaryDark, display: "flex", alignItems: "center", gap: 0.75 }}>
+                        <LockIcon sx={{ fontSize: 18 }} />
+                        Password strength
+                      </Typography>
+                      <Typography sx={{ fontFamily: fontBody, fontSize: "0.75rem", fontWeight: 700, color: passwordStrength === 100 ? successGreen : textSecondary }}>
+                        {passwordStrength}%
+                      </Typography>
                     </Stack>
-                  </CardContent>
-                  <Divider />
-                  <CardActions
+                    <LinearProgress
+                      variant="determinate"
+                      value={passwordStrength}
+                      sx={{
+                        height: 8,
+                        borderRadius: 4,
+                        mb: 1.5,
+                        bgcolor: "rgba(28,25,23,0.06)",
+                        "& .MuiLinearProgress-bar": {
+                          borderRadius: 4,
+                          background:
+                            passwordStrength === 100
+                              ? `linear-gradient(90deg, ${successGreen}, #22C55E)`
+                              : `linear-gradient(90deg, ${primaryRed}, ${primaryDark})`,
+                        },
+                      }}
+                    />
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                      <PasswordCriterion met={passwordCriteria.length} label="8+ chars" />
+                      <PasswordCriterion met={passwordCriteria.uppercase} label="Uppercase" />
+                      <PasswordCriterion met={passwordCriteria.lowercase} label="Lowercase" />
+                      <PasswordCriterion met={passwordCriteria.digit} label="Digit" />
+                      <PasswordCriterion met={passwordCriteria.special} label="Special" />
+                    </Box>
+                  </Box>
+
+                  {[
+                    { key: "oldPassword", label: "Current password", value: oldPassword, setter: setOldPassword },
+                    { key: "newPassword", label: "New password", value: newPassword, setter: setNewPassword },
+                    { key: "confirmPassword", label: "Confirm password", value: confirmPassword, setter: setConfirmPassword },
+                  ].map((field) => (
+                    <TextField
+                      key={field.key}
+                      label={field.label}
+                      type={showPasswords[field.key] ? "text" : "password"}
+                      value={field.value}
+                      onChange={(e) => field.setter(e.target.value)}
+                      fullWidth
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <LockIcon sx={{ color: primaryRed, fontSize: 20 }} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Tooltip title={showPasswords[field.key] ? "Hide" : "Show"}>
+                              <IconButton
+                                onClick={() => togglePasswordVisibility(field.key)}
+                                edge="end"
+                                sx={{ color: textMuted, "&:hover": { color: primaryRed } }}
+                              >
+                                {showPasswords[field.key] ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                              </IconButton>
+                            </Tooltip>
+                          </InputAdornment>
+                        ),
+                      }}
+                      sx={inputSx}
+                    />
+                  ))}
+
+                  <Box
                     sx={{
-                      px: { xs: 2, sm: 3 },
-                      py: 2.5,
-                      justifyContent: "flex-end",
-                      bgcolor: backgroundLight,
+                      p: 1.75,
+                      borderRadius: "14px",
+                      bgcolor: "rgba(37,99,235,0.06)",
+                      border: "1px solid rgba(37,99,235,0.15)",
+                      display: "flex",
+                      gap: 1.25,
+                      alignItems: "flex-start",
                     }}
                   >
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      disabled={ploading}
-                      startIcon={ploading ? <CircularProgress size={18} color="inherit" /> : <SecurityIcon />}
-                      sx={{
-                        bgcolor: primaryRed,
-                        color: "white",
-                        fontWeight: 700,
-                        textTransform: "none",
-                        borderRadius: 2,
-                        px: 3,
-                        boxShadow: `0 4px 14px ${primaryRed}44`,
-                        "&:hover": { bgcolor: primaryDark },
-                      }}
-                    >
-                      {ploading ? "Updating…" : "Update password"}
-                    </Button>
-                  </CardActions>
-                </Card>
-              </form>
-          </Stack>
-        )}
-      </Box>
+                    <Shield sx={{ fontSize: 20, color: "#2563EB", mt: 0.1, flexShrink: 0 }} />
+                    <Typography sx={{ fontFamily: fontBody, fontSize: "0.8rem", color: textSecondary, lineHeight: 1.55 }}>
+                      Use a unique password you don&apos;t share with other sites. You&apos;ll stay signed in on this device after updating.
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Box>
+            </SettingsSection>
+          </Box>
+        </Stack>
+      )}
     </Box>
   );
 }

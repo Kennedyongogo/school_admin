@@ -2,41 +2,68 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Box,
-  Button,
-  Card,
-  CardContent,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
+  IconButton,
   MenuItem,
   Stack,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import Swal from "sweetalert2";
-
-const primaryRed = "#DC2626";
-
-const authJsonHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
+import {
+  authJsonHeaders,
+  formatKes,
+  formatDateTime,
+  inputSx,
+  primaryRed,
+  fontBody,
+  actionIconSx,
+} from "../Accounting/accountingShared";
+import {
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  PremiumDialog,
+  DetailField,
+  FormSection,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+  AccountingInfoBanner,
+  InvoiceStatusChip,
+  FeeBreakdownView,
+} from "../Accounting/accountingUi";
 
 function studentLevelLabel(s) {
+  return s?.curriculum_class_level?.name || s?.curriculum_class_level_id || "—";
+}
+
+function studentName(row) {
+  return row?.student?.user?.full_name || row?.student?.name || row?.student?.admission_number || "—";
+}
+
+function findTermInvoice(rows, studentId, levelId) {
+  if (!studentId || !levelId) return null;
   return (
-    s?.curriculum_class_level?.name ||
-    s?.curriculum_class_level_id ||
-    "—"
+    rows.find(
+      (r) =>
+        String(r.student_id) === String(studentId) &&
+        String(r.curriculum_class_level_id) === String(levelId) &&
+        r.status !== "cancelled"
+    ) || null
   );
+}
+
+function canCancelInvoice(inv) {
+  if (!inv || inv.status === "cancelled" || inv.status === "paid") return false;
+  return Number(inv.amount_paid || 0) <= 0.01;
 }
 
 export default function FeeInvoicesTab({ genOpen: genOpenProp, onGenOpenChange }) {
@@ -46,10 +73,9 @@ export default function FeeInvoicesTab({ genOpen: genOpenProp, onGenOpenChange }
   const [genOpenLocal, setGenOpenLocal] = useState(false);
   const genOpen = genOpenProp !== undefined ? genOpenProp : genOpenLocal;
   const setGenOpen = onGenOpenChange || setGenOpenLocal;
-  const [payOpen, setPayOpen] = useState(null);
+  const [viewRow, setViewRow] = useState(null);
   const [students, setStudents] = useState([]);
   const [genForm, setGenForm] = useState({ student_id: "", send_to_parent: true, notes: "" });
-  const [payAmount, setPayAmount] = useState("");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -81,6 +107,10 @@ export default function FeeInvoicesTab({ genOpen: genOpenProp, onGenOpenChange }
   }, [load]);
 
   const selectedStudent = students.find((s) => String(s.id) === String(genForm.student_id));
+  const selectedTermInvoice = selectedStudent
+    ? findTermInvoice(rows, selectedStudent.id, selectedStudent.curriculum_class_level_id)
+    : null;
+  const generateBlocked = Boolean(selectedTermInvoice);
 
   const generateInvoice = async () => {
     const token = localStorage.getItem("token");
@@ -109,45 +139,33 @@ export default function FeeInvoicesTab({ genOpen: genOpenProp, onGenOpenChange }
     }
   };
 
-  const recordPayment = async () => {
+  const cancelInvoice = async (inv) => {
     const token = localStorage.getItem("token");
-    const inv = payOpen;
     if (!token || !inv) return;
-    const amount = Number(payAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      await Swal.fire({ icon: "warning", title: "Enter a valid amount" });
-      return;
-    }
+    const { value: reason, isConfirmed } = await Swal.fire({
+      icon: "warning",
+      title: "Cancel invoice?",
+      text: `Cancel ${inv.invoice_number}? You can generate a new one for this term/level after cancelling.`,
+      input: "text",
+      inputLabel: "Reason (optional)",
+      inputPlaceholder: "Created in error",
+      showCancelButton: true,
+      confirmButtonText: "Cancel invoice",
+      confirmButtonColor: primaryRed,
+    });
+    if (!isConfirmed) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/fee-invoices/${inv.id}/payments`, {
+      const res = await fetch(`/api/fee-invoices/${inv.id}/cancel`, {
         method: "POST",
         headers: authJsonHeaders(token),
-        body: JSON.stringify({ amount, payment_method: "manual" }),
+        body: JSON.stringify({ reason: reason || null }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.message || "Payment failed.");
-      const receipt = data.data?.payment_receipt;
-      setPayOpen(null);
-      setPayAmount("");
+      if (!res.ok || !data.success) throw new Error(data.message || "Could not cancel invoice.");
+      setViewRow(null);
       await load();
-      if (receipt?.has_excess && receipt.excess_from_payment > 0.01) {
-        await Swal.fire({
-          icon: "info",
-          title: "Excess payment recorded",
-          html: `
-            <p style="text-align:left;margin:0 0 10px">
-              Applied to invoice: <strong>KES ${Number(receipt.applied_to_invoice || 0).toLocaleString()}</strong><br/>
-              Excess this payment: <strong>KES ${Number(receipt.excess_from_payment || 0).toLocaleString()}</strong><br/>
-              Total credit on level: <strong>KES ${Number(receipt.invoice_credit_balance || 0).toLocaleString()}</strong>
-            </p>
-            <p style="text-align:left;margin:0;color:#4b5563">${receipt.carry_forward_message || ""}</p>
-          `,
-          confirmButtonText: "OK",
-        });
-      } else {
-        await Swal.fire({ icon: "success", title: "Payment recorded", timer: 1200, showConfirmButton: false });
-      }
+      await Swal.fire({ icon: "success", title: "Invoice cancelled", timer: 1200, showConfirmButton: false });
     } catch (e) {
       await Swal.fire({ icon: "error", title: "Failed", text: e.message });
     } finally {
@@ -155,119 +173,227 @@ export default function FeeInvoicesTab({ genOpen: genOpenProp, onGenOpenChange }
     }
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-        <CircularProgress sx={{ color: primaryRed }} />
-      </Box>
-    );
-  }
+  const breakdown = Array.isArray(viewRow?.payment_breakdown) ? viewRow.payment_breakdown : [];
 
   return (
-    <Stack spacing={2}>
-      {error ? <Alert severity="error">{error}</Alert> : null}
-      <Alert severity="info">
-        Invoices use each student&apos;s <strong>curriculum Term/level</strong> and the matching fee structure. Ensure the student has class, level, and a fee structure before generating.
-      </Alert>
-      <TableContainer component={Card} variant="outlined">
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Invoice</TableCell>
-              <TableCell>Student</TableCell>
-              <TableCell>Level</TableCell>
-              <TableCell>Due</TableCell>
-              <TableCell>Paid</TableCell>
-              <TableCell>Balance</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell align="right">Action</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8}>
-                  <Typography color="text.secondary" sx={{ py: 2 }}>
-                    No invoices yet. Generate one for a student with class, level, and fee structure set.
-                  </Typography>
+    <TabPanelShell loading={loading} error={error || null} onDismissError={() => setError("")}>
+      <Stack spacing={2}>
+        <AccountingInfoBanner>
+          <strong>One invoice per student per term/level.</strong> Generate again only when the student moves to a new
+          term/level or billing cycle, or after cancelling an invoice that was created in error.
+        </AccountingInfoBanner>
+
+        <DataTableShell>
+          <Table size="medium" sx={{ minWidth: 860 }}>
+            <TableHead>
+              <TableRow sx={tableHeadRowSx}>
+                <TableCell>Invoice</TableCell>
+                <TableCell>Student</TableCell>
+                <TableCell>Level</TableCell>
+                <TableCell>Due</TableCell>
+                <TableCell>Paid</TableCell>
+                <TableCell>Balance</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right" width={80}>
+                  Action
                 </TableCell>
               </TableRow>
-            ) : (
-              rows.map((r) => (
-                <TableRow key={r.id} hover>
-                  <TableCell>{r.invoice_number}</TableCell>
-                  <TableCell>{r.student?.user?.full_name || r.student?.admission_number || "—"}</TableCell>
-                  <TableCell>{r.curriculum_class_level?.name || "—"}</TableCell>
-                  <TableCell>{Number(r.amount_due || 0).toLocaleString()}</TableCell>
-                  <TableCell>{Number(r.amount_paid || 0).toLocaleString()}</TableCell>
-                  <TableCell>{Number(r.balance || 0).toLocaleString()}</TableCell>
-                  <TableCell>{r.status}</TableCell>
-                  <TableCell align="right">
-                    <Button size="small" disabled={r.status === "paid"} onClick={() => { setPayOpen(r); setPayAmount(String(r.balance || "")); }}>
-                      Record payment
-                    </Button>
+            </TableHead>
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8}>
+                    <EmptyTableRow message="No invoices yet. Generate one for a student with class, level, and fee structure set." />
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+              ) : (
+                rows.map((r) => (
+                  <TableRow key={r.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
+                    <TableCell sx={{ fontFamily: fontBody, fontWeight: 700 }}>{r.invoice_number}</TableCell>
+                    <TableCell sx={{ fontFamily: fontBody, fontWeight: 600 }}>
+                      {r.student?.user?.full_name || r.student?.admission_number || "—"}
+                    </TableCell>
+                    <TableCell sx={{ fontFamily: fontBody }}>
+                      {r.curriculum_class_level?.name || r.level_name || "—"}
+                    </TableCell>
+                    <TableCell sx={{ fontFamily: fontBody, fontWeight: 600 }}>{formatKes(r.amount_due)}</TableCell>
+                    <TableCell sx={{ fontFamily: fontBody }}>{formatKes(r.amount_paid)}</TableCell>
+                    <TableCell sx={{ fontFamily: fontBody, fontWeight: 700 }}>{formatKes(r.balance)}</TableCell>
+                    <TableCell>
+                      <InvoiceStatusChip status={r.status} />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Tooltip title="View invoice">
+                        <IconButton
+                          size="small"
+                          aria-label="View invoice"
+                          onClick={() => setViewRow(r)}
+                          sx={actionIconSx}
+                        >
+                          <VisibilityOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </DataTableShell>
 
-      <Dialog open={genOpen} onClose={() => setGenOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Generate fee invoice</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField select label="Student" required value={genForm.student_id} onChange={(e) => setGenForm((f) => ({ ...f, student_id: e.target.value }))} fullWidth>
-              <MenuItem value="">
-                <em>Select student</em>
-              </MenuItem>
-              {students.map((s) => (
-                <MenuItem key={s.id} value={s.id}>
-                  {s.user?.full_name || s.admission_number} ({s.admission_number})
-                  {s.curriculum_class_level?.name ? ` · ${s.curriculum_class_level.name}` : ""}
+        <PremiumDialog
+          open={genOpen}
+          onClose={() => !busy && setGenOpen(false)}
+          title="Generate fee invoice"
+          subtitle="Create and send an invoice for a student"
+          icon={<ReceiptLongIcon />}
+          maxWidth="sm"
+          footer={
+            <>
+              <DialogGhostButton onClick={() => setGenOpen(false)} disabled={busy}>
+                Cancel
+              </DialogGhostButton>
+              <DialogPrimaryButton
+                loading={busy}
+                disabled={!genForm.student_id || generateBlocked}
+                onClick={() => void generateInvoice()}
+              >
+                Generate & send
+              </DialogPrimaryButton>
+            </>
+          }
+        >
+          <Stack spacing={2}>
+            <FormSection title="Student">
+              <TextField
+                select
+                label="Student"
+                required
+                value={genForm.student_id}
+                onChange={(e) => setGenForm((f) => ({ ...f, student_id: e.target.value }))}
+                fullWidth
+                sx={inputSx}
+              >
+                <MenuItem value="">
+                  <em>Select student</em>
                 </MenuItem>
-              ))}
-            </TextField>
-            {selectedStudent ? (
-              <Typography variant="body2" color="text.secondary">
-                Fee level: <strong>{studentLevelLabel(selectedStudent)}</strong>
-                {!selectedStudent.curriculum_class_level_id ? (
-                  <> — set Term/level on the student profile first.</>
-                ) : null}
-              </Typography>
-            ) : null}
-            <TextField label="Notes (optional)" value={genForm.notes} onChange={(e) => setGenForm((f) => ({ ...f, notes: e.target.value }))} fullWidth multiline minRows={2} />
+                {students.map((s) => (
+                  <MenuItem key={s.id} value={s.id}>
+                    {s.user?.full_name || s.admission_number} ({s.admission_number})
+                    {s.curriculum_class_level?.name ? ` · ${s.curriculum_class_level.name}` : ""}
+                  </MenuItem>
+                ))}
+              </TextField>
+              {selectedStudent ? (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, fontFamily: fontBody }}>
+                  Fee level: <strong>{studentLevelLabel(selectedStudent)}</strong>
+                  {!selectedStudent.curriculum_class_level_id ? (
+                    <> — set Term/level on the student profile first.</>
+                  ) : null}
+                </Typography>
+              ) : null}
+              {selectedTermInvoice ? (
+                <Alert severity="warning" sx={{ mt: 1.5, borderRadius: "12px" }}>
+                  {selectedTermInvoice.status === "paid" ? (
+                    <>
+                      This student already has a <strong>paid</strong> invoice for this term/level (
+                      {selectedTermInvoice.invoice_number}). Generate a new one only after they move to a new term/level.
+                    </>
+                  ) : (
+                    <>
+                      An active invoice already exists ({selectedTermInvoice.invoice_number}, balance{" "}
+                      {formatKes(selectedTermInvoice.balance)}). Cancel it first if it was wrong.
+                    </>
+                  )}
+                </Alert>
+              ) : null}
+            </FormSection>
+            <TextField
+              label="Notes (optional)"
+              value={genForm.notes}
+              onChange={(e) => setGenForm((f) => ({ ...f, notes: e.target.value }))}
+              fullWidth
+              multiline
+              minRows={2}
+              sx={inputSx}
+            />
           </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setGenOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            disabled={busy || !genForm.student_id}
-            onClick={() => void generateInvoice()}
-            sx={{ bgcolor: primaryRed }}
-          >
-            {busy ? "Saving…" : "Generate & send"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        </PremiumDialog>
 
-      <Dialog open={Boolean(payOpen)} onClose={() => setPayOpen(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Record payment</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Invoice {payOpen?.invoice_number} · Balance KES {Number(payOpen?.balance || 0).toLocaleString()}
-          </Typography>
-          <TextField fullWidth label="Amount (KES)" type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPayOpen(null)}>Cancel</Button>
-          <Button variant="contained" disabled={busy} onClick={() => void recordPayment()} sx={{ bgcolor: primaryRed }}>
-            {busy ? "Saving…" : "Post payment"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Stack>
+        <PremiumDialog
+          open={Boolean(viewRow)}
+          onClose={() => setViewRow(null)}
+          title={viewRow?.invoice_number || "Invoice details"}
+          subtitle="Invoice and student information"
+          icon={<ReceiptLongIcon />}
+          maxWidth="sm"
+          footer={
+            viewRow ? (
+              <>
+                <DialogGhostButton onClick={() => setViewRow(null)}>Close</DialogGhostButton>
+                {canCancelInvoice(viewRow) ? (
+                  <DialogPrimaryButton
+                    loading={busy}
+                    onClick={() => void cancelInvoice(viewRow)}
+                    sx={{ bgcolor: "#6B7280", "&:hover": { bgcolor: "#4B5563" } }}
+                  >
+                    Cancel invoice
+                  </DialogPrimaryButton>
+                ) : null}
+              </>
+            ) : null
+          }
+        >
+          {viewRow ? (
+            <Stack spacing={2}>
+              <FormSection title="Invoice">
+                <Stack spacing={1.25}>
+                  <DetailField label="Invoice no." value={viewRow.invoice_number} />
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontFamily: fontBody,
+                        fontSize: "0.68rem",
+                        fontWeight: 700,
+                        color: "text.secondary",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                        mb: 0.5,
+                      }}
+                    >
+                      Status
+                    </Typography>
+                    <InvoiceStatusChip status={viewRow.status} />
+                  </Box>
+                  <DetailField label="Term fee" value={formatKes(viewRow.term_fee_amount ?? viewRow.amount_due)} />
+                  <DetailField label="Amount due" value={formatKes(viewRow.amount_due)} />
+                  <DetailField label="Amount paid" value={formatKes(viewRow.amount_paid)} />
+                  <DetailField label="Balance" value={formatKes(viewRow.balance)} />
+                  <DetailField label="Level credit" value={formatKes(viewRow.credit_balance)} />
+                  <DetailField label="Sent at" value={formatDateTime(viewRow.sent_at)} />
+                  <DetailField label="Created" value={formatDateTime(viewRow.created_at)} />
+                  <DetailField label="Notes" value={viewRow.notes} />
+                </Stack>
+              </FormSection>
+              <FormSection title="Student">
+                <Stack spacing={1.25}>
+                  <DetailField label="Name" value={studentName(viewRow)} />
+                  <DetailField label="Admission no." value={viewRow.student?.admission_number} />
+                  <DetailField
+                    label="Level"
+                    value={viewRow.curriculum_class_level?.name || viewRow.level_name}
+                  />
+                </Stack>
+              </FormSection>
+              {breakdown.length > 0 ? (
+                <FormSection title="Payment breakdown">
+                  <FeeBreakdownView breakdown={breakdown} />
+                </FormSection>
+              ) : null}
+            </Stack>
+          ) : null}
+        </PremiumDialog>
+      </Stack>
+    </TabPanelShell>
   );
 }

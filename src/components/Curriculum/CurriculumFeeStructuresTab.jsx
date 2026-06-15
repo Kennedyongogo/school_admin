@@ -1,13 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Box,
-  Button,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   FormControl,
   IconButton,
   InputLabel,
@@ -17,7 +10,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TablePagination,
   TableRow,
@@ -25,24 +17,40 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Delete as DeleteIcon, Edit as EditIcon, Visibility as ViewIcon, Add as AddIcon } from "@mui/icons-material";
+import {
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+  Savings as SavingsIcon,
+  Visibility as ViewIcon,
+} from "@mui/icons-material";
 import Swal from "sweetalert2";
-
-const primaryRed = "#DC2626";
-const primaryDark = "#B91C1C";
-const primaryLight = "#FEE2E2";
-
-const authJsonHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-function money(n) {
-  const v = Number.parseFloat(n);
-  if (!Number.isFinite(v)) return "0.00";
-  return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+import {
+  authJsonHeaders,
+  formatKes,
+  formatMoney,
+  halfAmountFromTerm,
+  sumFeeItems,
+  inputSx,
+  primaryRed,
+  primaryDark,
+  actionIconSx,
+} from "../Accounting/accountingShared";
+import {
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  PremiumDialog,
+  DetailField,
+  FormSection,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+  AccountingFilterBar,
+  FilterSelect,
+  FeeBreakdownEditor,
+  FeeBreakdownView,
+} from "../Accounting/accountingUi";
 
 export default function CurriculumFeeStructuresTab() {
   const [loading, setLoading] = useState(true);
@@ -84,6 +92,7 @@ export default function CurriculumFeeStructuresTab() {
     const m = new Map(levels.map((l) => [String(l.id), l.name]));
     return (id) => m.get(String(id)) || "—";
   }, [levels]);
+
   const [viewId, setViewId] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
@@ -97,6 +106,19 @@ export default function CurriculumFeeStructuresTab() {
     first_half_items: [{ name: "", amount: "" }],
     second_half_items: [{ name: "", amount: "" }],
   });
+
+  const editClassOptions = useMemo(
+    () => classes.filter((c) => String(c.curriculum_id) === String(editForm.curriculum_id)),
+    [classes, editForm.curriculum_id]
+  );
+  const editLevelOptions = useMemo(
+    () => levels.filter((l) => String(l.curriculum_class_id) === String(editForm.curriculum_class_id)),
+    [levels, editForm.curriculum_class_id]
+  );
+
+  const halfTarget = halfAmountFromTerm(editForm.term_fee_amount);
+  const tableColSpan = 6;
+  const actionsWidth = 132;
 
   const loadLookups = useCallback(async (token) => {
     const [curRes, clsRes, lvlRes] = await Promise.all([
@@ -154,13 +176,10 @@ export default function CurriculumFeeStructuresTab() {
     loadRows();
   }, [loadRows]);
 
-  const halfAmountFromTerm = (term) => {
-    const t = Number.parseFloat(term);
-    return Number.isFinite(t) ? Number.parseFloat((t / 2).toFixed(2)) : 0;
+  const handleRefresh = () => {
+    setPage(0);
+    void loadRows();
   };
-
-  const sumItems = (items) =>
-    (items || []).reduce((acc, it) => acc + (Number.isFinite(Number.parseFloat(it.amount)) ? Number.parseFloat(it.amount) : 0), 0);
 
   const openEdit = (row) => {
     const getItems = (phase) =>
@@ -262,402 +281,320 @@ export default function CurriculumFeeStructuresTab() {
     }
   };
 
+  const updateHalfItem = (half, index, field, value) => {
+    const key = half === "first" ? "first_half_items" : "second_half_items";
+    setEditForm((f) => {
+      const next = [...f[key]];
+      next[index] = { ...next[index], [field]: value };
+      return { ...f, [key]: next };
+    });
+  };
+
+  const addHalfItem = (half) => {
+    const key = half === "first" ? "first_half_items" : "second_half_items";
+    setEditForm((f) => ({ ...f, [key]: [...f[key], { name: "", amount: "" }] }));
+  };
+
+  const removeHalfItem = (half, index) => {
+    const key = half === "first" ? "first_half_items" : "second_half_items";
+    setEditForm((f) => ({ ...f, [key]: f[key].filter((_, idx) => idx !== index) }));
+  };
+
   return (
     <Stack spacing={2}>
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-        <FormControl fullWidth size="small">
-          <InputLabel>Curriculum</InputLabel>
-          <Select
-            label="Curriculum"
-            value={filters.curriculum_id}
-            onChange={(e) =>
-              setFilters((f) => ({
-                ...f,
-                curriculum_id: e.target.value,
-                curriculum_class_id: "",
-                curriculum_class_level_id: "",
-              }))
-            }
-          >
-            <MenuItem value="">All</MenuItem>
-            {curricula.map((c) => (
-              <MenuItem key={c.id} value={c.id}>
-                {c.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <FormControl fullWidth size="small">
-          <InputLabel>Class</InputLabel>
-          <Select
-            label="Class"
-            value={filters.curriculum_class_id}
-            onChange={(e) =>
-              setFilters((f) => ({
-                ...f,
-                curriculum_class_id: e.target.value,
-                curriculum_class_level_id: "",
-              }))
-            }
-          >
-            <MenuItem value="">All</MenuItem>
-            {classOptions.map((c) => (
-              <MenuItem key={c.id} value={c.id}>
-                {c.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <FormControl fullWidth size="small">
-          <InputLabel>Term</InputLabel>
-          <Select
-            label="Term"
-            value={filters.curriculum_class_level_id}
-            onChange={(e) => setFilters((f) => ({ ...f, curriculum_class_level_id: e.target.value }))}
-          >
-            <MenuItem value="">All</MenuItem>
-            {levelOptions.map((l) => (
-              <MenuItem key={l.id} value={l.id}>
-                {l.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <Button
-          variant="outlined"
-          onClick={() => {
-            setPage(0);
-            void loadRows();
-          }}
-          sx={{ borderColor: primaryRed, color: primaryDark }}
+      <AccountingFilterBar onRefresh={handleRefresh}>
+        <FilterSelect
+          label="Curriculum"
+          value={filters.curriculum_id}
+          onChange={(e) =>
+            setFilters((f) => ({
+              ...f,
+              curriculum_id: e.target.value,
+              curriculum_class_id: "",
+              curriculum_class_level_id: "",
+            }))
+          }
         >
-          Refresh
-        </Button>
-      </Stack>
-
-      {error ? (
-        <Alert severity="error" onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      ) : null}
-
-      {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-          <CircularProgress sx={{ color: primaryRed }} />
-        </Box>
-      ) : (
-        <TableContainer
-          sx={{
-            borderRadius: 2,
-            overflow: "auto",
-            border: `1px solid ${primaryLight}`,
-            boxShadow: `0 8px 28px -12px ${primaryRed}33`,
-            bgcolor: "rgba(255,255,255,0.98)",
-          }}
+          <MenuItem value="">All</MenuItem>
+          {curricula.map((c) => (
+            <MenuItem key={c.id} value={c.id}>
+              {c.name}
+            </MenuItem>
+          ))}
+        </FilterSelect>
+        <FilterSelect
+          label="Class"
+          value={filters.curriculum_class_id}
+          onChange={(e) =>
+            setFilters((f) => ({
+              ...f,
+              curriculum_class_id: e.target.value,
+              curriculum_class_level_id: "",
+            }))
+          }
         >
-          <Table size="medium" sx={{ minWidth: 760 }}>
-            <TableHead>
-              <TableRow
-                sx={{
-                  background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-                  "& .MuiTableCell-head": {
-                    color: "#fff",
-                    fontWeight: 700,
-                    fontSize: "0.8rem",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.04em",
-                    borderBottom: "none",
-                  },
+          <MenuItem value="">All</MenuItem>
+          {classOptions.map((c) => (
+            <MenuItem key={c.id} value={c.id}>
+              {c.name}
+            </MenuItem>
+          ))}
+        </FilterSelect>
+        <FilterSelect
+          label="Term"
+          value={filters.curriculum_class_level_id}
+          onChange={(e) => setFilters((f) => ({ ...f, curriculum_class_level_id: e.target.value }))}
+        >
+          <MenuItem value="">All</MenuItem>
+          {levelOptions.map((l) => (
+            <MenuItem key={l.id} value={l.id}>
+              {l.name}
+            </MenuItem>
+          ))}
+        </FilterSelect>
+      </AccountingFilterBar>
+
+      <TabPanelShell loading={loading} error={error} onDismissError={() => setError(null)}>
+        {!loading && (
+          <DataTableShell
+            pagination={
+              <TablePagination
+                component="div"
+                count={totalRows}
+                page={page}
+                onPageChange={(_, p) => setPage(p)}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={(e) => {
+                  setRowsPerPage(parseInt(e.target.value, 10));
+                  setPage(0);
                 }}
-              >
-                <TableCell width={70}>No</TableCell>
-                <TableCell>Curriculum</TableCell>
-                <TableCell>Fee</TableCell>
-                <TableCell align="right" sx={{ width: 140 }}>
-                  Action
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4}>
-                    <Typography color="text.secondary" sx={{ py: 4, textAlign: "center" }}>
-                      No fee structures yet. Use Create fee structure.
-                    </Typography>
+                rowsPerPageOptions={[5, 10, 25, 50]}
+                labelRowsPerPage="Rows per page"
+                sx={tablePaginationSx}
+              />
+            }
+          >
+            <Table size="medium" sx={{ minWidth: 900, tableLayout: "fixed" }}>
+              <TableHead>
+                <TableRow sx={tableHeadRowSx}>
+                  <TableCell width={56}>No.</TableCell>
+                  <TableCell>Curriculum</TableCell>
+                  <TableCell>Class</TableCell>
+                  <TableCell>Term</TableCell>
+                  <TableCell>Fee</TableCell>
+                  <TableCell align="right" sx={{ width: actionsWidth, minWidth: actionsWidth, whiteSpace: "nowrap" }}>
+                    Actions
                   </TableCell>
                 </TableRow>
-              ) : (
-                rows.map((r, idx) => (
-                  <TableRow key={r.id} hover>
-                    <TableCell sx={{ color: "text.secondary" }}>{page * rowsPerPage + idx + 1}</TableCell>
-                    <TableCell>
-                      <Typography sx={{ fontWeight: 700 }}>{curriculumName(r.curriculum_id)}</Typography>
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>{money(r.term_fee_amount)}</TableCell>
-                    <TableCell align="right">
-                      <Tooltip title="View">
-                        <IconButton size="small" onClick={() => setViewId(r.id)} sx={{ color: primaryDark }}>
-                          <ViewIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Edit">
-                        <IconButton size="small" onClick={() => openEdit(r)} sx={{ color: primaryRed }}>
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete">
-                        <IconButton size="small" onClick={() => void deleteRow(r)} sx={{ color: primaryRed }}>
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+              </TableHead>
+              <TableBody>
+                {rows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={tableColSpan}>
+                      <EmptyTableRow message="No fee structures yet. Use Create fee structure." />
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-          <TablePagination
-            component="div"
-            count={totalRows}
-            page={page}
-            onPageChange={(_, p) => setPage(p)}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(parseInt(e.target.value, 10));
-              setPage(0);
-            }}
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            sx={{ borderTop: `1px solid ${primaryLight}` }}
-          />
-        </TableContainer>
-      )}
-
-      <Dialog open={!!selectedView} onClose={() => setViewId(null)} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle sx={{ background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`, color: "#fff" }}>
-          Fee structure details
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2, pb: 2 }}>
-          {selectedView ? (
-            <Stack spacing={1.5}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Curriculum
-              </Typography>
-              <Typography sx={{ fontWeight: 700 }}>{curriculumName(selectedView.curriculum_id)}</Typography>
-              <Typography variant="subtitle2" color="text.secondary">
-                Class
-              </Typography>
-              <Typography sx={{ fontWeight: 700 }}>{className(selectedView.curriculum_class_id)}</Typography>
-              <Typography variant="subtitle2" color="text.secondary">
-                Term
-              </Typography>
-              <Typography sx={{ fontWeight: 700 }}>{levelName(selectedView.curriculum_class_level_id)}</Typography>
-              <Typography variant="subtitle2" color="text.secondary">
-                Term fee
-              </Typography>
-              <Typography sx={{ fontWeight: 700 }}>{money(selectedView.term_fee_amount)}</Typography>
-              <Typography variant="subtitle2" color="text.secondary">
-                Breakdown
-              </Typography>
-              {Array.isArray(selectedView.payment_breakdown)
-                ? selectedView.payment_breakdown.map((p) => (
-                    <Box key={p.phase} sx={{ p: 1.5, border: `1px solid ${primaryLight}`, borderRadius: 2 }}>
-                      <Typography sx={{ fontWeight: 700, mb: 0.5 }}>
-                        {p.phase === "first_half" ? "First half" : "Second half"} ({money(p.amount)})
-                      </Typography>
-                      <Stack spacing={0.5}>
-                        {(Array.isArray(p.items) ? p.items : []).map((it, i) => (
-                          <Typography key={`${p.phase}-${i}`} variant="body2" color="text.secondary">
-                            {it.name}: {money(it.amount)}
-                          </Typography>
-                        ))}
-                      </Stack>
-                    </Box>
+                ) : (
+                  rows.map((r, idx) => (
+                    <TableRow key={r.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
+                      <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>{page * rowsPerPage + idx + 1}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{curriculumName(r.curriculum_id)}</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>{className(r.curriculum_class_id)}</TableCell>
+                      <TableCell sx={{ color: "text.secondary" }}>{levelName(r.curriculum_class_level_id)}</TableCell>
+                      <TableCell sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>{formatKes(r.term_fee_amount)}</TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{
+                          width: actionsWidth,
+                          minWidth: actionsWidth,
+                          whiteSpace: "nowrap",
+                          verticalAlign: "middle",
+                          py: 0.5,
+                        }}
+                      >
+                        <Tooltip title="View">
+                          <IconButton size="small" aria-label="View fee structure" onClick={() => setViewId(r.id)} sx={actionIconSx}>
+                            <ViewIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Edit">
+                          <IconButton size="small" aria-label="Edit fee structure" onClick={() => openEdit(r)} sx={actionIconSx}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete">
+                          <IconButton
+                            size="small"
+                            aria-label="Delete fee structure"
+                            onClick={() => void deleteRow(r)}
+                            sx={{ ...actionIconSx, "&:hover": { bgcolor: "#FEE2E2", color: primaryRed } }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
                   ))
-                : null}
-            </Stack>
-          ) : null}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setViewId(null)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+                )}
+              </TableBody>
+            </Table>
+          </DataTableShell>
+        )}
+      </TabPanelShell>
 
-      <Dialog open={editOpen} onClose={() => !editSaving && setEditOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle sx={{ background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`, color: "#fff" }}>
-          Edit fee structure
-        </DialogTitle>
-        <DialogContent sx={{ pt: "14px !important", pb: 2 }}>
-          <Stack spacing={1.5} sx={{ mt: 0.75 }}>
-            <FormControl fullWidth sx={{ mt: 1 }}>
-              <InputLabel>Curriculum</InputLabel>
-              <Select
-                label="Curriculum"
-                value={editForm.curriculum_id}
-                onChange={(e) =>
-                  setEditForm((f) => ({ ...f, curriculum_id: e.target.value, curriculum_class_id: "", curriculum_class_level_id: "" }))
-                }
+      <PremiumDialog
+        open={!!selectedView}
+        onClose={() => setViewId(null)}
+        title="Fee structure details"
+        subtitle={`${selectedView ? curriculumName(selectedView.curriculum_id) : ""} · ${selectedView ? className(selectedView.curriculum_class_id) : ""}`}
+        icon={<SavingsIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => setViewId(null)}>Close</DialogGhostButton>
+            {selectedView ? (
+              <DialogPrimaryButton
+                startIcon={<EditIcon />}
+                onClick={() => {
+                  const row = selectedView;
+                  setViewId(null);
+                  openEdit(row);
+                }}
               >
-                {curricula.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth disabled={!editForm.curriculum_id}>
-              <InputLabel>Class</InputLabel>
-              <Select
-                label="Class"
-                value={editForm.curriculum_class_id}
-                onChange={(e) => setEditForm((f) => ({ ...f, curriculum_class_id: e.target.value, curriculum_class_level_id: "" }))}
-              >
-                {classes
-                  .filter((c) => String(c.curriculum_id) === String(editForm.curriculum_id))
-                  .map((c) => (
+                Edit
+              </DialogPrimaryButton>
+            ) : null}
+          </>
+        }
+      >
+        {selectedView ? (
+          <Stack spacing={2}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5 }}>
+              <DetailField label="Curriculum" value={curriculumName(selectedView.curriculum_id)} />
+              <DetailField label="Class" value={className(selectedView.curriculum_class_id)} />
+              <DetailField label="Term" value={levelName(selectedView.curriculum_class_level_id)} />
+              <DetailField label="Term fee" value={formatKes(selectedView.term_fee_amount)} />
+            </Box>
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontWeight: 700 }}>
+                Payment breakdown
+              </Typography>
+              <FeeBreakdownView breakdown={selectedView.payment_breakdown} />
+            </Box>
+          </Stack>
+        ) : null}
+      </PremiumDialog>
+
+      <PremiumDialog
+        open={editOpen}
+        onClose={() => !editSaving && setEditOpen(false)}
+        title="Edit fee structure"
+        subtitle="Update placement, term fee, and installment breakdown"
+        icon={<SavingsIcon />}
+        maxWidth="md"
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={editSaving} onClick={() => void saveEdit()}>
+              Save
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        <Stack spacing={2}>
+          <FormSection title="Placement">
+            <Stack spacing={2}>
+              <FormControl fullWidth sx={inputSx}>
+                <InputLabel>Curriculum</InputLabel>
+                <Select
+                  label="Curriculum"
+                  value={editForm.curriculum_id}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, curriculum_id: e.target.value, curriculum_class_id: "", curriculum_class_level_id: "" }))
+                  }
+                >
+                  {curricula.map((c) => (
                     <MenuItem key={c.id} value={c.id}>
                       {c.name}
                     </MenuItem>
                   ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth disabled={!editForm.curriculum_class_id}>
-              <InputLabel>Term</InputLabel>
-              <Select
-                label="Term"
-                value={editForm.curriculum_class_level_id}
-                onChange={(e) => setEditForm((f) => ({ ...f, curriculum_class_level_id: e.target.value }))}
-              >
-                {levels
-                  .filter((l) => String(l.curriculum_class_id) === String(editForm.curriculum_class_id))
-                  .map((l) => (
+                </Select>
+              </FormControl>
+              <FormControl fullWidth disabled={!editForm.curriculum_id} sx={inputSx}>
+                <InputLabel>Class</InputLabel>
+                <Select
+                  label="Class"
+                  value={editForm.curriculum_class_id}
+                  onChange={(e) => setEditForm((f) => ({ ...f, curriculum_class_id: e.target.value, curriculum_class_level_id: "" }))}
+                >
+                  {editClassOptions.map((c) => (
+                    <MenuItem key={c.id} value={c.id}>
+                      {c.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth disabled={!editForm.curriculum_class_id} sx={inputSx}>
+                <InputLabel>Term</InputLabel>
+                <Select
+                  label="Term"
+                  value={editForm.curriculum_class_level_id}
+                  onChange={(e) => setEditForm((f) => ({ ...f, curriculum_class_level_id: e.target.value }))}
+                >
+                  {editLevelOptions.map((l) => (
                     <MenuItem key={l.id} value={l.id}>
                       {l.name}
                     </MenuItem>
                   ))}
-              </Select>
-            </FormControl>
-            <TextField
-              label="Term fee amount"
-              type="number"
-              inputProps={{ min: 0, step: "0.01" }}
-              value={editForm.term_fee_amount}
-              onChange={(e) => setEditForm((f) => ({ ...f, term_fee_amount: e.target.value }))}
-            />
-            <Typography variant="caption" color="text.secondary">
-              Half target: {halfAmountFromTerm(editForm.term_fee_amount).toFixed(2)} each
-            </Typography>
+                </Select>
+              </FormControl>
+            </Stack>
+          </FormSection>
 
-            <Typography sx={{ fontWeight: 700 }}>First half items</Typography>
-            {editForm.first_half_items.map((it, i) => (
-              <Stack key={`ef-${i}`} direction={{ xs: "column", sm: "row" }} spacing={1}>
-                <TextField
-                  label="Item"
-                  fullWidth
-                  value={it.name}
-                  onChange={(e) =>
-                    setEditForm((f) => {
-                      const next = [...f.first_half_items];
-                      next[i] = { ...next[i], name: e.target.value };
-                      return { ...f, first_half_items: next };
-                    })
-                  }
-                />
-                <TextField
-                  label="Amount"
-                  type="number"
-                  inputProps={{ min: 0, step: "0.01" }}
-                  value={it.amount}
-                  onChange={(e) =>
-                    setEditForm((f) => {
-                      const next = [...f.first_half_items];
-                      next[i] = { ...next[i], amount: e.target.value };
-                      return { ...f, first_half_items: next };
-                    })
-                  }
-                />
-                <IconButton
-                  disabled={editForm.first_half_items.length <= 1}
-                  onClick={() =>
-                    setEditForm((f) => ({ ...f, first_half_items: f.first_half_items.filter((_, idx) => idx !== i) }))
-                  }
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </Stack>
-            ))}
-            <Button
-              variant="outlined"
-              startIcon={<AddIcon />}
-              onClick={() => setEditForm((f) => ({ ...f, first_half_items: [...f.first_half_items, { name: "", amount: "" }] }))}
-              sx={{ alignSelf: "flex-start" }}
-            >
-              Add item
-            </Button>
-            <Typography variant="caption" color="text.secondary">
-              First half total: {sumItems(editForm.first_half_items).toFixed(2)}
-            </Typography>
+          <FormSection title="Term fee">
+            <Stack spacing={1.5}>
+              <TextField
+                label="Term fee amount"
+                type="number"
+                fullWidth
+                inputProps={{ min: 0, step: "0.01" }}
+                value={editForm.term_fee_amount}
+                onChange={(e) => setEditForm((f) => ({ ...f, term_fee_amount: e.target.value }))}
+                sx={inputSx}
+              />
+              <Typography variant="body2" color="text.secondary">
+                Half target: <strong>{formatMoney(halfTarget)}</strong> each
+              </Typography>
+            </Stack>
+          </FormSection>
 
-            <Typography sx={{ fontWeight: 700 }}>Second half items</Typography>
-            {editForm.second_half_items.map((it, i) => (
-              <Stack key={`es-${i}`} direction={{ xs: "column", sm: "row" }} spacing={1}>
-                <TextField
-                  label="Item"
-                  fullWidth
-                  value={it.name}
-                  onChange={(e) =>
-                    setEditForm((f) => {
-                      const next = [...f.second_half_items];
-                      next[i] = { ...next[i], name: e.target.value };
-                      return { ...f, second_half_items: next };
-                    })
-                  }
-                />
-                <TextField
-                  label="Amount"
-                  type="number"
-                  inputProps={{ min: 0, step: "0.01" }}
-                  value={it.amount}
-                  onChange={(e) =>
-                    setEditForm((f) => {
-                      const next = [...f.second_half_items];
-                      next[i] = { ...next[i], amount: e.target.value };
-                      return { ...f, second_half_items: next };
-                    })
-                  }
-                />
-                <IconButton
-                  disabled={editForm.second_half_items.length <= 1}
-                  onClick={() =>
-                    setEditForm((f) => ({ ...f, second_half_items: f.second_half_items.filter((_, idx) => idx !== i) }))
-                  }
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </Stack>
-            ))}
-            <Button
-              variant="outlined"
-              startIcon={<AddIcon />}
-              onClick={() => setEditForm((f) => ({ ...f, second_half_items: [...f.second_half_items, { name: "", amount: "" }] }))}
-              sx={{ alignSelf: "flex-start" }}
-            >
-              Add item
-            </Button>
-            <Typography variant="caption" color="text.secondary">
-              Second half total: {sumItems(editForm.second_half_items).toFixed(2)}
-            </Typography>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditOpen(false)} disabled={editSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={() => void saveEdit()} disabled={editSaving} sx={{ bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }}>
-            {editSaving ? "Saving…" : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+          <FormSection title="Payment breakdown">
+            <Stack spacing={2}>
+              <FeeBreakdownEditor
+                title="First half items"
+                halfTarget={halfTarget}
+                items={editForm.first_half_items}
+                onChange={(i, field, value) => updateHalfItem("first", i, field, value)}
+                onAdd={() => addHalfItem("first")}
+                onRemove={(i) => removeHalfItem("first", i)}
+              />
+              <FeeBreakdownEditor
+                title="Second half items"
+                halfTarget={halfTarget}
+                items={editForm.second_half_items}
+                onChange={(i, field, value) => updateHalfItem("second", i, field, value)}
+                onAdd={() => addHalfItem("second")}
+                onRemove={(i) => removeHalfItem("second", i)}
+              />
+              <Typography variant="caption" color="text.secondary">
+                First half total: {sumFeeItems(editForm.first_half_items).toFixed(2)} · Second half total:{" "}
+                {sumFeeItems(editForm.second_half_items).toFixed(2)}
+              </Typography>
+            </Stack>
+          </FormSection>
+        </Stack>
+      </PremiumDialog>
     </Stack>
   );
 }

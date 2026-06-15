@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
   Box,
   Typography,
@@ -13,11 +14,7 @@ import {
   IconButton,
   Tooltip,
   InputAdornment,
-  OutlinedInput,
   CircularProgress,
-  Alert,
-  Card,
-  CardContent,
 } from "@mui/material";
 import {
   ArrowBack as ArrowBackIcon,
@@ -25,44 +22,30 @@ import {
   Visibility,
   VisibilityOff,
   PersonAdd as PersonAddIcon,
+  Person as PersonIcon,
+  Email as EmailIcon,
+  Phone as PhoneIcon,
+  Home as HomeIcon,
+  Lock as LockIcon,
+  Download as DownloadIcon,
+  InfoOutlined,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
-
-const primaryRed = "#DC2626";
-const primaryDark = "#B91C1C";
-const primaryLight = "#FEE2E2";
-const backgroundLight = "#FEF2F2";
-
-const ALL_ROLES = [
-  "super_admin",
-  "admin",
-  "teacher",
-  "student",
-  "parent",
-  "accountant",
-  "librarian",
-];
-
-function formatRole(role) {
-  if (!role) return "—";
-  return String(role).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-const authJsonHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-const fullMainBleedSx = (theme) => ({
-  width: `calc(100% + ${theme.spacing(6)})`,
-  maxWidth: "none",
-  marginLeft: theme.spacing(-3),
-  marginRight: theme.spacing(-3),
-  marginTop: "1px",
-  marginBottom: "1px",
-  boxSizing: "border-box",
-});
+import {
+  ALL_ROLES,
+  authJsonHeaders,
+  formatRole,
+  getActorFromStorage,
+  assignableRoles,
+  primaryRed,
+  warmCream,
+  textSecondary,
+  inputSx,
+  primaryBtnSx,
+  ghostBtnSx,
+  pageShellSx,
+} from "./usersShared";
+import { UsersHero, FormSection, fadeUp } from "./usersUi";
 
 const initialForm = () => ({
   username: "",
@@ -97,34 +80,39 @@ export default function UsersCreate() {
   const [form, setForm] = useState(initialForm());
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+
+  const actor = getActorFromStorage();
+  const creatableRoles = assignableRoles(actor?.role);
 
   const goBack = () => navigate("/users");
 
   const handleDownloadImportTemplate = async () => {
-    setError(null);
     const token = localStorage.getItem("token");
     if (!token) {
-      setError("Please sign in again.");
+      Swal.fire({ icon: "error", title: "Not signed in", text: "Please sign in again.", confirmButtonColor: primaryRed });
       return;
     }
     try {
       await downloadUsersImportTemplate(token);
     } catch (err) {
-      setError(err.message || "Could not download template");
+      Swal.fire({ icon: "error", title: "Download failed", text: err.message, confirmButtonColor: primaryRed });
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
     const token = localStorage.getItem("token");
     if (!token) {
-      setError("Please sign in again.");
+      Swal.fire({ icon: "error", title: "Not signed in", text: "Please sign in again.", confirmButtonColor: primaryRed });
       return;
     }
     if (!form.username?.trim() || !form.email?.trim() || !form.password || !form.full_name?.trim() || !form.role) {
-      setError("Username, email, password, full name, and role are required.");
+      Swal.fire({
+        icon: "error",
+        title: "Missing fields",
+        text: "Username, email, password, full name, and role are required.",
+        confirmButtonColor: primaryRed,
+      });
       return;
     }
 
@@ -151,112 +139,90 @@ export default function UsersCreate() {
       await Swal.fire({
         icon: "success",
         title: "User created",
-        text: data.data?.full_name ? `${data.data.full_name} was added.` : "The account was created.",
-        timer: 1800,
+        text: data.data?.full_name ? `${data.data.full_name} was added successfully.` : "The account was created.",
+        confirmButtonColor: primaryRed,
+        timer: 2000,
         showConfirmButton: false,
       });
 
       navigate("/users", { replace: true });
     } catch (err) {
-      setError(err.message || "Create failed");
+      Swal.fire({ icon: "error", title: "Create failed", text: err.message, confirmButtonColor: primaryRed });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Box
-      component="form"
-      onSubmit={handleSubmit}
-      sx={(theme) => ({
-        ...fullMainBleedSx(theme),
-        /** Pull up into `main`’s default padding so less gap under the fixed top bar. */
-        marginTop: theme.spacing(-2.5),
-        minHeight: "100%",
-        background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
-      })}
-    >
-      <Box
-        sx={{
-          background: `linear-gradient(135deg, ${primaryDark} 0%, ${primaryRed} 55%, #EF4444 100%)`,
-          px: { xs: 1.5, sm: 2 },
-          py: { xs: 1.5, sm: 2 },
-          color: "white",
-          boxShadow: `0 8px 24px ${primaryRed}33`,
-        }}
-      >
-        <Stack direction="row" alignItems="center" spacing={1.5}>
+    <Box component="form" onSubmit={handleSubmit} sx={pageShellSx}>
+      <UsersHero
+        title="Create user"
+        subtitle="Add a new account with role-based access"
+        icon={<PersonAddIcon sx={{ fontSize: 28, color: "#fff" }} />}
+        actions={
           <Tooltip title="Back to users">
             <IconButton
               onClick={goBack}
+              type="button"
               aria-label="Back to users"
               sx={{
                 color: "#fff",
                 bgcolor: "rgba(255,255,255,0.15)",
+                border: "1px solid rgba(255,255,255,0.22)",
                 "&:hover": { bgcolor: "rgba(255,255,255,0.28)" },
               }}
             >
               <ArrowBackIcon />
             </IconButton>
           </Tooltip>
-          <PersonAddIcon sx={{ fontSize: 32, opacity: 0.95 }} />
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
-              Create user
-            </Typography>
-          </Box>
-        </Stack>
-      </Box>
+        }
+      />
 
       <Box
+        component={motion.div}
+        variants={fadeUp}
+        custom={1}
+        initial="hidden"
+        animate="visible"
         sx={{
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          px: { xs: 2, sm: 3 },
-          py: { xs: 2, sm: 3 },
+          display: "flex",
+          gap: 1.25,
+          alignItems: "flex-start",
+          p: 2,
+          mb: 3,
+          borderRadius: "16px",
+          bgcolor: "rgba(37,99,235,0.06)",
+          border: "1px solid rgba(37,99,235,0.15)",
         }}
       >
-        {error && (
-          <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
+        <InfoOutlined sx={{ color: "#2563EB", fontSize: 22, mt: 0.1, flexShrink: 0 }} />
+        <Box sx={{ flex: 1 }}>
+          <Typography sx={{ fontSize: "0.85rem", color: textSecondary, lineHeight: 1.55 }}>
+            Bulk import? Use <strong>Import Excel</strong> on the users list. Columns: username, email, password, full_name, role — optional: phone, address.
+          </Typography>
+          <Button
+            type="button"
+            size="small"
+            startIcon={<DownloadIcon />}
+            onClick={handleDownloadImportTemplate}
+            sx={{ mt: 1, color: primaryRed, fontWeight: 700, textTransform: "none" }}
+          >
+            Download Excel template
+          </Button>
+        </Box>
+      </Box>
 
-        <Alert
-          severity="info"
-          sx={{ mb: 2, borderRadius: 2 }}
-          action={
-            <Button color="inherit" size="small" sx={{ fontWeight: 700 }} onClick={handleDownloadImportTemplate}>
-              Excel template
-            </Button>
-          }
-        >
-          Bulk import: User management → Import Excel. Download template: column G (role) is a dropdown of DB roles.
-          Columns: username, email, password, full_name, role — optional: phone, address.
-        </Alert>
-
-        <Card
-          elevation={0}
+      <Stack spacing={2.5} component={motion.div} variants={fadeUp} custom={2} initial="hidden" animate="visible">
+        <Box
           sx={{
-            width: "100%",
-            borderRadius: 0,
-            border: "none",
-            borderBottom: `1px solid ${primaryLight}`,
-            boxShadow: "none",
-            overflow: "hidden",
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" },
+            gap: 2.5,
+            alignItems: "start",
           }}
         >
-          <CardContent
-            sx={{
-              width: "100%",
-              boxSizing: "border-box",
-              px: { xs: 2, sm: 3 },
-              pt: 3,
-              pb: 2,
-            }}
-          >
-            <Stack spacing={2.5} sx={{ width: "100%", maxWidth: "100%" }}>
+          <FormSection title="Account credentials">
+            <Stack spacing={2}>
               <TextField
                 label="Username"
                 required
@@ -266,60 +232,84 @@ export default function UsersCreate() {
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <BadgeIcon sx={{ color: primaryRed }} />
+                      <BadgeIcon sx={{ color: primaryRed, fontSize: 20 }} />
                     </InputAdornment>
                   ),
                 }}
-                sx={outlinedFieldSx}
+                sx={inputSx}
               />
               <TextField
-                label="Email"
+                label="Email address"
                 type="email"
                 required
                 fullWidth
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                sx={outlinedFieldSx}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <EmailIcon sx={{ color: primaryRed, fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={inputSx}
               />
-              <FormControl fullWidth variant="outlined" required sx={outlinedFieldSx}>
-                <InputLabel htmlFor="create-password" sx={labelSx}>
-                  Password
-                </InputLabel>
-                <OutlinedInput
-                  id="create-password"
-                  label="Password"
-                  fullWidth
-                  type={showPassword ? "text" : "password"}
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  endAdornment={
+              <TextField
+                label="Password"
+                required
+                fullWidth
+                type={showPassword ? "text" : "password"}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <LockIcon sx={{ color: primaryRed, fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: (
                     <InputAdornment position="end">
-                      <IconButton
-                        aria-label={showPassword ? "Hide password" : "Show password"}
-                        onClick={() => setShowPassword((v) => !v)}
-                        edge="end"
-                        sx={{ color: primaryRed }}
-                      >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      <IconButton onClick={() => setShowPassword((v) => !v)} edge="end" sx={{ color: textSecondary }}>
+                        {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
                       </IconButton>
                     </InputAdornment>
-                  }
-                />
-              </FormControl>
+                  ),
+                }}
+                sx={inputSx}
+              />
+            </Stack>
+          </FormSection>
+
+          <FormSection title="Personal & role">
+            <Stack spacing={2}>
               <TextField
                 label="Full name"
                 required
                 fullWidth
                 value={form.full_name}
                 onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                sx={outlinedFieldSx}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PersonIcon sx={{ color: primaryRed, fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={inputSx}
               />
               <TextField
                 label="Phone"
                 fullWidth
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                sx={outlinedFieldSx}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PhoneIcon sx={{ color: primaryRed, fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={inputSx}
               />
               <TextField
                 label="Address"
@@ -328,68 +318,57 @@ export default function UsersCreate() {
                 minRows={2}
                 value={form.address}
                 onChange={(e) => setForm({ ...form, address: e.target.value })}
-                sx={outlinedFieldSx}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start" sx={{ alignSelf: "flex-start", mt: 1.5 }}>
+                      <HomeIcon sx={{ color: primaryRed, fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={inputSx}
               />
-              <FormControl fullWidth sx={outlinedFieldSx}>
-                <InputLabel id="create-role-label" sx={labelSx}>
-                  Role
-                </InputLabel>
-                <Select
-                  labelId="create-role-label"
-                  label="Role"
-                  value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value })}
-                >
-                  {ALL_ROLES.map((r) => (
+              <FormControl fullWidth required sx={inputSx}>
+                <InputLabel>Role</InputLabel>
+                <Select label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                  {(creatableRoles.length ? creatableRoles : ALL_ROLES).map((r) => (
                     <MenuItem key={r} value={r}>
                       {formatRole(r)}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
-
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="flex-end" sx={{ pt: 1 }}>
-                <Button type="button" variant="outlined" onClick={goBack} sx={{ borderColor: primaryRed, color: primaryDark, fontWeight: 700 }}>
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  disabled={saving}
-                  startIcon={saving ? <CircularProgress size={18} color="inherit" /> : null}
-                  sx={{ bgcolor: primaryRed, fontWeight: 700, "&:hover": { bgcolor: primaryDark }, minWidth: 140 }}
-                >
-                  {saving ? "Creating…" : "Create user"}
-                </Button>
-              </Stack>
+              {actor?.role !== "super_admin" && creatableRoles.length > 0 ? (
+                <Typography sx={{ fontSize: "0.78rem", color: textSecondary }}>
+                  Only a super admin can create super admin accounts.
+                </Typography>
+              ) : null}
             </Stack>
-          </CardContent>
-        </Card>
-      </Box>
+          </FormSection>
+        </Box>
+
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: { xs: "column", sm: "row" },
+            gap: 1.5,
+            justifyContent: "flex-end",
+            pt: 1,
+          }}
+        >
+          <Button type="button" variant="text" onClick={goBack} sx={{ ...ghostBtnSx, py: 1.25 }}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={saving}
+            startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <PersonAddIcon />}
+            sx={{ ...primaryBtnSx, minWidth: 160 }}
+          >
+            {saving ? "Creating…" : "Create user"}
+          </Button>
+        </Box>
+      </Stack>
     </Box>
   );
 }
-
-/** Match Settings.jsx outlined inputs — full width of content area */
-const labelSx = {
-  color: primaryDark,
-  fontWeight: 600,
-  "&.Mui-focused": { color: primaryRed },
-};
-
-const outlinedFieldSx = {
-  width: "100%",
-  maxWidth: "100%",
-  "& .MuiOutlinedInput-root": {
-    width: "100%",
-    borderRadius: 2,
-    bgcolor: "rgba(255,255,255,0.95)",
-    "& fieldset": { borderColor: "#FECACA" },
-    "&:hover fieldset": { borderColor: primaryRed },
-    "&.Mui-focused fieldset": {
-      borderColor: primaryRed,
-      boxShadow: `0 0 0 2px ${primaryLight}`,
-    },
-  },
-  "& .MuiInputLabel-root": { ...labelSx },
-};

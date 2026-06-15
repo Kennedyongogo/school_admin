@@ -1,24 +1,17 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Box,
   Typography,
   Alert,
-  CircularProgress,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   TablePagination,
   IconButton,
   Tooltip,
   Avatar,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   Stack,
   FormControl,
@@ -29,33 +22,29 @@ import {
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Close as CloseIcon,
   Visibility as VisibilityIcon,
+  AdminPanelSettings as AdminIcon,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
-
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
-const accentLight = "#FEE2E2";
-
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-const authMultipartHeaders = (token) => ({
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-function profilePhotoUrl(stored) {
-  if (!stored || typeof stored !== "string") return null;
-  const t = stored.trim();
-  if (!t) return null;
-  if (/^https?:\/\//i.test(t)) return t;
-  return t.startsWith("/") ? t : `/${t}`;
-}
+import {
+  authHeaders,
+  authMultipartHeaders,
+  resolveAssetUrl,
+  inputSx,
+  primaryRed,
+  primaryDark,
+  actionIconSx,
+} from "./elimuPlusShared";
+import {
+  PremiumDialog,
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+} from "./elimuPlusUi";
 
 function rowToEditForm(row) {
   return {
@@ -181,7 +170,7 @@ export default function ElimuPlusSchoolAdminsTab({ active }) {
       title: "Remove school admin profile?",
       text: `The school admin profile for ${name} will be removed. Their login account stays — you can create a new profile for this user later.`,
       showCancelButton: true,
-      confirmButtonColor: accent,
+      confirmButtonColor: primaryRed,
       cancelButtonColor: "#6B7280",
       confirmButtonText: "Remove profile",
     });
@@ -207,34 +196,29 @@ export default function ElimuPlusSchoolAdminsTab({ active }) {
   if (!active) return null;
 
   return (
-    <Box sx={{ pt: 2 }}>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-          <CircularProgress sx={{ color: accent }} />
-        </Box>
-      ) : (
-        <TableContainer
-          sx={{
-            borderRadius: 2,
-            border: `1px solid ${accentLight}`,
-            boxShadow: `0 8px 28px -12px ${accent}33`,
-            bgcolor: "rgba(255,255,255,0.98)",
-          }}
+    <TabPanelShell loading={loading} error={error} onDismissError={() => setError(null)}>
+      {!loading && (
+        <DataTableShell
+          pagination={
+            <TablePagination
+              component="div"
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              count={totalCount}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(_, newPage) => setPage(newPage)}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              labelRowsPerPage="Rows per page"
+              sx={tablePaginationSx}
+            />
+          }
         >
           <Table size="medium">
             <TableHead>
-              <TableRow
-                sx={{
-                  background: `linear-gradient(135deg, ${accent} 0%, ${accentDark} 100%)`,
-                  "& .MuiTableCell-head": { color: "#fff", fontWeight: 700, borderBottom: "none" },
-                }}
-              >
+              <TableRow sx={tableHeadRowSx}>
                 <TableCell width={56}>No.</TableCell>
                 <TableCell>Name</TableCell>
                 <TableCell>Admin Type</TableCell>
@@ -250,18 +234,16 @@ export default function ElimuPlusSchoolAdminsTab({ active }) {
               {rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5}>
-                    <Typography color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
-                      No school admins yet. Use Create school admin in the header.
-                    </Typography>
+                    <EmptyTableRow message="No school admins yet. Use Create school admin in the header." />
                   </TableCell>
                 </TableRow>
               ) : (
                 rows.map((r, idx) => {
                   const displayName = r.user?.full_name || r.user?.username || "—";
-                  const photoSrc = profilePhotoUrl(r.profile_picture);
+                  const photoSrc = resolveAssetUrl(r.profile_picture);
                   const adminTypeLabel = adminTypes.find((t) => t.value === r.admin_type)?.label || r.admin_type || "—";
                   return (
-                    <TableRow key={r.id} hover>
+                    <TableRow key={r.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
                       <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>{page * rowsPerPage + idx + 1}</TableCell>
                       <TableCell>
                         <Typography variant="body1" sx={{ fontWeight: 700 }}>
@@ -276,7 +258,7 @@ export default function ElimuPlusSchoolAdminsTab({ active }) {
                       <TableCell align="center">
                         <Avatar
                           src={photoSrc || undefined}
-                          sx={{ width: 40, height: 40, mx: "auto", bgcolor: `${accent}22`, color: accentDark, fontWeight: 700 }}
+                          sx={{ width: 40, height: 40, mx: "auto", bgcolor: `${primaryRed}22`, color: primaryDark, fontWeight: 700 }}
                         >
                           {!photoSrc ? displayName.charAt(0).toUpperCase() : null}
                         </Avatar>
@@ -287,18 +269,23 @@ export default function ElimuPlusSchoolAdminsTab({ active }) {
                             size="small"
                             aria-label="View admin profile"
                             onClick={() => navigate(`/elimu-plus/school-admins/${r.id}`)}
-                            sx={{ color: accentDark }}
+                            sx={actionIconSx}
                           >
                             <VisibilityIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Edit">
-                          <IconButton size="small" aria-label="Edit admin" onClick={() => openEdit(r)} sx={{ color: accentDark }}>
+                          <IconButton size="small" aria-label="Edit admin" onClick={() => openEdit(r)} sx={actionIconSx}>
                             <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Delete admin">
-                          <IconButton size="small" aria-label="Delete admin" onClick={() => handleDelete(r)} sx={{ color: accent }}>
+                          <IconButton
+                            size="small"
+                            aria-label="Delete admin"
+                            onClick={() => handleDelete(r)}
+                            sx={{ ...actionIconSx, "&:hover": { bgcolor: "#FEE2E2", color: primaryRed } }}
+                          >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
@@ -309,86 +296,65 @@ export default function ElimuPlusSchoolAdminsTab({ active }) {
               )}
             </TableBody>
           </Table>
-          <TablePagination
-            component="div"
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            count={totalCount}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={(_, newPage) => setPage(newPage)}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(parseInt(e.target.value, 10));
-              setPage(0);
-            }}
-            labelRowsPerPage="Rows per page"
-            sx={{
-              borderTop: `1px solid ${accentLight}`,
-              "& .MuiTablePagination-toolbar": { flexWrap: "wrap", gap: 1 },
-            }}
-          />
-        </TableContainer>
+        </DataTableShell>
       )}
 
-      <Dialog open={editOpen} onClose={() => !editSaving && setEditOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
-          Edit school admin
-          <IconButton aria-label="Close" onClick={() => !editSaving && setEditOpen(false)} sx={{ position: "absolute", right: 8, top: 8 }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {editError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {editError}
-            </Alert>
-          )}
-          <Stack spacing={2}>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <Avatar
-                src={editPhotoPreview || profilePhotoUrl(editForm.profile_picture_url) || undefined}
-                sx={{ width: 72, height: 72, bgcolor: `${accent}22`, color: accentDark, fontWeight: 700 }}
-              >
-                {!editPhotoPreview && !editForm.profile_picture_url ? "?" : null}
-              </Avatar>
-              <Button variant="outlined" component="label" sx={{ borderColor: accent, color: accentDark, fontWeight: 700 }}>
-                Choose photo
-                <input type="file" accept="image/*" hidden onChange={(e) => setEditPhotoFile(e.target.files?.[0] || null)} />
+      <PremiumDialog
+        open={editOpen}
+        onClose={() => !editSaving && setEditOpen(false)}
+        title="Edit school admin"
+        subtitle="Update admin type and profile photo"
+        icon={<AdminIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={editSaving} onClick={saveEdit}>
+              Save
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        {editError ? <Alert severity="error" sx={{ mb: 2, borderRadius: "12px" }}>{editError}</Alert> : null}
+        <Stack spacing={2}>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Avatar
+              src={editPhotoPreview || resolveAssetUrl(editForm.profile_picture_url) || undefined}
+              sx={{ width: 72, height: 72, bgcolor: `${primaryRed}22`, color: primaryDark, fontWeight: 700 }}
+            >
+              {!editPhotoPreview && !editForm.profile_picture_url ? "?" : null}
+            </Avatar>
+            <Button variant="outlined" component="label" sx={{ borderColor: primaryRed, color: primaryDark, fontWeight: 700 }}>
+              Choose photo
+              <input type="file" accept="image/*" hidden onChange={(e) => setEditPhotoFile(e.target.files?.[0] || null)} />
+            </Button>
+            {(editPhotoFile || editForm.profile_picture_url) && (
+              <Button size="small" onClick={() => { setEditPhotoFile(null); setEditForm({ ...editForm, profile_picture_url: "" }); }}>
+                Clear photo
               </Button>
-              {(editPhotoFile || editForm.profile_picture_url) && (
-                <Button size="small" onClick={() => { setEditPhotoFile(null); setEditForm({ ...editForm, profile_picture_url: "" }); }}>
-                  Clear photo
-                </Button>
-              )}
-            </Stack>
-            <FormControl fullWidth required variant="outlined">
-              <InputLabel id="edit-admin-type-label">Admin type</InputLabel>
-              <Select
-                labelId="edit-admin-type-label"
-                label="Admin type"
-                value={editForm.admin_type}
-                onChange={(e) => setEditForm({ ...editForm, admin_type: e.target.value })}
-              >
-                <MenuItem value="">
-                  <em>Select…</em>
-                </MenuItem>
-                {adminTypes.map((type) => (
-                  <MenuItem key={type.value} value={type.value}>
-                    {type.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            )}
           </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" disabled={editSaving} onClick={saveEdit} sx={{ bgcolor: accent, fontWeight: 700 }}>
-            {editSaving ? "Saving…" : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+          <FormControl fullWidth required variant="outlined" sx={inputSx}>
+            <InputLabel id="edit-admin-type-label">Admin type</InputLabel>
+            <Select
+              labelId="edit-admin-type-label"
+              label="Admin type"
+              value={editForm.admin_type}
+              onChange={(e) => setEditForm({ ...editForm, admin_type: e.target.value })}
+            >
+              <MenuItem value="">
+                <em>Select…</em>
+              </MenuItem>
+              {adminTypes.map((type) => (
+                <MenuItem key={type.value} value={type.value}>
+                  {type.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Stack>
+      </PremiumDialog>
+    </TabPanelShell>
   );
 }

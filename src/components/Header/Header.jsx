@@ -5,42 +5,59 @@ import {
   Menu,
   MenuItem,
   Typography,
-  CircularProgress,
   Avatar,
+  Divider,
+  ListItemIcon,
+  ListItemText,
 } from "@mui/material";
 import {
   Menu as MenuIcon,
-  ArrowDropDown as ArrowDropDownIcon,
-  Person as PersonIcon,
   AccountCircle as AccountCircleIcon,
   Lock as LockIcon,
   Logout as LogoutIcon,
+  KeyboardArrowDown,
 } from "@mui/icons-material";
 import UserAccount from "./userAccount";
 import EditUserDetails from "./editUserDetails";
 import ChangePassword from "./changePassword";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import BrandPageLoader from "../Util/BrandPageLoader";
 import AdminNotificationBell from "./AdminNotificationBell";
 
-// Helper to build URL for uploaded assets using Vite proxy
+const fontBody = '"Plus Jakarta Sans", "Inter", system-ui, sans-serif';
+const fontDisplay = '"Fraunces", "Georgia", serif';
+
+const PAGE_TITLES = [
+  { prefix: "/dashboard", title: "Dashboard", subtitle: "Overview & insights" },
+  { prefix: "/hr", title: "HR", subtitle: "Staff & people management" },
+  { prefix: "/accounting", title: "Accounting", subtitle: "Fees & finances" },
+  { prefix: "/exam", title: "Exams", subtitle: "Assessments & submissions" },
+  { prefix: "/curriculum", title: "Curriculum", subtitle: "Courses & programmes" },
+  { prefix: "/timetable", title: "Timetable", subtitle: "Schedules & classes" },
+  { prefix: "/users", title: "Users", subtitle: "Account management" },
+  { prefix: "/elimu-plus", title: "Elimu Plus", subtitle: "School profile & records" },
+  { prefix: "/settings", title: "Settings", subtitle: "Preferences & security" },
+];
+
 const buildImageUrl = (imageUrl) => {
   if (!imageUrl) return "";
   if (imageUrl.startsWith("http")) return imageUrl;
-
-  // Use relative URLs - Vite proxy will handle routing to backend
   if (imageUrl.startsWith("uploads/")) return `/${imageUrl}`;
   if (imageUrl.startsWith("/uploads/")) return imageUrl;
   return imageUrl;
 };
 
-// Helper to get user initials
 const getInitials = (name) => {
   if (!name) return "U";
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 };
+
+function getPageContext(pathname) {
+  const match = PAGE_TITLES.find(({ prefix }) => pathname.startsWith(prefix));
+  return match || { title: "Admin Portal", subtitle: "Elimu Plus Homeschool" };
+}
 
 export default function Header(props) {
   const [currentUser, setCurrentUser] = useState("");
@@ -50,13 +67,14 @@ export default function Header(props) {
   const [toggleChangePass, setToggleChangePass] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
+  const page = getPageContext(location.pathname);
 
   useEffect(() => {
     setLoading(true);
     const token = localStorage.getItem("token");
 
     if (token) {
-      // Fetch current user data from API
       fetch("/api/users/me", {
         method: "GET",
         headers: {
@@ -66,28 +84,20 @@ export default function Header(props) {
         credentials: "include",
       })
         .then((response) => {
-          if (response.ok) {
-            return response.json();
-          } else {
-            throw new Error("Failed to fetch user");
-          }
+          if (response.ok) return response.json();
+          throw new Error("Failed to fetch user");
         })
         .then((response) => {
           const userData = response.data;
-          console.log("User data from /api/users/me:", userData);
           setCurrentUser(userData);
           props.setUser(userData);
-          localStorage.setItem("user", JSON.stringify(userData)); // Update localStorage
+          localStorage.setItem("user", JSON.stringify(userData));
           setLoading(false);
         })
-        .catch((error) => {
-          console.error("Error fetching user:", error);
-          console.log("Fetch failed, falling back to localStorage");
-          // Fallback to localStorage
+        .catch(() => {
           const savedUser = localStorage.getItem("user");
           if (savedUser) {
             const userData = JSON.parse(savedUser);
-            console.log("User data from localStorage:", userData);
             setCurrentUser(userData);
             props.setUser(userData);
           } else {
@@ -109,13 +119,10 @@ export default function Header(props) {
     });
   };
 
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
+  const roleLabel =
+    currentUser?.role
+      ? String(currentUser.role).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+      : "Staff";
 
   return (
     <>
@@ -125,103 +132,233 @@ export default function Header(props) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          p: 2,
           color: "white",
           width: "100%",
+          gap: 2,
         }}
       >
-        <IconButton
-          aria-label="open drawer"
-          onClick={props.handleDrawerOpen}
-          edge="start"
-          sx={{
-            color: "white",
-            marginRight: 5,
-            ...(props.open && { display: "none" }),
-          }}
-        >
-          <MenuIcon />
-        </IconButton>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+          <IconButton
+            aria-label="Open navigation"
+            onClick={props.handleDrawerOpen}
+            sx={{
+              color: "white",
+              bgcolor: "rgba(255,255,255,0.12)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: "12px",
+              width: 40,
+              height: 40,
+              flexShrink: 0,
+              ...(props.open && { display: "none" }),
+              "&:hover": { bgcolor: "rgba(255,255,255,0.2)" },
+            }}
+          >
+            <MenuIcon fontSize="small" />
+          </IconButton>
 
-        <Box sx={{ flexGrow: 1 }}></Box>
+          <Box sx={{ minWidth: 0, display: { xs: props.open ? "none" : "block", sm: "block" } }}>
+            <Typography
+              sx={{
+                fontFamily: fontDisplay,
+                fontWeight: 700,
+                fontSize: { xs: "1rem", sm: "1.15rem" },
+                letterSpacing: "-0.02em",
+                lineHeight: 1.2,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {page.title}
+            </Typography>
+            <Typography
+              sx={{
+                fontFamily: fontBody,
+                fontSize: "0.75rem",
+                color: "rgba(255,255,255,0.78)",
+                fontWeight: 500,
+                display: { xs: "none", md: "block" },
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {page.subtitle}
+            </Typography>
+          </Box>
+        </Box>
 
-        <Box sx={{ display: "flex", alignItems: "center" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.5, sm: 1.5 }, flexShrink: 0 }}>
           <AdminNotificationBell />
-          <Typography variant="body1" sx={{ mr: 1, display: { xs: "none", sm: "block" } }}>
-            {currentUser?.full_name}
-          </Typography>
 
-          {/* Profile Picture or Avatar */}
-          <Box sx={{ mr: 1 }}>
+          <Box
+            component="button"
+            type="button"
+            onClick={(e) => setAnchorEl(e.currentTarget)}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.25,
+              border: "1px solid rgba(255,255,255,0.18)",
+              bgcolor: "rgba(255,255,255,0.1)",
+              backdropFilter: "blur(8px)",
+              borderRadius: "14px",
+              pl: { xs: 0.75, sm: 1 },
+              pr: { xs: 0.75, sm: 1.25 },
+              py: 0.75,
+              cursor: "pointer",
+              color: "inherit",
+              font: "inherit",
+              transition: "all 0.2s ease",
+              "&:hover": {
+                bgcolor: "rgba(255,255,255,0.16)",
+                borderColor: "rgba(255,255,255,0.28)",
+              },
+            }}
+          >
             {currentUser?.profile_image ? (
               <Avatar
                 src={buildImageUrl(currentUser.profile_image)}
                 alt={currentUser?.full_name}
                 sx={{
-                  width: 32,
-                  height: 32,
-                  border: "2px solid rgba(255, 255, 255, 0.3)",
+                  width: 36,
+                  height: 36,
+                  border: "2px solid rgba(255, 255, 255, 0.35)",
                   boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
                 }}
               />
             ) : (
               <Avatar
                 sx={{
-                  width: 32,
-                  height: 32,
-                  backgroundColor: "rgba(255, 255, 255, 0.2)",
-                  border: "2px solid rgba(255, 255, 255, 0.3)",
+                  width: 36,
+                  height: 36,
+                  background: "rgba(255, 255, 255, 0.2)",
+                  border: "2px solid rgba(255, 255, 255, 0.35)",
                   color: "white",
-                  fontWeight: "bold",
-                  fontSize: "0.875rem",
+                  fontWeight: 700,
+                  fontSize: "0.8rem",
+                  fontFamily: fontBody,
                 }}
               >
                 {getInitials(currentUser?.full_name)}
               </Avatar>
             )}
-          </Box>
 
-          <IconButton color="inherit" onClick={handleClick}>
-            <ArrowDropDownIcon />
-          </IconButton>
+            <Box sx={{ textAlign: "left", display: { xs: "none", sm: "block" } }}>
+              <Typography
+                sx={{
+                  fontFamily: fontBody,
+                  fontSize: "0.85rem",
+                  fontWeight: 700,
+                  lineHeight: 1.2,
+                  maxWidth: 160,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {currentUser?.full_name || "Admin"}
+              </Typography>
+              <Typography
+                sx={{
+                  fontFamily: fontBody,
+                  fontSize: "0.7rem",
+                  color: "rgba(255,255,255,0.75)",
+                  fontWeight: 500,
+                }}
+              >
+                {roleLabel}
+              </Typography>
+            </Box>
+
+            <KeyboardArrowDown
+              sx={{
+                fontSize: 20,
+                color: "rgba(255,255,255,0.8)",
+                display: { xs: "none", sm: "block" },
+                transition: "transform 0.2s",
+                transform: anchorEl ? "rotate(180deg)" : "rotate(0deg)",
+              }}
+            />
+          </Box>
         </Box>
 
         <Menu
           anchorEl={anchorEl}
           open={Boolean(anchorEl)}
-          onClose={handleClose}
+          onClose={() => setAnchorEl(null)}
+          transformOrigin={{ horizontal: "right", vertical: "top" }}
+          anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+          slotProps={{
+            paper: {
+              sx: {
+                mt: 1,
+                minWidth: 220,
+                borderRadius: "16px",
+                border: "1px solid rgba(220,38,38,0.08)",
+                boxShadow: "0 16px 48px rgba(28,25,23,0.14)",
+                overflow: "hidden",
+              },
+            },
+          }}
         >
+          <Box sx={{ px: 2, py: 1.5, bgcolor: "#FFFBF7" }}>
+            <Typography sx={{ fontFamily: fontBody, fontWeight: 700, fontSize: "0.9rem", color: "#1C1917" }}>
+              {currentUser?.full_name || "Admin"}
+            </Typography>
+            <Typography sx={{ fontFamily: fontBody, fontSize: "0.75rem", color: "#78716C" }}>
+              {currentUser?.email}
+            </Typography>
+          </Box>
+          <Divider />
           <MenuItem
             onClick={() => {
               setToggleAccount(true);
-              handleClose();
+              setAnchorEl(null);
             }}
+            sx={{ py: 1.25, fontFamily: fontBody, fontSize: "0.9rem" }}
           >
-            <AccountCircleIcon sx={{ mr: 1 }} /> Account
+            <ListItemIcon>
+              <AccountCircleIcon fontSize="small" sx={{ color: "#DC2626" }} />
+            </ListItemIcon>
+            <ListItemText primary="My account" />
           </MenuItem>
           <MenuItem
             onClick={() => {
               navigate("/settings");
-              handleClose();
+              setAnchorEl(null);
             }}
+            sx={{ py: 1.25, fontFamily: fontBody, fontSize: "0.9rem" }}
           >
-            <LockIcon sx={{ mr: 1 }} /> Change Password
+            <ListItemIcon>
+              <LockIcon fontSize="small" sx={{ color: "#DC2626" }} />
+            </ListItemIcon>
+            <ListItemText primary="Change password" />
           </MenuItem>
+          <Divider />
           <MenuItem
             onClick={() => {
               logout();
-              handleClose();
+              setAnchorEl(null);
+            }}
+            sx={{
+              py: 1.25,
+              fontFamily: fontBody,
+              fontSize: "0.9rem",
+              color: "#DC2626",
+              "&:hover": { bgcolor: "rgba(220,38,38,0.08)" },
             }}
           >
-            <LogoutIcon sx={{ mr: 1 }} /> Logout
+            <ListItemIcon>
+              <LogoutIcon fontSize="small" sx={{ color: "#DC2626" }} />
+            </ListItemIcon>
+            <ListItemText primary="Sign out" />
           </MenuItem>
         </Menu>
 
         {currentUser && (
           <UserAccount
-            onClose={() => {
-              setToggleAccount(false);
-            }}
+            onClose={() => setToggleAccount(false)}
             open={toggleAccount}
             currentUser={currentUser}
           />
@@ -229,18 +366,14 @@ export default function Header(props) {
         {currentUser && (
           <EditUserDetails
             open={toggleEditDetails}
-            onClose={() => {
-              setToggleEditDetails(false);
-            }}
+            onClose={() => setToggleEditDetails(false)}
             currentUser={currentUser}
           />
         )}
         {currentUser && (
           <ChangePassword
             open={toggleChangePass}
-            onClose={() => {
-              setToggleChangePass(false);
-            }}
+            onClose={() => setToggleChangePass(false)}
             currentUser={currentUser}
           />
         )}

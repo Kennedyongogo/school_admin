@@ -4,11 +4,8 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
   FormControl,
-  Divider,
   IconButton,
   InputLabel,
   MenuItem,
@@ -18,29 +15,28 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { AccountBalanceWallet as WalletIcon, ArrowBack as ArrowBackIcon, Add as AddIcon, Delete as DeleteIcon } from "@mui/icons-material";
+import {
+  AccountBalanceWallet as WalletIcon,
+  ArrowBack as ArrowBackIcon,
+} from "@mui/icons-material";
 import Swal from "sweetalert2";
-
-const primaryRed = "#DC2626";
-const primaryDark = "#B91C1C";
-const primaryLight = "#FEE2E2";
-const backgroundLight = "#FEF2F2";
-
-const authJsonHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-const fullMainBleedSx = (theme) => ({
-  width: `calc(100% + ${theme.spacing(6)})`,
-  maxWidth: "none",
-  marginLeft: theme.spacing(-3),
-  marginRight: theme.spacing(-3),
-  marginTop: theme.spacing(-2.5),
-  marginBottom: "1px",
-  boxSizing: "border-box",
-});
+import {
+  authJsonHeaders,
+  formatMoney,
+  halfAmountFromTerm,
+  sumFeeItems,
+  inputSx,
+  primaryRed,
+  warmCream,
+  fullMainBleedSx,
+  primaryBtnSx,
+  ghostBtnSx,
+} from "../Accounting/accountingShared";
+import {
+  AccountingHero,
+  FormSection,
+  FeeBreakdownEditor,
+} from "../Accounting/accountingUi";
 
 export default function CurriculumFeeStructureCreate() {
   const navigate = useNavigate();
@@ -69,10 +65,8 @@ export default function CurriculumFeeStructureCreate() {
   );
 
   const goBack = () => navigate("/accounting", { replace: false });
-  const termAmount = Number.parseFloat(form.term_fee_amount);
-  const halfAmount = Number.isFinite(termAmount) ? Number.parseFloat((termAmount / 2).toFixed(2)) : 0;
-  const sumItems = (items) =>
-    (items || []).reduce((acc, it) => acc + (Number.isFinite(Number.parseFloat(it.amount)) ? Number.parseFloat(it.amount) : 0), 0);
+  const halfAmount = halfAmountFromTerm(form.term_fee_amount);
+
   const showErrorAlert = async (message) =>
     Swal.fire({
       icon: "error",
@@ -120,6 +114,25 @@ export default function CurriculumFeeStructureCreate() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const updateHalfItem = (half, index, field, value) => {
+    const key = half === "first" ? "first_half_items" : "second_half_items";
+    setForm((f) => {
+      const next = [...f[key]];
+      next[index] = { ...next[index], [field]: value };
+      return { ...f, [key]: next };
+    });
+  };
+
+  const addHalfItem = (half) => {
+    const key = half === "first" ? "first_half_items" : "second_half_items";
+    setForm((f) => ({ ...f, [key]: [...f[key], { name: "", amount: "" }] }));
+  };
+
+  const removeHalfItem = (half, index) => {
+    const key = half === "first" ? "first_half_items" : "second_half_items";
+    setForm((f) => ({ ...f, [key]: f[key].filter((_, idx) => idx !== index) }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -198,279 +211,168 @@ export default function CurriculumFeeStructureCreate() {
       sx={(theme) => ({
         ...fullMainBleedSx(theme),
         minHeight: "100%",
-        background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
+        bgcolor: warmCream,
+        px: { xs: 1.5, sm: 2, md: 3 },
+        py: { xs: 2, sm: 2.5 },
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
       })}
     >
-      <Box
-        sx={{
-          background: `linear-gradient(135deg, ${primaryDark} 0%, ${primaryRed} 55%, #EF4444 100%)`,
-          px: { xs: 1.5, sm: 2 },
-          py: { xs: 2, sm: 2.5 },
-          color: "white",
-          boxShadow: `0 8px 24px ${primaryRed}33`,
-        }}
-      >
-        <Stack direction="row" alignItems="center" spacing={1.5}>
+      <AccountingHero
+        title="Create fee structure"
+        subtitle="Assign a term fee to curriculum, class and term, then split into two installments."
+        icon={<WalletIcon sx={{ fontSize: 26, color: "#fff" }} />}
+        actions={
           <Tooltip title="Back to fee structures">
             <IconButton
               type="button"
               onClick={goBack}
               aria-label="Back to fee structures"
               sx={{
-                color: "#fff",
                 bgcolor: "rgba(255,255,255,0.15)",
+                border: "1px solid rgba(255,255,255,0.28)",
+                color: "#fff",
                 "&:hover": { bgcolor: "rgba(255,255,255,0.28)" },
               }}
             >
               <ArrowBackIcon />
             </IconButton>
           </Tooltip>
-          <WalletIcon sx={{ fontSize: 32, opacity: 0.95 }} />
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
-              Create fee structure
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.92, mt: 0.25 }}>
-              Assign a term fee to curriculum, class and term, then split into two installments.
-            </Typography>
-          </Box>
+        }
+      />
+
+      {error ? (
+        <Alert severity="error" sx={{ borderRadius: "14px" }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      ) : null}
+
+      {loading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+          <CircularProgress sx={{ color: primaryRed }} />
+        </Box>
+      ) : (
+        <Stack spacing={2.5} sx={{ width: "100%" }}>
+          <FormSection title="Placement">
+            <Stack spacing={2} sx={{ width: "100%" }}>
+              <FormControl fullWidth required sx={inputSx}>
+                <InputLabel>Curriculum</InputLabel>
+                <Select
+                  label="Curriculum"
+                  value={form.curriculum_id}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      curriculum_id: e.target.value,
+                      curriculum_class_id: "",
+                      curriculum_class_level_id: "",
+                    }))
+                  }
+                >
+                  {curricula.map((c) => (
+                    <MenuItem key={c.id} value={c.id}>
+                      {c.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth required disabled={!form.curriculum_id} sx={inputSx}>
+                <InputLabel>Class</InputLabel>
+                <Select
+                  label="Class"
+                  value={form.curriculum_class_id}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      curriculum_class_id: e.target.value,
+                      curriculum_class_level_id: "",
+                    }))
+                  }
+                >
+                  {classOptions.map((c) => (
+                    <MenuItem key={c.id} value={c.id}>
+                      {c.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth required disabled={!form.curriculum_class_id} sx={inputSx}>
+                <InputLabel>Term (class level)</InputLabel>
+                <Select
+                  label="Term (class level)"
+                  value={form.curriculum_class_level_id}
+                  onChange={(e) => setForm((f) => ({ ...f, curriculum_class_level_id: e.target.value }))}
+                >
+                  {levelOptions.map((l) => (
+                    <MenuItem key={l.id} value={l.id}>
+                      {l.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
+          </FormSection>
+
+          <FormSection title="Term fee">
+            <Stack spacing={1.5} sx={{ width: "100%" }}>
+              <TextField
+                label="Term fee amount"
+                required
+                fullWidth
+                type="number"
+                inputProps={{ min: 0, step: "0.01" }}
+                value={form.term_fee_amount}
+                onChange={(e) => setForm((f) => ({ ...f, term_fee_amount: e.target.value }))}
+                sx={inputSx}
+              />
+              <Typography variant="body2" color="text.secondary">
+                Payment is split in two equal halves: <strong>{formatMoney(halfAmount)}</strong> each.
+              </Typography>
+            </Stack>
+          </FormSection>
+
+          <FormSection title="Payment breakdown">
+            <Stack spacing={2} sx={{ width: "100%" }}>
+              <FeeBreakdownEditor
+                title={`First half breakdown (must total ${halfAmount.toFixed(2)})`}
+                halfTarget={halfAmount}
+                items={form.first_half_items}
+                onChange={(i, field, value) => updateHalfItem("first", i, field, value)}
+                onAdd={() => addHalfItem("first")}
+                onRemove={(i) => removeHalfItem("first", i)}
+              />
+              <FeeBreakdownEditor
+                title={`Second half breakdown (must total ${halfAmount.toFixed(2)})`}
+                halfTarget={halfAmount}
+                items={form.second_half_items}
+                onChange={(i, field, value) => updateHalfItem("second", i, field, value)}
+                onAdd={() => addHalfItem("second")}
+                onRemove={(i) => removeHalfItem("second", i)}
+              />
+              <Typography variant="caption" color="text.secondary">
+                First half total: {sumFeeItems(form.first_half_items).toFixed(2)} · Second half total:{" "}
+                {sumFeeItems(form.second_half_items).toFixed(2)}
+              </Typography>
+            </Stack>
+          </FormSection>
+
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="flex-end" sx={{ pt: 0.5 }}>
+            <Button type="button" variant="text" onClick={goBack} sx={ghostBtnSx}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={saving}
+              startIcon={saving ? <CircularProgress size={18} color="inherit" /> : null}
+              sx={{ ...primaryBtnSx, minWidth: 200 }}
+            >
+              {saving ? "Saving…" : "Create fee structure"}
+            </Button>
+          </Stack>
         </Stack>
-      </Box>
-
-      <Box sx={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 } }}>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <CircularProgress sx={{ color: primaryRed }} />
-          </Box>
-        ) : (
-          <Card
-            elevation={0}
-            sx={{
-              borderRadius: 2,
-              border: `1px solid ${primaryLight}`,
-              boxShadow: `0 8px 28px -12px ${primaryRed}33`,
-              overflow: "hidden",
-            }}
-          >
-            <CardContent sx={{ px: { xs: 2, sm: 3 }, py: 3 }}>
-              <Stack spacing={2.5}>
-                <FormControl fullWidth required>
-                  <InputLabel>Curriculum</InputLabel>
-                  <Select
-                    label="Curriculum"
-                    value={form.curriculum_id}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        curriculum_id: e.target.value,
-                        curriculum_class_id: "",
-                        curriculum_class_level_id: "",
-                      }))
-                    }
-                  >
-                    {curricula.map((c) => (
-                      <MenuItem key={c.id} value={c.id}>
-                        {c.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl fullWidth required disabled={!form.curriculum_id}>
-                  <InputLabel>Class</InputLabel>
-                  <Select
-                    label="Class"
-                    value={form.curriculum_class_id}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        curriculum_class_id: e.target.value,
-                        curriculum_class_level_id: "",
-                      }))
-                    }
-                  >
-                    {classOptions.map((c) => (
-                      <MenuItem key={c.id} value={c.id}>
-                        {c.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl fullWidth required disabled={!form.curriculum_class_id}>
-                  <InputLabel>Term (class level)</InputLabel>
-                  <Select
-                    label="Term (class level)"
-                    value={form.curriculum_class_level_id}
-                    onChange={(e) => setForm((f) => ({ ...f, curriculum_class_level_id: e.target.value }))}
-                  >
-                    {levelOptions.map((l) => (
-                      <MenuItem key={l.id} value={l.id}>
-                        {l.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <TextField
-                  label="Term fee amount"
-                  required
-                  type="number"
-                  inputProps={{ min: 0, step: "0.01" }}
-                  value={form.term_fee_amount}
-                  onChange={(e) => setForm((f) => ({ ...f, term_fee_amount: e.target.value }))}
-                />
-
-                <Typography variant="body2" color="text.secondary">
-                  Payment is split in two equal halves: <strong>{halfAmount.toFixed(2)}</strong> each.
-                </Typography>
-                <Divider />
-                <Stack spacing={1.25}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                    First half breakdown (must total {halfAmount.toFixed(2)})
-                  </Typography>
-                  {form.first_half_items.map((it, i) => (
-                    <Stack key={`f-${i}`} direction={{ xs: "column", sm: "row" }} spacing={1}>
-                      <TextField
-                        label="Item name"
-                        fullWidth
-                        value={it.name}
-                        onChange={(e) =>
-                          setForm((f) => {
-                            const next = [...f.first_half_items];
-                            next[i] = { ...next[i], name: e.target.value };
-                            return { ...f, first_half_items: next };
-                          })
-                        }
-                      />
-                      <TextField
-                        label="Amount"
-                        type="number"
-                        inputProps={{ min: 0, step: "0.01" }}
-                        value={it.amount}
-                        onChange={(e) =>
-                          setForm((f) => {
-                            const next = [...f.first_half_items];
-                            next[i] = { ...next[i], amount: e.target.value };
-                            return { ...f, first_half_items: next };
-                          })
-                        }
-                      />
-                      <IconButton
-                        disabled={form.first_half_items.length <= 1}
-                        onClick={() =>
-                          setForm((f) => ({
-                            ...f,
-                            first_half_items: f.first_half_items.filter((_, idx) => idx !== i),
-                          }))
-                        }
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Stack>
-                  ))}
-                  <Button
-                    variant="outlined"
-                    startIcon={<AddIcon />}
-                    onClick={() =>
-                      setForm((f) => ({
-                        ...f,
-                        first_half_items: [...f.first_half_items, { name: "", amount: "" }],
-                      }))
-                    }
-                    sx={{ alignSelf: "flex-start" }}
-                  >
-                    Add item
-                  </Button>
-                  <Typography variant="caption" color="text.secondary">
-                    Current total: {sumItems(form.first_half_items).toFixed(2)}
-                  </Typography>
-                </Stack>
-                <Divider />
-                <Stack spacing={1.25}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                    Second half breakdown (must total {halfAmount.toFixed(2)})
-                  </Typography>
-                  {form.second_half_items.map((it, i) => (
-                    <Stack key={`s-${i}`} direction={{ xs: "column", sm: "row" }} spacing={1}>
-                      <TextField
-                        label="Item name"
-                        fullWidth
-                        value={it.name}
-                        onChange={(e) =>
-                          setForm((f) => {
-                            const next = [...f.second_half_items];
-                            next[i] = { ...next[i], name: e.target.value };
-                            return { ...f, second_half_items: next };
-                          })
-                        }
-                      />
-                      <TextField
-                        label="Amount"
-                        type="number"
-                        inputProps={{ min: 0, step: "0.01" }}
-                        value={it.amount}
-                        onChange={(e) =>
-                          setForm((f) => {
-                            const next = [...f.second_half_items];
-                            next[i] = { ...next[i], amount: e.target.value };
-                            return { ...f, second_half_items: next };
-                          })
-                        }
-                      />
-                      <IconButton
-                        disabled={form.second_half_items.length <= 1}
-                        onClick={() =>
-                          setForm((f) => ({
-                            ...f,
-                            second_half_items: f.second_half_items.filter((_, idx) => idx !== i),
-                          }))
-                        }
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Stack>
-                  ))}
-                  <Button
-                    variant="outlined"
-                    startIcon={<AddIcon />}
-                    onClick={() =>
-                      setForm((f) => ({
-                        ...f,
-                        second_half_items: [...f.second_half_items, { name: "", amount: "" }],
-                      }))
-                    }
-                    sx={{ alignSelf: "flex-start" }}
-                  >
-                    Add item
-                  </Button>
-                  <Typography variant="caption" color="text.secondary">
-                    Current total: {sumItems(form.second_half_items).toFixed(2)}
-                  </Typography>
-                </Stack>
-
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="flex-end" sx={{ pt: 1 }}>
-                  <Button type="button" variant="outlined" onClick={goBack} sx={{ borderColor: primaryRed, color: primaryDark, fontWeight: 700 }}>
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={saving}
-                    startIcon={saving ? <CircularProgress size={18} color="inherit" /> : null}
-                    sx={{ bgcolor: primaryRed, fontWeight: 700, "&:hover": { bgcolor: primaryDark }, minWidth: 200 }}
-                  >
-                    {saving ? "Saving…" : "Create fee structure"}
-                  </Button>
-                </Stack>
-              </Stack>
-            </CardContent>
-          </Card>
-        )}
-      </Box>
+      )}
     </Box>
   );
 }

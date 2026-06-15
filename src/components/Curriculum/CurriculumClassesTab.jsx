@@ -2,15 +2,12 @@ import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperat
 import {
   Box,
   Typography,
-  Button,
   IconButton,
   Stack,
-  CircularProgress,
   Alert,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   TablePagination,
@@ -19,54 +16,28 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
   Chip,
 } from "@mui/material";
 import {
   Delete as DeleteIcon,
-  Close as CloseIcon,
   Visibility as ViewIcon,
   Edit as EditIcon,
+  School as SchoolIcon,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
-
-const primaryRed = "#DC2626";
-const primaryDark = "#B91C1C";
-const primaryLight = "#FEE2E2";
-
-const authJsonHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-async function fetchAllCurricula(token) {
-  const out = [];
-  let page = 1;
-  let totalPages = 1;
-  while (page <= totalPages && page <= 100) {
-    const params = new URLSearchParams({ page: String(page), limit: "100" });
-    const res = await fetch(`/api/curricula?${params}`, { headers: authJsonHeaders(token) });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success) throw new Error(data.message || `Could not load curricula (${res.status})`);
-    const chunk = Array.isArray(data.data) ? data.data : [];
-    out.push(...chunk);
-    totalPages = data.pagination?.totalPages ?? 1;
-    page += 1;
-  }
-  return out;
-}
-
-function truncate(text, max = 160) {
-  if (!text || typeof text !== "string") return "—";
-  const t = text.trim();
-  if (!t) return "—";
-  return t.length <= max ? t : `${t.slice(0, max)}…`;
-}
+import { authJsonHeaders, fetchAllCurricula, truncateText, primaryRed, primaryDark, inputSx, actionIconSx } from "./curriculumShared";
+import {
+  PremiumDialog,
+  DetailField,
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+} from "./curriculumUi";
 
 const CurriculumClassesTab = forwardRef(function CurriculumClassesTab({ curriculumId, onCurriculumChange }, ref) {
   const [curriculaOptions, setCurriculaOptions] = useState([]);
@@ -338,134 +309,6 @@ const CurriculumClassesTab = forwardRef(function CurriculumClassesTab({ curricul
   const tableColSpan = 6;
   const actionsWidth = 132;
 
-  const tableShell = (
-    <TableContainer
-      sx={{
-        borderRadius: 2,
-        overflow: "auto",
-        border: `1px solid ${primaryLight}`,
-        boxShadow: `0 8px 28px -12px ${primaryRed}33`,
-        bgcolor: "rgba(255,255,255,0.98)",
-      }}
-    >
-      <Table size="medium" sx={{ minWidth: 620, tableLayout: "fixed" }}>
-        <TableHead>
-          <TableRow
-            sx={{
-              background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-              "& .MuiTableCell-head": {
-                color: "#fff",
-                fontWeight: 700,
-                fontSize: "0.8rem",
-                textTransform: "uppercase",
-                letterSpacing: "0.04em",
-                borderBottom: "none",
-              },
-            }}
-          >
-            <TableCell width={56}>No.</TableCell>
-            <TableCell>Name</TableCell>
-            <TableCell>Code</TableCell>
-            <TableCell>Period</TableCell>
-            <TableCell>Active</TableCell>
-            <TableCell align="right" sx={{ width: actionsWidth, minWidth: actionsWidth, whiteSpace: "nowrap" }}>
-              Actions
-            </TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {loadingClasses ? (
-            <TableRow>
-              <TableCell colSpan={tableColSpan} sx={{ borderBottom: "none" }}>
-                <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-                  <CircularProgress sx={{ color: primaryRed }} />
-                </Box>
-              </TableCell>
-            </TableRow>
-          ) : rows.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={tableColSpan}>
-                <Typography color="text.secondary" sx={{ py: 4, textAlign: "center" }}>
-                  No classes yet. Use Create class in the header to add one.
-                </Typography>
-              </TableCell>
-            </TableRow>
-          ) : (
-            rows.map((r, idx) => (
-              <TableRow key={r.id} hover>
-                <TableCell sx={{ color: "text.secondary" }}>{page * rowsPerPage + idx + 1}</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>{r.name}</TableCell>
-                <TableCell sx={{ whiteSpace: "nowrap" }}>{r.code}</TableCell>
-                <TableCell sx={{ color: "text.secondary", maxWidth: 180 }}>{truncate(r.period, 48)}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={r.is_active ? "Yes" : "No"}
-                    size="small"
-                    color={r.is_active ? "success" : "default"}
-                    sx={{ fontWeight: 600 }}
-                  />
-                </TableCell>
-                <TableCell
-                  align="right"
-                  sx={{
-                    width: actionsWidth,
-                    minWidth: actionsWidth,
-                    whiteSpace: "nowrap",
-                    verticalAlign: "middle",
-                    py: 0.5,
-                  }}
-                >
-                  <Box
-                    sx={{
-                      display: "inline-flex",
-                      flexDirection: "row",
-                      flexWrap: "nowrap",
-                      alignItems: "center",
-                      justifyContent: "flex-end",
-                      gap: 0,
-                    }}
-                  >
-                    <Tooltip title="View">
-                      <IconButton size="small" aria-label="View class" onClick={() => setViewRow(r)} sx={{ color: primaryDark, flexShrink: 0 }}>
-                        <ViewIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Edit">
-                      <IconButton size="small" aria-label="Edit class" onClick={() => openEdit(r)} sx={{ color: primaryRed, flexShrink: 0 }}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete">
-                      <IconButton size="small" aria-label="Delete class" onClick={() => handleDelete(r)} sx={{ color: primaryRed, flexShrink: 0 }}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-      <TablePagination
-        component="div"
-        count={totalClasses}
-        page={page}
-        onPageChange={(_, p) => setPage(p)}
-        rowsPerPage={rowsPerPage}
-        onRowsPerPageChange={(e) => {
-          setRowsPerPage(parseInt(e.target.value, 10));
-          setPage(0);
-        }}
-        rowsPerPageOptions={[5, 10, 25, 50]}
-        sx={{
-          borderTop: `1px solid ${primaryLight}`,
-          "& .MuiTablePagination-toolbar": { fontWeight: 600 },
-        }}
-      />
-    </TableContainer>
-  );
-
   return (
     <>
       {curriculaError && (
@@ -474,189 +317,239 @@ const CurriculumClassesTab = forwardRef(function CurriculumClassesTab({ curricul
         </Alert>
       )}
 
-      <Stack spacing={2}>
-        {classesError && (
-          <Alert severity="error" sx={{ borderRadius: 2 }} onClose={() => setClassesError(null)}>
-            {classesError}
-          </Alert>
+      <TabPanelShell loading={loadingClasses} error={classesError} onDismissError={() => setClassesError(null)}>
+        {!loadingClasses && (
+          <DataTableShell
+            pagination={
+              <TablePagination
+                component="div"
+                count={totalClasses}
+                page={page}
+                onPageChange={(_, p) => setPage(p)}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={(e) => {
+                  setRowsPerPage(parseInt(e.target.value, 10));
+                  setPage(0);
+                }}
+                rowsPerPageOptions={[5, 10, 25, 50]}
+                labelRowsPerPage="Rows per page"
+                sx={tablePaginationSx}
+              />
+            }
+          >
+            <Table size="medium" sx={{ minWidth: 620, tableLayout: "fixed" }}>
+              <TableHead>
+                <TableRow sx={tableHeadRowSx}>
+                  <TableCell width={56}>No.</TableCell>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Code</TableCell>
+                  <TableCell>Period</TableCell>
+                  <TableCell>Active</TableCell>
+                  <TableCell align="right" sx={{ width: actionsWidth, minWidth: actionsWidth, whiteSpace: "nowrap" }}>
+                    Actions
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {rows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={tableColSpan}>
+                      <EmptyTableRow message="No classes yet. Use Create class in the header to add one." />
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  rows.map((r, idx) => (
+                    <TableRow key={r.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
+                      <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>{page * rowsPerPage + idx + 1}</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>{r.name}</TableCell>
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>{r.code}</TableCell>
+                      <TableCell sx={{ color: "text.secondary", maxWidth: 180 }}>{truncateText(r.period, 48)}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={r.is_active ? "Yes" : "No"}
+                          size="small"
+                          color={r.is_active ? "success" : "default"}
+                          sx={{ fontWeight: 600 }}
+                        />
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{
+                          width: actionsWidth,
+                          minWidth: actionsWidth,
+                          whiteSpace: "nowrap",
+                          verticalAlign: "middle",
+                          py: 0.5,
+                        }}
+                      >
+                        <Tooltip title="View">
+                          <IconButton size="small" aria-label="View class" onClick={() => setViewRow(r)} sx={actionIconSx}>
+                            <ViewIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Edit">
+                          <IconButton size="small" aria-label="Edit class" onClick={() => openEdit(r)} sx={actionIconSx}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete">
+                          <IconButton
+                            size="small"
+                            aria-label="Delete class"
+                            onClick={() => handleDelete(r)}
+                            sx={{ ...actionIconSx, "&:hover": { bgcolor: "#FEE2E2", color: primaryRed } }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </DataTableShell>
         )}
-        {tableShell}
-      </Stack>
+      </TabPanelShell>
 
-      <Dialog open={dialogOpen} onClose={() => !saving && setDialogOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle
-          sx={{
-            background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mb: 2,
-          }}
-        >
-          New class
-          <IconButton onClick={() => setDialogOpen(false)} disabled={saving} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2, pb: 2, overflow: "visible" }}>
-          <Stack spacing={2}>
-            <FormControl fullWidth required sx={{ mt: 0.5 }} disabled={curriculaLoading}>
-              <InputLabel id="dlg-class-curriculum-label">Curriculum</InputLabel>
-              <Select
-                labelId="dlg-class-curriculum-label"
-                label="Curriculum"
-                value={dialogCurriculumId}
-                onChange={(e) => setDialogCurriculumId(e.target.value)}
-              >
-                <MenuItem value="">
-                  <em>Select curriculum</em>
+      <PremiumDialog
+        open={dialogOpen}
+        onClose={() => !saving && setDialogOpen(false)}
+        title="New class"
+        subtitle="Add a class to a curriculum"
+        icon={<SchoolIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !saving && setDialogOpen(false)} disabled={saving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={saving} onClick={handleCreateSubmit}>
+              Create
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        <Stack spacing={2}>
+          <FormControl fullWidth required sx={inputSx} disabled={curriculaLoading}>
+            <InputLabel id="dlg-class-curriculum-label">Curriculum</InputLabel>
+            <Select
+              labelId="dlg-class-curriculum-label"
+              label="Curriculum"
+              value={dialogCurriculumId}
+              onChange={(e) => setDialogCurriculumId(e.target.value)}
+            >
+              <MenuItem value="">
+                <em>Select curriculum</em>
+              </MenuItem>
+              {curriculaOptions.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                  {c.type ? ` — ${c.type}` : ""}
                 </MenuItem>
-                {curriculaOptions.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.name}
-                    {c.type ? ` — ${c.type}` : ""}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField label="Name" fullWidth required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-            <TextField label="Code" fullWidth required value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} helperText="Unique within this curriculum" />
-            <TextField
-              label="Period"
-              fullWidth
-              value={form.period}
-              onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))}
-              helperText='Optional — e.g. "1 academic year", "2 terms"'
-              inputProps={{ maxLength: 120 }}
+              ))}
+            </Select>
+          </FormControl>
+          <TextField label="Name" fullWidth required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} sx={inputSx} />
+          <TextField label="Code" fullWidth required value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} helperText="Unique within this curriculum" sx={inputSx} />
+          <TextField
+            label="Period"
+            fullWidth
+            value={form.period}
+            onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))}
+            helperText='Optional — e.g. "1 academic year", "2 terms"'
+            inputProps={{ maxLength: 120 }}
+            sx={inputSx}
+          />
+          <TextField label="Description" fullWidth multiline minRows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} sx={inputSx} />
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Chip
+              label={form.is_active ? "Active" : "Inactive"}
+              onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
+              color={form.is_active ? "success" : "default"}
+              sx={{ fontWeight: 600, cursor: "pointer" }}
             />
-            <TextField label="Description" fullWidth multiline minRows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <Chip
-                label={form.is_active ? "Active" : "Inactive"}
-                onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
-                color={form.is_active ? "success" : "default"}
-                sx={{ fontWeight: 600, cursor: "pointer" }}
-              />
-              <Typography variant="body2" color="text.secondary">
-                Click to toggle
-              </Typography>
-            </Stack>
+            <Typography variant="body2" color="text.secondary">
+              Click to toggle
+            </Typography>
           </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setDialogOpen(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleCreateSubmit} disabled={saving} sx={{ bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }}>
-            {saving ? "Saving…" : "Create"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        </Stack>
+      </PremiumDialog>
 
-      <Dialog open={!!viewRow} onClose={() => setViewRow(null)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle
-          sx={{
-            background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mb: 2,
-          }}
-        >
-          Class details
-          <IconButton onClick={() => setViewRow(null)} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2, pb: 2 }}>
-          {viewRow && (
-            <Stack spacing={1.5}>
-              <Typography variant="body2" color="text.secondary">
-                Curriculum
-              </Typography>
-              <Typography sx={{ fontWeight: 700 }}>{viewRow.curriculum?.name || "—"}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
-                Name
-              </Typography>
-              <Typography sx={{ fontWeight: 600 }}>{viewRow.name}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Code
-              </Typography>
-              <Typography>{viewRow.code}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Period
-              </Typography>
-              <Typography>{viewRow.period?.trim() ? viewRow.period.trim() : "—"}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Description
-              </Typography>
-              <Typography>{truncate(viewRow.description, 400)}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Active
-              </Typography>
+      <PremiumDialog
+        open={!!viewRow}
+        onClose={() => setViewRow(null)}
+        title={viewRow?.name || "Class details"}
+        subtitle="Class overview"
+        icon={<SchoolIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => setViewRow(null)}>Close</DialogGhostButton>
+            {viewRow ? (
+              <DialogPrimaryButton startIcon={<EditIcon />} onClick={() => { setViewRow(null); openEdit(viewRow); }}>
+                Edit
+              </DialogPrimaryButton>
+            ) : null}
+          </>
+        }
+      >
+        {viewRow ? (
+          <Stack spacing={1.5}>
+            <DetailField label="Curriculum" value={viewRow.curriculum?.name} />
+            <DetailField label="Name" value={viewRow.name} />
+            <DetailField label="Code" value={viewRow.code} />
+            <DetailField label="Period" value={viewRow.period?.trim() ? viewRow.period.trim() : "—"} />
+            <DetailField label="Description" value={truncateText(viewRow.description, 400)} />
+            <Box>
               <Chip label={viewRow.is_active ? "Yes" : "No"} size="small" color={viewRow.is_active ? "success" : "default"} sx={{ width: "fit-content", fontWeight: 600 }} />
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setViewRow(null)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={editOpen} onClose={() => !editSaving && setEditOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle
-          sx={{
-            background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mb: 2,
-          }}
-        >
-          Edit class
-          <IconButton onClick={() => setEditOpen(false)} disabled={editSaving} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2, pb: 2, overflow: "visible" }}>
-          <Stack spacing={2}>
-            <TextField label="Curriculum" fullWidth value={editRow?.curriculum?.name || ""} disabled />
-            <TextField label="Name" fullWidth required value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
-            <TextField label="Code" fullWidth required value={editForm.code} onChange={(e) => setEditForm((f) => ({ ...f, code: e.target.value }))} helperText="Unique within this curriculum" />
-            <TextField
-              label="Period"
-              fullWidth
-              value={editForm.period}
-              onChange={(e) => setEditForm((f) => ({ ...f, period: e.target.value }))}
-              helperText='Optional — e.g. "1 academic year"'
-              inputProps={{ maxLength: 120 }}
-            />
-            <TextField label="Description" fullWidth multiline minRows={2} value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} />
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <Chip
-                label={editForm.is_active ? "Active" : "Inactive"}
-                onClick={() => !editSaving && setEditForm((f) => ({ ...f, is_active: !f.is_active }))}
-                color={editForm.is_active ? "success" : "default"}
-                sx={{ fontWeight: 600, cursor: editSaving ? "default" : "pointer" }}
-              />
-              <Typography variant="body2" color="text.secondary">
-                Click to toggle
-              </Typography>
-            </Stack>
+            </Box>
           </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setEditOpen(false)} disabled={editSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleEditSubmit} disabled={editSaving} sx={{ bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }}>
-            {editSaving ? "Saving…" : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        ) : null}
+      </PremiumDialog>
+
+      <PremiumDialog
+        open={editOpen}
+        onClose={() => !editSaving && setEditOpen(false)}
+        title="Edit class"
+        subtitle="Update class details"
+        icon={<SchoolIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={editSaving} onClick={handleEditSubmit}>
+              Save
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        <Stack spacing={2}>
+          <TextField label="Curriculum" fullWidth value={editRow?.curriculum?.name || ""} disabled sx={inputSx} />
+          <TextField label="Name" fullWidth required value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} sx={inputSx} />
+          <TextField label="Code" fullWidth required value={editForm.code} onChange={(e) => setEditForm((f) => ({ ...f, code: e.target.value }))} helperText="Unique within this curriculum" sx={inputSx} />
+          <TextField
+            label="Period"
+            fullWidth
+            value={editForm.period}
+            onChange={(e) => setEditForm((f) => ({ ...f, period: e.target.value }))}
+            helperText='Optional — e.g. "1 academic year"'
+            inputProps={{ maxLength: 120 }}
+            sx={inputSx}
+          />
+          <TextField label="Description" fullWidth multiline minRows={2} value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} sx={inputSx} />
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Chip
+              label={editForm.is_active ? "Active" : "Inactive"}
+              onClick={() => !editSaving && setEditForm((f) => ({ ...f, is_active: !f.is_active }))}
+              color={editForm.is_active ? "success" : "default"}
+              sx={{ fontWeight: 600, cursor: editSaving ? "default" : "pointer" }}
+            />
+            <Typography variant="body2" color="text.secondary">
+              Click to toggle
+            </Typography>
+          </Stack>
+        </Stack>
+      </PremiumDialog>
     </>
   );
 });

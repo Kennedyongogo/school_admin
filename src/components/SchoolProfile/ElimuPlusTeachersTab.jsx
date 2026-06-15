@@ -1,14 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Box,
   Typography,
   Alert,
-  CircularProgress,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   TablePagination,
@@ -16,10 +13,6 @@ import {
   IconButton,
   Tooltip,
   Avatar,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   Stack,
   TextField,
@@ -35,49 +28,29 @@ import {
   Delete as DeleteIcon,
   Visibility as VisibilityIcon,
   Edit as EditIcon,
-  Close as CloseIcon,
+  Person as PersonIcon,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
-
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
-const accentLight = "#FEE2E2";
-
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-const authMultipartHeaders = (token) => ({
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-function profilePhotoUrl(stored) {
-  if (!stored || typeof stored !== "string") return null;
-  const t = stored.trim();
-  if (!t) return null;
-  if (/^https?:\/\//i.test(t)) return t;
-  return t.startsWith("/") ? t : `/${t}`;
-}
-
-async function fetchAllPages(path, token) {
-  const out = [];
-  let page = 1;
-  let totalPages = 1;
-  do {
-    const sep = path.includes("?") ? "&" : "?";
-    const res = await fetch(`${path}${sep}page=${page}&limit=100`, { headers: authHeaders(token) });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success || !Array.isArray(data.data)) break;
-    out.push(...data.data);
-    totalPages = data.pagination?.totalPages ?? 1;
-    page += 1;
-    if (page > 50) break;
-  } while (page <= totalPages);
-  return out;
-}
+import {
+  authHeaders,
+  authMultipartHeaders,
+  fetchAllPages,
+  resolveAssetUrl,
+  inputSx,
+  primaryRed,
+  primaryDark,
+  actionIconSx,
+} from "./elimuPlusShared";
+import {
+  PremiumDialog,
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+} from "./elimuPlusUi";
 
 function rowToEditForm(row) {
   return {
@@ -271,7 +244,7 @@ export default function ElimuPlusTeachersTab({ active }) {
       title: "Remove teacher profile?",
       text: `The teacher profile for ${name} will be removed. Their login account stays — you can create a new profile for this user later.`,
       showCancelButton: true,
-      confirmButtonColor: accent,
+      confirmButtonColor: primaryRed,
       cancelButtonColor: "#6B7280",
       confirmButtonText: "Remove profile",
     });
@@ -302,34 +275,29 @@ export default function ElimuPlusTeachersTab({ active }) {
   if (!active) return null;
 
   return (
-    <Box sx={{ pt: 2 }}>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-          <CircularProgress sx={{ color: accent }} />
-        </Box>
-      ) : (
-        <TableContainer
-          sx={{
-            borderRadius: 2,
-            border: `1px solid ${accentLight}`,
-            boxShadow: `0 8px 28px -12px ${accent}33`,
-            bgcolor: "rgba(255,255,255,0.98)",
-          }}
+    <TabPanelShell loading={loading} error={error} onDismissError={() => setError(null)}>
+      {!loading && (
+        <DataTableShell
+          pagination={
+            <TablePagination
+              component="div"
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              count={totalCount}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(_, newPage) => setPage(newPage)}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              labelRowsPerPage="Rows per page"
+              sx={tablePaginationSx}
+            />
+          }
         >
           <Table size="medium">
             <TableHead>
-              <TableRow
-                sx={{
-                  background: `linear-gradient(135deg, ${accent} 0%, ${accentDark} 100%)`,
-                  "& .MuiTableCell-head": { color: "#fff", fontWeight: 700, borderBottom: "none" },
-                }}
-              >
+              <TableRow sx={tableHeadRowSx}>
                 <TableCell width={56}>No.</TableCell>
                 <TableCell>Name</TableCell>
                 <TableCell align="center" width={72}>
@@ -344,17 +312,15 @@ export default function ElimuPlusTeachersTab({ active }) {
               {rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4}>
-                    <Typography color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
-                      No teachers yet. Use Create teacher profile in the header.
-                    </Typography>
+                    <EmptyTableRow message="No teachers yet. Use Create teacher profile in the header." />
                   </TableCell>
                 </TableRow>
               ) : (
                 rows.map((r, idx) => {
                   const displayName = r.user?.full_name || r.user?.username || "—";
-                  const photoSrc = profilePhotoUrl(r.profile_picture);
+                  const photoSrc = resolveAssetUrl(r.profile_picture);
                   return (
-                    <TableRow key={r.id} hover>
+                    <TableRow key={r.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
                       <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>{page * rowsPerPage + idx + 1}</TableCell>
                       <TableCell>
                         <Typography variant="body1" sx={{ fontWeight: 700 }}>
@@ -364,7 +330,7 @@ export default function ElimuPlusTeachersTab({ active }) {
                       <TableCell align="center">
                         <Avatar
                           src={photoSrc || undefined}
-                          sx={{ width: 40, height: 40, mx: "auto", bgcolor: `${accent}22`, color: accentDark, fontWeight: 700 }}
+                          sx={{ width: 40, height: 40, mx: "auto", bgcolor: `${primaryRed}22`, color: primaryDark, fontWeight: 700 }}
                         >
                           {!photoSrc ? displayName.charAt(0).toUpperCase() : null}
                         </Avatar>
@@ -375,18 +341,23 @@ export default function ElimuPlusTeachersTab({ active }) {
                             size="small"
                             aria-label="View teacher profile"
                             onClick={() => navigate(`/elimu-plus/teachers/${r.id}`)}
-                            sx={{ color: accentDark }}
+                            sx={actionIconSx}
                           >
                             <VisibilityIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Edit">
-                          <IconButton size="small" aria-label="Edit teacher" onClick={() => openEdit(r)} sx={{ color: accentDark }}>
+                          <IconButton size="small" aria-label="Edit teacher" onClick={() => openEdit(r)} sx={actionIconSx}>
                             <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Delete teacher">
-                          <IconButton size="small" aria-label="Delete teacher" onClick={() => handleDelete(r)} sx={{ color: accent }}>
+                          <IconButton
+                            size="small"
+                            aria-label="Delete teacher"
+                            onClick={() => handleDelete(r)}
+                            sx={{ ...actionIconSx, "&:hover": { bgcolor: "#FEE2E2", color: primaryRed } }}
+                          >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
@@ -397,170 +368,150 @@ export default function ElimuPlusTeachersTab({ active }) {
               )}
             </TableBody>
           </Table>
-          <TablePagination
-            component="div"
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            count={totalCount}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={(_, newPage) => setPage(newPage)}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(parseInt(e.target.value, 10));
-              setPage(0);
-            }}
-            labelRowsPerPage="Rows per page"
-            sx={{
-              borderTop: `1px solid ${accentLight}`,
-              "& .MuiTablePagination-toolbar": { flexWrap: "wrap", gap: 1 },
-            }}
-          />
-        </TableContainer>
+        </DataTableShell>
       )}
 
-      <Dialog open={editOpen} onClose={() => !editSaving && setEditOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
-          Edit teacher
-          <IconButton aria-label="Close" onClick={() => !editSaving && setEditOpen(false)} sx={{ position: "absolute", right: 8, top: 8 }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {editError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {editError}
-            </Alert>
-          )}
-          <Stack spacing={2}>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <Avatar
-                src={editPhotoPreview || profilePhotoUrl(editForm.profile_picture_url) || undefined}
-                sx={{ width: 72, height: 72, bgcolor: `${accent}22`, color: accentDark, fontWeight: 700 }}
-              >
-                {!editPhotoPreview && !editForm.profile_picture_url ? "?" : null}
-              </Avatar>
-              <Button variant="outlined" component="label" sx={{ borderColor: accent, color: accentDark, fontWeight: 700 }}>
-                Choose photo
-                <input type="file" accept="image/*" hidden onChange={(e) => setEditPhotoFile(e.target.files?.[0] || null)} />
+      <PremiumDialog
+        open={editOpen}
+        onClose={() => !editSaving && setEditOpen(false)}
+        title="Edit teacher"
+        subtitle="Update teacher profile and assignments"
+        icon={<PersonIcon />}
+        maxWidth="md"
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={editSaving} onClick={saveEdit}>
+              Save
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        {editError ? <Alert severity="error" sx={{ mb: 2, borderRadius: "12px" }}>{editError}</Alert> : null}
+        <Stack spacing={2}>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Avatar
+              src={editPhotoPreview || resolveAssetUrl(editForm.profile_picture_url) || undefined}
+              sx={{ width: 72, height: 72, bgcolor: `${primaryRed}22`, color: primaryDark, fontWeight: 700 }}
+            >
+              {!editPhotoPreview && !editForm.profile_picture_url ? "?" : null}
+            </Avatar>
+            <Button variant="outlined" component="label" sx={{ borderColor: primaryRed, color: primaryDark, fontWeight: 700 }}>
+              Choose photo
+              <input type="file" accept="image/*" hidden onChange={(e) => setEditPhotoFile(e.target.files?.[0] || null)} />
+            </Button>
+            {(editPhotoFile || editForm.profile_picture_url) && (
+              <Button size="small" onClick={() => { setEditPhotoFile(null); setEditForm({ ...editForm, profile_picture_url: "" }); }}>
+                Clear photo
               </Button>
-              {(editPhotoFile || editForm.profile_picture_url) && (
-                <Button size="small" onClick={() => { setEditPhotoFile(null); setEditForm({ ...editForm, profile_picture_url: "" }); }}>
-                  Clear photo
-                </Button>
-              )}
-            </Stack>
-            <TextField label="Employee number" required fullWidth value={editForm.employee_number} onChange={(e) => setEditForm({ ...editForm, employee_number: e.target.value })} />
-            <TextField label="Qualification" required fullWidth value={editForm.qualification} onChange={(e) => setEditForm({ ...editForm, qualification: e.target.value })} />
-            <TextField label="Specialization" fullWidth value={editForm.specialization} onChange={(e) => setEditForm({ ...editForm, specialization: e.target.value })} />
-            <TextField label="Years of experience" type="number" fullWidth inputProps={{ min: 0 }} value={editForm.years_of_experience} onChange={(e) => setEditForm({ ...editForm, years_of_experience: e.target.value })} />
-            <TextField label="Joining date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editForm.joining_date} onChange={(e) => setEditForm({ ...editForm, joining_date: e.target.value })} />
-            <TextField label="Salary" type="number" fullWidth inputProps={{ min: 0, step: "0.01" }} value={editForm.salary} onChange={(e) => setEditForm({ ...editForm, salary: e.target.value })} />
-            <TextField label="Bank account number" fullWidth value={editForm.bank_account_number} onChange={(e) => setEditForm({ ...editForm, bank_account_number: e.target.value })} />
-            <TextField label="Highest degree" fullWidth value={editForm.highest_degree} onChange={(e) => setEditForm({ ...editForm, highest_degree: e.target.value })} />
-
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: accentDark }}>
-              Teaching assignments
-            </Typography>
-            <Autocomplete
-              multiple
-              options={departments}
-              getOptionLabel={(o) => (o?.name ? `${o.name} (${o.code || ""})` : "")}
-              value={selectedDepartments}
-              onChange={(_, v) => setEditForm({ ...editForm, department_ids: v.map((x) => x.id) })}
-              renderTags={(value, getTagProps) =>
-                value.map((option, index) => <Chip variant="outlined" label={option.name} {...getTagProps({ index })} key={option.id} size="small" />)
-              }
-              renderInput={(params) => <TextField {...params} label="Departments" />}
-            />
-            <Autocomplete
-              multiple
-              options={curricula}
-              getOptionLabel={(o) => o?.name || ""}
-              value={selectedCurricula}
-              onChange={(_, v) => setEditForm({ ...editForm, curriculum_ids: v.map((x) => x.id) })}
-              renderTags={(value, getTagProps) =>
-                value.map((option, index) => <Chip variant="outlined" label={option.name} {...getTagProps({ index })} key={option.id} size="small" />)
-              }
-              renderInput={(params) => <TextField {...params} label="Curricula taught" />}
-            />
-            <Autocomplete
-              multiple
-              options={curriculumClasses}
-              getOptionLabel={curriculumClassOptionLabel}
-              value={selectedTeachingClasses}
-              onChange={(_, v) => setEditForm({ ...editForm, curriculum_class_ids: v.map((x) => x.id) })}
-              renderTags={(value, getTagProps) =>
-                value.map((option, index) => (
-                  <Chip variant="outlined" label={option.name || option.code} {...getTagProps({ index })} key={option.id} size="small" />
-                ))
-              }
-              renderInput={(params) => <TextField {...params} label="Curriculum classes taught" />}
-              ListboxProps={{ style: { maxHeight: 280 } }}
-            />
-            <Autocomplete
-              multiple
-              options={curriculumSubjects}
-              getOptionLabel={(o) => {
-                const c = o?.curriculum?.name || "";
-                const cl = o?.curriculum_class?.name;
-                const base = o?.name || "";
-                return [c, cl, base].filter(Boolean).join(" — ");
-              }}
-              value={selectedSubjects}
-              onChange={(_, v) => setEditForm({ ...editForm, curriculum_subject_ids: v.map((x) => x.id) })}
-              renderTags={(value, getTagProps) =>
-                value.map((option, index) => (
-                  <Chip variant="outlined" label={option.name} {...getTagProps({ index })} key={option.id} size="small" />
-                ))
-              }
-              renderInput={(params) => <TextField {...params} label="Curriculum subjects taught" />}
-              ListboxProps={{ style: { maxHeight: 280 } }}
-            />
-
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={!!editForm.is_class_teacher}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      is_class_teacher: e.target.checked,
-                      class_teacher_curriculum_class_id: e.target.checked ? editForm.class_teacher_curriculum_class_id : "",
-                    })
-                  }
-                  sx={{ color: accent, "&.Mui-checked": { color: accent } }}
-                />
-              }
-              label="Class teacher (homeroom)"
-            />
-            <FormControl fullWidth variant="outlined" disabled={!editForm.is_class_teacher}>
-              <InputLabel id="edit-homeroom-label">Homeroom curriculum class</InputLabel>
-              <Select
-                labelId="edit-homeroom-label"
-                label="Homeroom curriculum class"
-                value={editForm.is_class_teacher ? editForm.class_teacher_curriculum_class_id || "" : ""}
-                onChange={(e) => setEditForm({ ...editForm, class_teacher_curriculum_class_id: e.target.value })}
-              >
-                <MenuItem value="">
-                  <em>Select…</em>
-                </MenuItem>
-                {curriculumClasses.map((o) => (
-                  <MenuItem key={o.id} value={o.id}>
-                    {curriculumClassOptionLabel(o)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            )}
           </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" disabled={editSaving} onClick={saveEdit} sx={{ bgcolor: accent, fontWeight: 700 }}>
-            {editSaving ? "Saving…" : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+          <TextField label="Employee number" required fullWidth value={editForm.employee_number} onChange={(e) => setEditForm({ ...editForm, employee_number: e.target.value })} sx={inputSx} />
+          <TextField label="Qualification" required fullWidth value={editForm.qualification} onChange={(e) => setEditForm({ ...editForm, qualification: e.target.value })} sx={inputSx} />
+          <TextField label="Specialization" fullWidth value={editForm.specialization} onChange={(e) => setEditForm({ ...editForm, specialization: e.target.value })} sx={inputSx} />
+          <TextField label="Years of experience" type="number" fullWidth inputProps={{ min: 0 }} value={editForm.years_of_experience} onChange={(e) => setEditForm({ ...editForm, years_of_experience: e.target.value })} sx={inputSx} />
+          <TextField label="Joining date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={editForm.joining_date} onChange={(e) => setEditForm({ ...editForm, joining_date: e.target.value })} sx={inputSx} />
+          <TextField label="Salary" type="number" fullWidth inputProps={{ min: 0, step: "0.01" }} value={editForm.salary} onChange={(e) => setEditForm({ ...editForm, salary: e.target.value })} sx={inputSx} />
+          <TextField label="Bank account number" fullWidth value={editForm.bank_account_number} onChange={(e) => setEditForm({ ...editForm, bank_account_number: e.target.value })} sx={inputSx} />
+          <TextField label="Highest degree" fullWidth value={editForm.highest_degree} onChange={(e) => setEditForm({ ...editForm, highest_degree: e.target.value })} sx={inputSx} />
+
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: primaryDark }}>
+            Teaching assignments
+          </Typography>
+          <Autocomplete
+            multiple
+            options={departments}
+            getOptionLabel={(o) => (o?.name ? `${o.name} (${o.code || ""})` : "")}
+            value={selectedDepartments}
+            onChange={(_, v) => setEditForm({ ...editForm, department_ids: v.map((x) => x.id) })}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => <Chip variant="outlined" label={option.name} {...getTagProps({ index })} key={option.id} size="small" />)
+            }
+            renderInput={(params) => <TextField {...params} label="Departments" sx={inputSx} />}
+          />
+          <Autocomplete
+            multiple
+            options={curricula}
+            getOptionLabel={(o) => o?.name || ""}
+            value={selectedCurricula}
+            onChange={(_, v) => setEditForm({ ...editForm, curriculum_ids: v.map((x) => x.id) })}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => <Chip variant="outlined" label={option.name} {...getTagProps({ index })} key={option.id} size="small" />)
+            }
+            renderInput={(params) => <TextField {...params} label="Curricula taught" sx={inputSx} />}
+          />
+          <Autocomplete
+            multiple
+            options={curriculumClasses}
+            getOptionLabel={curriculumClassOptionLabel}
+            value={selectedTeachingClasses}
+            onChange={(_, v) => setEditForm({ ...editForm, curriculum_class_ids: v.map((x) => x.id) })}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip variant="outlined" label={option.name || option.code} {...getTagProps({ index })} key={option.id} size="small" />
+              ))
+            }
+            renderInput={(params) => <TextField {...params} label="Curriculum classes taught" sx={inputSx} />}
+            ListboxProps={{ style: { maxHeight: 280 } }}
+          />
+          <Autocomplete
+            multiple
+            options={curriculumSubjects}
+            getOptionLabel={(o) => {
+              const c = o?.curriculum?.name || "";
+              const cl = o?.curriculum_class?.name;
+              const base = o?.name || "";
+              return [c, cl, base].filter(Boolean).join(" — ");
+            }}
+            value={selectedSubjects}
+            onChange={(_, v) => setEditForm({ ...editForm, curriculum_subject_ids: v.map((x) => x.id) })}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip variant="outlined" label={option.name} {...getTagProps({ index })} key={option.id} size="small" />
+              ))
+            }
+            renderInput={(params) => <TextField {...params} label="Curriculum subjects taught" sx={inputSx} />}
+            ListboxProps={{ style: { maxHeight: 280 } }}
+          />
+
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={!!editForm.is_class_teacher}
+                onChange={(e) =>
+                  setEditForm({
+                    ...editForm,
+                    is_class_teacher: e.target.checked,
+                    class_teacher_curriculum_class_id: e.target.checked ? editForm.class_teacher_curriculum_class_id : "",
+                  })
+                }
+                sx={{ color: primaryRed, "&.Mui-checked": { color: primaryRed } }}
+              />
+            }
+            label="Class teacher (homeroom)"
+          />
+          <FormControl fullWidth variant="outlined" disabled={!editForm.is_class_teacher} sx={inputSx}>
+            <InputLabel id="edit-homeroom-label">Homeroom curriculum class</InputLabel>
+            <Select
+              labelId="edit-homeroom-label"
+              label="Homeroom curriculum class"
+              value={editForm.is_class_teacher ? editForm.class_teacher_curriculum_class_id || "" : ""}
+              onChange={(e) => setEditForm({ ...editForm, class_teacher_curriculum_class_id: e.target.value })}
+            >
+              <MenuItem value="">
+                <em>Select…</em>
+              </MenuItem>
+              {curriculumClasses.map((o) => (
+                <MenuItem key={o.id} value={o.id}>
+                  {curriculumClassOptionLabel(o)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Stack>
+      </PremiumDialog>
+    </TabPanelShell>
   );
 }

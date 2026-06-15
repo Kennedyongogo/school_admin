@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
-  Typography,
   Button,
   TextField,
   Stack,
@@ -10,31 +9,27 @@ import {
   Tooltip,
   CircularProgress,
   Alert,
-  Card,
-  CardContent,
+  InputAdornment,
 } from "@mui/material";
-import { ArrowBack as ArrowBackIcon, School as SchoolIcon } from "@mui/icons-material";
+import {
+  ArrowBack as ArrowBackIcon,
+  School as SchoolIcon,
+  Email as EmailIcon,
+  Phone as PhoneIcon,
+  Home as HomeIcon,
+  Language as LanguageIcon,
+} from "@mui/icons-material";
 import Swal from "sweetalert2";
-
-const primaryRed = "#DC2626";
-const primaryDark = "#B91C1C";
-const primaryLight = "#FEE2E2";
-const backgroundLight = "#FEF2F2";
-
-const authHeadersMultipart = (token) => ({
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-const fullMainBleedSx = (theme) => ({
-  width: `calc(100% + ${theme.spacing(6)})`,
-  maxWidth: "none",
-  marginLeft: theme.spacing(-3),
-  marginRight: theme.spacing(-3),
-  marginTop: "1px",
-  marginBottom: "1px",
-  boxSizing: "border-box",
-});
+import {
+  authMultipartHeaders,
+  inputSx,
+  pageShellSx,
+  primaryRed,
+  primaryDark,
+  primaryBtnSx,
+  ghostBtnSx,
+} from "./elimuPlusShared";
+import { ElimuPlusHero, FormSection } from "./elimuPlusUi";
 
 const EDIT_FIELD_DEFAULTS = {
   name: "",
@@ -102,38 +97,6 @@ function formToPayload(form) {
   return py;
 }
 
-const labelSx = {
-  color: primaryDark,
-  fontWeight: 600,
-  "&.Mui-focused": { color: primaryRed },
-};
-
-/** Match UsersCreate.jsx outlined inputs */
-const outlinedFieldSx = {
-  width: "100%",
-  maxWidth: "100%",
-  "& .MuiOutlinedInput-root": {
-    width: "100%",
-    borderRadius: 2,
-    bgcolor: "rgba(255,255,255,0.95)",
-    "& fieldset": { borderColor: "#FECACA" },
-    "&:hover fieldset": { borderColor: primaryRed },
-    "&.Mui-focused fieldset": {
-      borderColor: primaryRed,
-      boxShadow: `0 0 0 2px ${primaryLight}`,
-    },
-  },
-  "& .MuiInputLabel-root": { ...labelSx },
-};
-
-function SectionTitle({ children, first }) {
-  return (
-    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: primaryDark, pt: first ? 0 : 2.5 }}>
-      {children}
-    </Typography>
-  );
-}
-
 export default function ElimuPlusSchoolProfileForm({ mode }) {
   const navigate = useNavigate();
   const isCreate = mode === "create";
@@ -166,9 +129,7 @@ export default function ElimuPlusSchoolProfileForm({ mode }) {
     setLoadingProfile(true);
     setError(null);
     try {
-      const res = await fetch("/api/school-profile/admin", {
-        headers: authHeadersMultipart(token),
-      });
+      const res = await fetch("/api/school-profile/admin", { headers: authMultipartHeaders(token) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         throw new Error(data.message || `Could not load profile (${res.status})`);
@@ -223,7 +184,7 @@ export default function ElimuPlusSchoolProfileForm({ mode }) {
 
       const res = await fetch("/api/school-profile/", {
         method: "PUT",
-        headers: authHeadersMultipart(token),
+        headers: authMultipartHeaders(token),
         body: fd,
       });
       const data = await res.json().catch(() => ({}));
@@ -235,6 +196,7 @@ export default function ElimuPlusSchoolProfileForm({ mode }) {
         icon: "success",
         title: isCreate ? "School profile created" : "School profile updated",
         text: data.data?.name ? `${data.data.name} saved.` : "Changes saved.",
+        confirmButtonColor: primaryRed,
         timer: 1800,
         showConfirmButton: false,
       });
@@ -249,7 +211,7 @@ export default function ElimuPlusSchoolProfileForm({ mode }) {
 
   if (!isCreate && loadingProfile) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 360 }}>
+      <Box sx={{ ...pageShellSx, display: "flex", justifyContent: "center", alignItems: "center", minHeight: 360 }}>
         <CircularProgress sx={{ color: primaryRed }} />
       </Box>
     );
@@ -258,236 +220,91 @@ export default function ElimuPlusSchoolProfileForm({ mode }) {
   const mainLogoSrc = logoDraftPreviewUrl || form.logo_url || null;
 
   return (
-    <Box
-      component="form"
-      onSubmit={handleSubmit}
-      sx={(theme) => ({
-        ...fullMainBleedSx(theme),
-        marginTop: theme.spacing(-2.5),
-        minHeight: "100%",
-        background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
-      })}
-    >
-      <Box
-        sx={{
-          background: `linear-gradient(135deg, ${primaryDark} 0%, ${primaryRed} 55%, #EF4444 100%)`,
-          px: { xs: 1.5, sm: 2 },
-          py: { xs: 1.5, sm: 2 },
-          color: "white",
-          boxShadow: `0 8px 24px ${primaryRed}33`,
-        }}
-      >
-        <Stack direction="row" alignItems="center" spacing={1.5}>
+    <Box component="form" onSubmit={handleSubmit} sx={{ ...pageShellSx, minHeight: "100%" }}>
+      <ElimuPlusHero
+        title={isCreate ? "Create school profile" : "Edit school profile"}
+        subtitle="Identity, contact details, branding, and social links for Elimu Plus"
+        icon={<SchoolIcon sx={{ fontSize: 26, color: "#fff" }} />}
+        actions={
           <Tooltip title="Back to Elimu Plus">
             <IconButton
               onClick={goBack}
-              aria-label="Back"
+              aria-label="Back to Elimu Plus"
               sx={{
-                color: "#fff",
                 bgcolor: "rgba(255,255,255,0.15)",
+                border: "1px solid rgba(255,255,255,0.28)",
+                color: "#fff",
                 "&:hover": { bgcolor: "rgba(255,255,255,0.28)" },
               }}
             >
               <ArrowBackIcon />
             </IconButton>
           </Tooltip>
-          <SchoolIcon sx={{ fontSize: 32, opacity: 0.95 }} />
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
-              {isCreate ? "Create school profile" : "Edit school profile"}
-            </Typography>
-          </Box>
-        </Stack>
-      </Box>
+        }
+      />
 
-      <Box
-        sx={{
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          px: { xs: 2, sm: 3 },
-          py: { xs: 2, sm: 3 },
-        }}
-      >
-        {error && (
-          <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
+      {error ? (
+        <Alert severity="error" sx={{ mt: 2, borderRadius: "14px" }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      ) : null}
 
-        <Card
-          elevation={0}
-          sx={{
-            width: "100%",
-            borderRadius: 0,
-            border: "none",
-            borderBottom: `1px solid ${primaryLight}`,
-            boxShadow: "none",
-            overflow: "hidden",
-          }}
-        >
-          <CardContent
-            sx={{
-              width: "100%",
-              boxSizing: "border-box",
-              px: { xs: 2, sm: 3 },
-              pt: 3,
-              pb: 2,
-            }}
-          >
-            <Stack spacing={2.5} sx={{ width: "100%", maxWidth: "100%" }}>
-              <SectionTitle first>Identity</SectionTitle>
-              <TextField label="School name" fullWidth value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} sx={outlinedFieldSx} />
-              <TextField
-                label="Short name"
-                fullWidth
-                value={form.short_name}
-                onChange={(e) => setForm({ ...form, short_name: e.target.value })}
-                placeholder="e.g. CIS"
-                sx={outlinedFieldSx}
-              />
-              <TextField label="Tagline" fullWidth value={form.tagline} onChange={(e) => setForm({ ...form, tagline: e.target.value })} sx={outlinedFieldSx} />
-              <TextField
-                label="Description"
-                fullWidth
-                multiline
-                minRows={3}
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                sx={outlinedFieldSx}
-              />
-              <TextField
-                label="Founded year"
-                fullWidth
-                value={form.founded_year}
-                onChange={(e) => setForm({ ...form, founded_year: e.target.value })}
-                inputProps={{ inputMode: "numeric" }}
-                sx={outlinedFieldSx}
-              />
+      <Stack spacing={2.5} sx={{ mt: 0.5, width: "100%" }}>
+        <FormSection title="Identity">
+          <Stack spacing={2} sx={{ width: "100%" }}>
+            <TextField label="School name" fullWidth value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} sx={inputSx} />
+            <TextField label="Short name" fullWidth value={form.short_name} onChange={(e) => setForm({ ...form, short_name: e.target.value })} placeholder="e.g. CIS" sx={inputSx} />
+            <TextField label="Tagline" fullWidth value={form.tagline} onChange={(e) => setForm({ ...form, tagline: e.target.value })} sx={inputSx} />
+            <TextField label="Description" fullWidth multiline minRows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} sx={inputSx} />
+            <TextField label="Founded year" fullWidth value={form.founded_year} onChange={(e) => setForm({ ...form, founded_year: e.target.value })} inputProps={{ inputMode: "numeric" }} sx={inputSx} />
+          </Stack>
+        </FormSection>
 
-              <SectionTitle>Contact & location</SectionTitle>
-              <TextField
-                label="Email"
-                fullWidth
-                required={isCreate}
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                sx={outlinedFieldSx}
-              />
-              <TextField
-                label="Phone"
-                fullWidth
-                required={isCreate}
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                sx={outlinedFieldSx}
-              />
-              <TextField
-                label="Alternate phone"
-                fullWidth
-                value={form.alternate_phone}
-                onChange={(e) => setForm({ ...form, alternate_phone: e.target.value })}
-                sx={outlinedFieldSx}
-              />
-              <TextField
-                label="Address"
-                fullWidth
-                required={isCreate}
-                multiline
-                minRows={2}
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-                sx={outlinedFieldSx}
-              />
-              <TextField
-                label="City"
-                fullWidth
-                required={isCreate}
-                value={form.city}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-                sx={outlinedFieldSx}
-              />
-              <TextField label="State / County" fullWidth value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} sx={outlinedFieldSx} />
-              <TextField label="Country" fullWidth value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} sx={outlinedFieldSx} />
-              <TextField label="Postal code" fullWidth value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} sx={outlinedFieldSx} />
+        <FormSection title="Contact & location">
+          <Stack spacing={2} sx={{ width: "100%" }}>
+            <TextField label="Email" fullWidth required={isCreate} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} InputProps={{ startAdornment: <InputAdornment position="start"><EmailIcon sx={{ color: primaryRed, fontSize: 20 }} /></InputAdornment> }} sx={inputSx} />
+            <TextField label="Phone" fullWidth required={isCreate} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} InputProps={{ startAdornment: <InputAdornment position="start"><PhoneIcon sx={{ color: primaryRed, fontSize: 20 }} /></InputAdornment> }} sx={inputSx} />
+            <TextField label="Alternate phone" fullWidth value={form.alternate_phone} onChange={(e) => setForm({ ...form, alternate_phone: e.target.value })} sx={inputSx} />
+            <TextField label="Address" fullWidth required={isCreate} multiline minRows={2} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} InputProps={{ startAdornment: <InputAdornment position="start" sx={{ alignSelf: "flex-start", mt: 1.5 }}><HomeIcon sx={{ color: primaryRed, fontSize: 20 }} /></InputAdornment> }} sx={inputSx} />
+            <TextField label="City" fullWidth required={isCreate} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} sx={inputSx} />
+            <TextField label="State / County" fullWidth value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} sx={inputSx} />
+            <TextField label="Country" fullWidth value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} sx={inputSx} />
+            <TextField label="Postal code" fullWidth value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} sx={inputSx} />
+          </Stack>
+        </FormSection>
 
-              <SectionTitle>Web & branding</SectionTitle>
-              <TextField
-                label="Website URL"
-                fullWidth
-                value={form.website}
-                onChange={(e) => setForm({ ...form, website: e.target.value })}
-                placeholder="https://..."
-                sx={outlinedFieldSx}
-              />
-
-              <Typography variant="caption" sx={{ color: primaryDark, fontWeight: 700, display: "block" }}>
-                School logo
-              </Typography>
-              <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap" sx={{ pt: 0.5 }}>
-                {mainLogoSrc ? (
-                  <Box
-                    component="img"
-                    src={mainLogoSrc}
-                    alt="School logo preview"
-                    sx={{
-                      maxHeight: 56,
-                      maxWidth: 200,
-                      objectFit: "contain",
-                      borderRadius: 1,
-                      border: `1px solid ${primaryLight}`,
-                      bgcolor: "rgba(255,255,255,0.95)",
-                    }}
-                  />
-                ) : null}
-                <Button
-                  variant="outlined"
-                  component="label"
-                  sx={{ borderColor: primaryRed, color: primaryDark, fontWeight: 700 }}
-                >
-                  {logoDraft ? "Replace logo" : mainLogoSrc ? "Change logo" : "Upload logo"}
-                  <input
-                    type="file"
-                    hidden
-                    accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) setLogoDraft(f);
-                      e.target.value = "";
-                    }}
-                  />
+        <FormSection title="Web, logo & social">
+          <Stack spacing={2} sx={{ width: "100%" }}>
+            <TextField label="Website URL" fullWidth value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://..." InputProps={{ startAdornment: <InputAdornment position="start"><LanguageIcon sx={{ color: primaryRed, fontSize: 20 }} /></InputAdornment> }} sx={inputSx} />
+            <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
+              {mainLogoSrc ? (
+                <Box component="img" src={mainLogoSrc} alt="School logo preview" sx={{ maxHeight: 64, maxWidth: 200, objectFit: "contain", borderRadius: "12px", border: "1px solid rgba(220,38,38,0.12)", bgcolor: "#fff", p: 0.5 }} />
+              ) : null}
+              <Button variant="outlined" component="label" sx={{ borderColor: primaryRed, color: primaryDark, fontWeight: 700, borderRadius: "12px", textTransform: "none" }}>
+                {logoDraft ? "Replace logo" : mainLogoSrc ? "Change logo" : "Upload logo"}
+                <input type="file" hidden accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif" onChange={(e) => { const f = e.target.files?.[0]; if (f) setLogoDraft(f); e.target.value = ""; }} />
+              </Button>
+              {logoDraft ? (
+                <Button type="button" size="small" onClick={() => setLogoDraft(null)} sx={{ fontWeight: 600, textTransform: "none" }}>
+                  Discard new file
                 </Button>
-                {logoDraft ? (
-                  <Button type="button" size="small" onClick={() => setLogoDraft(null)} sx={{ fontWeight: 600 }}>
-                    Discard new file
-                  </Button>
-                ) : null}
-              </Stack>
-              <TextField label="Facebook URL" fullWidth value={form.facebook_url} onChange={(e) => setForm({ ...form, facebook_url: e.target.value })} sx={outlinedFieldSx} />
-              <TextField label="Twitter / X URL" fullWidth value={form.twitter_url} onChange={(e) => setForm({ ...form, twitter_url: e.target.value })} sx={outlinedFieldSx} />
-              <TextField label="Instagram URL" fullWidth value={form.instagram_url} onChange={(e) => setForm({ ...form, instagram_url: e.target.value })} sx={outlinedFieldSx} />
-              <TextField label="LinkedIn URL" fullWidth value={form.linkedin_url} onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })} sx={outlinedFieldSx} />
-              <TextField label="YouTube URL" fullWidth value={form.youtube_url} onChange={(e) => setForm({ ...form, youtube_url: e.target.value })} sx={outlinedFieldSx} />
-
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="flex-end" sx={{ pt: 1 }}>
-                <Button type="button" variant="outlined" onClick={goBack} sx={{ borderColor: primaryRed, color: primaryDark, fontWeight: 700 }}>
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  disabled={saving}
-                  startIcon={saving ? <CircularProgress size={18} color="inherit" /> : null}
-                  sx={{ bgcolor: primaryRed, fontWeight: 700, "&:hover": { bgcolor: primaryDark }, minWidth: 140 }}
-                >
-                  {saving ? "Saving…" : isCreate ? "Create profile" : "Save changes"}
-                </Button>
-              </Stack>
+              ) : null}
             </Stack>
-          </CardContent>
-        </Card>
-      </Box>
+            <TextField label="Facebook URL" fullWidth value={form.facebook_url} onChange={(e) => setForm({ ...form, facebook_url: e.target.value })} sx={inputSx} />
+            <TextField label="Twitter / X URL" fullWidth value={form.twitter_url} onChange={(e) => setForm({ ...form, twitter_url: e.target.value })} sx={inputSx} />
+            <TextField label="Instagram URL" fullWidth value={form.instagram_url} onChange={(e) => setForm({ ...form, instagram_url: e.target.value })} sx={inputSx} />
+            <TextField label="LinkedIn URL" fullWidth value={form.linkedin_url} onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })} sx={inputSx} />
+            <TextField label="YouTube URL" fullWidth value={form.youtube_url} onChange={(e) => setForm({ ...form, youtube_url: e.target.value })} sx={inputSx} />
+          </Stack>
+        </FormSection>
+      </Stack>
+
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="flex-end" sx={{ mt: 3 }}>
+        <Button type="button" variant="text" onClick={goBack} sx={ghostBtnSx}>Cancel</Button>
+        <Button type="submit" variant="contained" disabled={saving} startIcon={saving ? <CircularProgress size={18} color="inherit" /> : null} sx={primaryBtnSx}>
+          {saving ? "Saving…" : isCreate ? "Create profile" : "Save changes"}
+        </Button>
+      </Stack>
     </Box>
   );
 }

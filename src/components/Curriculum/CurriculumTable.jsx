@@ -2,26 +2,16 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Box,
-  Typography,
-  Button,
   IconButton,
   Stack,
-  CircularProgress,
   Alert,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   TablePagination,
   Tooltip,
-  Tabs,
-  Tab,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
 } from "@mui/material";
 import {
@@ -31,10 +21,8 @@ import {
   School as SchoolIcon,
   CalendarMonth as CalendarMonthIcon,
   Subject as SubjectIcon,
-  ViewList as ViewListIcon,
   Visibility as ViewIcon,
   Edit as EditIcon,
-  Close as CloseIcon,
   Rule as RuleIcon,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
@@ -42,34 +30,31 @@ import CurriculumClassesTab from "./CurriculumClassesTab";
 import CurriculumClassLevelsTab from "./CurriculumClassLevelsTab";
 import CurriculumSubjectsTab from "./CurriculumSubjectsTab";
 import CurriculumGradingSystemTab from "./CurriculumGradingSystemTab";
-
-const primaryRed = "#DC2626";
-const primaryDark = "#B91C1C";
-const primaryLight = "#FEE2E2";
-const backgroundLight = "#FEF2F2";
-
-const authJsonHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-const fullMainBleedSx = (theme) => ({
-  width: `calc(100% + ${theme.spacing(6)})`,
-  maxWidth: "none",
-  marginLeft: theme.spacing(-3),
-  marginRight: theme.spacing(-3),
-  marginTop: "1px",
-  marginBottom: "1px",
-  boxSizing: "border-box",
-});
-
-function truncate(text, max = 120) {
-  if (!text || typeof text !== "string") return "—";
-  const t = text.trim();
-  if (!t) return "—";
-  return t.length <= max ? t : `${t.slice(0, max)}…`;
-}
+import {
+  authJsonHeaders,
+  CURRICULUM_TABS,
+  pageShellSx,
+  elimuViewportSx,
+  primaryRed,
+  primaryDark,
+  actionIconSx,
+  truncateText,
+  inputSx,
+} from "./curriculumShared";
+import {
+  CurriculumHero,
+  CurriculumTabs,
+  HeroActionButton,
+  PremiumDialog,
+  DetailField,
+  DataTableShell,
+  TabPanelShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+} from "./curriculumUi";
 
 export default function CurriculumTable() {
   const navigate = useNavigate();
@@ -165,14 +150,7 @@ export default function CurriculumTable() {
       }
       setSearchParams(next, { replace: true });
     },
-    [
-      searchParams,
-      setSearchParams,
-      classesCurriculumId,
-      termsClassId,
-      subjectsClassFilterId,
-      subjectsLevelFilterId,
-    ]
+    [searchParams, setSearchParams, classesCurriculumId, termsClassId, subjectsClassFilterId, subjectsLevelFilterId]
   );
 
   const handleTermsContextChange = useCallback(
@@ -229,8 +207,8 @@ export default function CurriculumTable() {
   }, [page, rowsPerPage]);
 
   useEffect(() => {
-    fetchCurricula();
-  }, [fetchCurricula]);
+    if (pageTab === 0) fetchCurricula();
+  }, [fetchCurricula, pageTab]);
 
   const handleDelete = async (row) => {
     const token = localStorage.getItem("token");
@@ -261,7 +239,7 @@ export default function CurriculumTable() {
     }
   };
 
-  const handleMainTabChange = (_, v) => {
+  const handleTabChange = (v) => {
     setPageTab(v);
     syncTabUrl(v);
   };
@@ -317,188 +295,70 @@ export default function CurriculumTable() {
     }
   };
 
+  const renderHeaderActions = () => {
+    if (pageTab === 1) {
+      return (
+        <HeroActionButton variant="contained" startIcon={<SchoolIcon />} onClick={() => classesTabRef.current?.openCreateDialog?.()}>
+          Create class
+        </HeroActionButton>
+      );
+    }
+    if (pageTab === 2) {
+      return (
+        <HeroActionButton variant="contained" startIcon={<CalendarMonthIcon />} onClick={() => termsTabRef.current?.openCreateDialog?.()}>
+          Add term
+        </HeroActionButton>
+      );
+    }
+    if (pageTab === 3) {
+      return (
+        <HeroActionButton variant="contained" startIcon={<SubjectIcon />} onClick={() => subjectsTabRef.current?.openCreateDialog?.()}>
+          Add subject
+        </HeroActionButton>
+      );
+    }
+    if (pageTab === 4) {
+      return (
+        <HeroActionButton variant="contained" startIcon={<RuleIcon />} onClick={() => gradingTabRef.current?.openCreateDialog?.()}>
+          Add grading config
+        </HeroActionButton>
+      );
+    }
+    return (
+      <HeroActionButton variant="contained" startIcon={<AddIcon />} onClick={() => navigate("/curriculum/create")}>
+        Create curriculum
+      </HeroActionButton>
+    );
+  };
+
   return (
     <Box
-      sx={(theme) => ({
-        ...fullMainBleedSx(theme),
-        /** Pull up into `main`’s default padding so less gap under the fixed top bar. */
-        marginTop: theme.spacing(-2.5),
-        minHeight: "100%",
-        background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 40%)`,
-      })}
+      sx={{
+        ...pageShellSx,
+        ...elimuViewportSx,
+        mx: { xs: -1.5, sm: -2, md: -3 },
+        mt: { xs: -1, sm: -1.5 },
+        px: { xs: 1.5, sm: 2, md: 3 },
+        py: { xs: 2, sm: 2.5 },
+        gap: 2,
+      }}
     >
-      <Box
-        sx={{
-          background: `linear-gradient(135deg, ${primaryDark} 0%, ${primaryRed} 55%, #EF4444 100%)`,
-          px: { xs: 2, sm: 3 },
-          py: { xs: 1.75, sm: 2.25 },
-          color: "white",
-          position: "relative",
-          overflow: "hidden",
-          boxShadow: `0 8px 24px ${primaryRed}33`,
-        }}
-      >
-        <Box
-          sx={{
-            position: "absolute",
-            top: -40,
-            right: -40,
-            width: 160,
-            height: 160,
-            background: "rgba(255,255,255,0.12)",
-            borderRadius: "50%",
-          }}
-        />
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          justifyContent="space-between"
-          alignItems={{ xs: "stretch", sm: "center" }}
-          spacing={2}
-          position="relative"
-          zIndex={1}
-        >
-          <Stack direction="row" alignItems="center" spacing={1.5}>
-            <MenuBookIcon sx={{ fontSize: { xs: 36, sm: 42 }, opacity: 0.95 }} />
-            <Box>
-              <Typography variant="h4" sx={{ fontWeight: 800, fontSize: { xs: "1.35rem", sm: "2rem" } }}>
-                Curriculum
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.25 }}>
-                Pathways your school offers — including how long each runs until completion.
-              </Typography>
-            </Box>
-          </Stack>
-          {pageTab === 1 ? (
-            <Button
-              variant="contained"
-              startIcon={<SchoolIcon />}
-              onClick={() => classesTabRef.current?.openCreateDialog?.()}
-              sx={{
-                bgcolor: "rgba(255,255,255,0.95)",
-                color: primaryDark,
-                fontWeight: 700,
-                textTransform: "none",
-                borderRadius: 2,
-                px: 3,
-                py: 1.25,
-                boxShadow: "0 4px 14px rgba(0,0,0,0.15)",
-                "&:hover": { bgcolor: "#fff", color: primaryRed },
-              }}
-            >
-              Create class
-            </Button>
-          ) : pageTab === 2 ? (
-            <Button
-              variant="contained"
-              startIcon={<CalendarMonthIcon />}
-              onClick={() => termsTabRef.current?.openCreateDialog?.()}
-              sx={{
-                bgcolor: "rgba(255,255,255,0.95)",
-                color: primaryDark,
-                fontWeight: 700,
-                textTransform: "none",
-                borderRadius: 2,
-                px: 3,
-                py: 1.25,
-                boxShadow: "0 4px 14px rgba(0,0,0,0.15)",
-                "&:hover": { bgcolor: "#fff", color: primaryRed },
-              }}
-            >
-              Add term
-            </Button>
-          ) : pageTab === 3 ? (
-            <Button
-              variant="contained"
-              startIcon={<SubjectIcon />}
-              onClick={() => subjectsTabRef.current?.openCreateDialog?.()}
-              sx={{
-                bgcolor: "rgba(255,255,255,0.95)",
-                color: primaryDark,
-                fontWeight: 700,
-                textTransform: "none",
-                borderRadius: 2,
-                px: 3,
-                py: 1.25,
-                boxShadow: "0 4px 14px rgba(0,0,0,0.15)",
-                "&:hover": { bgcolor: "#fff", color: primaryRed },
-              }}
-            >
-              Add subject
-            </Button>
-          ) : pageTab === 4 ? (
-            <Button
-              variant="contained"
-              startIcon={<RuleIcon />}
-              onClick={() => gradingTabRef.current?.openCreateDialog?.()}
-              sx={{
-                bgcolor: "rgba(255,255,255,0.95)",
-                color: primaryDark,
-                fontWeight: 700,
-                textTransform: "none",
-                borderRadius: 2,
-                px: 3,
-                py: 1.25,
-                boxShadow: "0 4px 14px rgba(0,0,0,0.15)",
-                "&:hover": { bgcolor: "#fff", color: primaryRed },
-              }}
-            >
-              Add grading config
-            </Button>
-          ) : (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => navigate("/curriculum/create")}
-              sx={{
-                bgcolor: "rgba(255,255,255,0.95)",
-                color: primaryDark,
-                fontWeight: 700,
-                textTransform: "none",
-                borderRadius: 2,
-                px: 3,
-                py: 1.25,
-                boxShadow: "0 4px 14px rgba(0,0,0,0.15)",
-                "&:hover": { bgcolor: "#fff", color: primaryRed },
-              }}
-            >
-              Create curriculum
-            </Button>
-          )}
-        </Stack>
-      </Box>
+      <CurriculumHero
+        title="Curriculum"
+        subtitle="Pathways your school offers — including how long each runs until completion"
+        icon={<MenuBookIcon sx={{ fontSize: 26, color: "#fff" }} />}
+        actions={renderHeaderActions()}
+      />
 
-      <Box sx={{ px: { xs: 1.5, sm: 2, md: 3 }, py: 2, width: "100%", boxSizing: "border-box" }}>
-        <Tabs
-          value={pageTab}
-          onChange={handleMainTabChange}
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{
-            mb: 2,
-            minHeight: 44,
-            "& .MuiTab-root": {
-              textTransform: "none",
-              fontWeight: 700,
-              minHeight: 44,
-              color: primaryDark,
-              "&.Mui-selected": { color: primaryRed },
-            },
-            "& .MuiTabs-indicator": { bgcolor: primaryRed, height: 3, borderRadius: 1 },
-          }}
-        >
-          <Tab icon={<ViewListIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Curricula" />
-          <Tab icon={<SchoolIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Classes" />
-          <Tab icon={<CalendarMonthIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Terms" />
-          <Tab icon={<SubjectIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Subjects" />
-          <Tab icon={<RuleIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Grading system" />
-        </Tabs>
+      <CurriculumTabs activeTab={pageTab} onChange={handleTabChange} tabs={CURRICULUM_TABS} />
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
+      {error && pageTab === 0 ? (
+        <Alert severity="error" sx={{ borderRadius: "14px", flexShrink: 0 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      ) : null}
 
+      <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         {pageTab === 1 ? (
           <CurriculumClassesTab ref={classesTabRef} curriculumId={classesCurriculumId} onCurriculumChange={handleClassesCurriculumChange} />
         ) : pageTab === 2 ? (
@@ -525,180 +385,129 @@ export default function CurriculumTable() {
               syncTabUrl(4, { curriculumId: id || "" });
             }}
           />
-        ) : loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <CircularProgress sx={{ color: primaryRed }} />
-          </Box>
         ) : (
-          <TableContainer
-            sx={{
-              borderRadius: 2,
-              overflow: "auto",
-              border: `1px solid ${primaryLight}`,
-              boxShadow: `0 8px 28px -12px ${primaryRed}33`,
-              bgcolor: "rgba(255,255,255,0.98)",
-            }}
-          >
-            <Table size="medium" sx={{ minWidth: 560 }}>
-              <TableHead>
-                <TableRow
-                  sx={{
-                    background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-                    "& .MuiTableCell-head": {
-                      color: "#fff",
-                      fontWeight: 700,
-                      fontSize: "0.8rem",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                      borderBottom: "none",
-                    },
-                  }}
-                >
-                  <TableCell width={56}>No.</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Period</TableCell>
-                  <TableCell>Description</TableCell>
-                  <TableCell align="right" sx={{ width: 140 }}>
-                    Actions
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6}>
-                      <Typography color="text.secondary" sx={{ py: 4, textAlign: "center" }}>
-                        No curricula yet. Create one with a name and your own type label.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  rows.map((r, idx) => (
-                    <TableRow key={r.id} hover>
-                      <TableCell sx={{ color: "text.secondary" }}>{page * rowsPerPage + idx + 1}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>{r.name}</TableCell>
-                      <TableCell sx={{ whiteSpace: "nowrap" }}>{r.type || "—"}</TableCell>
-                      <TableCell sx={{ whiteSpace: "nowrap", color: "text.secondary" }}>{r.period?.trim() || "—"}</TableCell>
-                      <TableCell sx={{ color: "text.secondary", maxWidth: 360 }}>{truncate(r.description, 140)}</TableCell>
-                      <TableCell align="right">
-                        <Tooltip title="View">
-                          <IconButton size="small" aria-label="View curriculum" onClick={() => setViewCurriculumRow(r)} sx={{ color: primaryDark }}>
-                            <ViewIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Edit">
-                          <IconButton size="small" aria-label="Edit curriculum" onClick={() => openEditCurriculum(r)} sx={{ color: primaryRed }}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                          <IconButton size="small" aria-label="Delete curriculum" onClick={() => handleDelete(r)} sx={{ color: primaryRed }}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+          <TabPanelShell loading={loading} error={error} onDismissError={() => setError(null)}>
+            {!loading && (
+              <DataTableShell
+                pagination={
+                  <TablePagination
+                    component="div"
+                    count={totalRows}
+                    page={page}
+                    onPageChange={(_, p) => setPage(p)}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={(e) => {
+                      setRowsPerPage(parseInt(e.target.value, 10));
+                      setPage(0);
+                    }}
+                    rowsPerPageOptions={[5, 10, 25, 50]}
+                    sx={tablePaginationSx}
+                  />
+                }
+              >
+                <Table size="medium" sx={{ minWidth: 560 }}>
+                  <TableHead>
+                    <TableRow sx={tableHeadRowSx}>
+                      <TableCell width={56}>No.</TableCell>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Period</TableCell>
+                      <TableCell>Description</TableCell>
+                      <TableCell align="right" sx={{ width: 140 }}>
+                        Actions
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-            <TablePagination
-              component="div"
-              count={totalRows}
-              page={page}
-              onPageChange={(_, p) => setPage(p)}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={(e) => {
-                setRowsPerPage(parseInt(e.target.value, 10));
-                setPage(0);
-              }}
-              rowsPerPageOptions={[5, 10, 25, 50]}
-              sx={{
-                borderTop: `1px solid ${primaryLight}`,
-                "& .MuiTablePagination-toolbar": { fontWeight: 600 },
-              }}
-            />
-          </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {rows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6}>
+                          <EmptyTableRow message="No curricula yet. Create one with a name and your own type label." />
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      rows.map((r, idx) => (
+                        <TableRow key={r.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
+                          <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>{page * rowsPerPage + idx + 1}</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>{r.name}</TableCell>
+                          <TableCell sx={{ whiteSpace: "nowrap" }}>{r.type || "—"}</TableCell>
+                          <TableCell sx={{ whiteSpace: "nowrap", color: "text.secondary" }}>{r.period?.trim() || "—"}</TableCell>
+                          <TableCell sx={{ color: "text.secondary", maxWidth: 360 }}>{truncateText(r.description, 140)}</TableCell>
+                          <TableCell align="right">
+                            <Tooltip title="View">
+                              <IconButton size="small" aria-label="View curriculum" onClick={() => setViewCurriculumRow(r)} sx={actionIconSx}>
+                                <ViewIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Edit">
+                              <IconButton size="small" aria-label="Edit curriculum" onClick={() => openEditCurriculum(r)} sx={actionIconSx}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete">
+                              <IconButton
+                                size="small"
+                                aria-label="Delete curriculum"
+                                onClick={() => handleDelete(r)}
+                                sx={{ ...actionIconSx, "&:hover": { bgcolor: "#FEE2E2", color: primaryRed } }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </DataTableShell>
+            )}
+          </TabPanelShell>
         )}
       </Box>
 
-      <Dialog open={!!viewCurriculumRow} onClose={() => setViewCurriculumRow(null)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle
-          sx={{
-            background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mb: 2,
-          }}
-        >
-          Curriculum details
-          <IconButton onClick={() => setViewCurriculumRow(null)} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2, pb: 2 }}>
-          {viewCurriculumRow && (
-            <Stack spacing={1.5}>
-              <Typography variant="body2" color="text.secondary">
-                Name
-              </Typography>
-              <Typography sx={{ fontWeight: 700 }}>{viewCurriculumRow.name}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
-                Type
-              </Typography>
-              <Typography sx={{ fontWeight: 600 }}>{viewCurriculumRow.type || "—"}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Period
-              </Typography>
-              <Typography>{viewCurriculumRow.period?.trim() || "—"}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Description
-              </Typography>
-              <Typography sx={{ whiteSpace: "pre-wrap" }}>{truncate(viewCurriculumRow.description, 600)}</Typography>
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setViewCurriculumRow(null)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={editCurriculumOpen} onClose={() => !editCurriculumSaving && setEditCurriculumOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle
-          sx={{
-            background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mb: 2,
-          }}
-        >
-          Edit curriculum
-          <IconButton onClick={() => setEditCurriculumOpen(false)} disabled={editCurriculumSaving} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2, pb: 2, overflow: "visible" }}>
-          <Stack spacing={2}>
-            <TextField label="Name" fullWidth required value={editCurriculumForm.name} onChange={(e) => setEditCurriculumForm((f) => ({ ...f, name: e.target.value }))} />
-            <TextField label="Type" fullWidth required value={editCurriculumForm.type} onChange={(e) => setEditCurriculumForm((f) => ({ ...f, type: e.target.value }))} />
-            <TextField label="Period" fullWidth value={editCurriculumForm.period} onChange={(e) => setEditCurriculumForm((f) => ({ ...f, period: e.target.value }))} helperText="Optional — length until completion" />
-            <TextField label="Description" fullWidth multiline minRows={3} value={editCurriculumForm.description} onChange={(e) => setEditCurriculumForm((f) => ({ ...f, description: e.target.value }))} />
+      <PremiumDialog
+        open={!!viewCurriculumRow}
+        onClose={() => setViewCurriculumRow(null)}
+        title="Curriculum details"
+        subtitle={viewCurriculumRow?.type || undefined}
+        icon={<MenuBookIcon />}
+        footer={<DialogGhostButton onClick={() => setViewCurriculumRow(null)}>Close</DialogGhostButton>}
+      >
+        {viewCurriculumRow ? (
+          <Stack spacing={1.5}>
+            <DetailField label="Name" value={viewCurriculumRow.name} />
+            <DetailField label="Type" value={viewCurriculumRow.type} />
+            <DetailField label="Period" value={viewCurriculumRow.period} />
+            <DetailField label="Description" value={truncateText(viewCurriculumRow.description, 600)} />
           </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setEditCurriculumOpen(false)} disabled={editCurriculumSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleEditCurriculumSubmit} disabled={editCurriculumSaving} sx={{ bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }}>
-            {editCurriculumSaving ? "Saving…" : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        ) : null}
+      </PremiumDialog>
+
+      <PremiumDialog
+        open={editCurriculumOpen}
+        onClose={() => !editCurriculumSaving && setEditCurriculumOpen(false)}
+        title="Edit curriculum"
+        subtitle="Update pathway name, type, and details"
+        icon={<EditIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => setEditCurriculumOpen(false)} disabled={editCurriculumSaving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={editCurriculumSaving} onClick={handleEditCurriculumSubmit}>
+              Save
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        <Stack spacing={2}>
+          <TextField label="Name" fullWidth required value={editCurriculumForm.name} onChange={(e) => setEditCurriculumForm((f) => ({ ...f, name: e.target.value }))} sx={inputSx} />
+          <TextField label="Type" fullWidth required value={editCurriculumForm.type} onChange={(e) => setEditCurriculumForm((f) => ({ ...f, type: e.target.value }))} sx={inputSx} />
+          <TextField label="Period" fullWidth value={editCurriculumForm.period} onChange={(e) => setEditCurriculumForm((f) => ({ ...f, period: e.target.value }))} helperText="Optional — length until completion" sx={inputSx} />
+          <TextField label="Description" fullWidth multiline minRows={3} value={editCurriculumForm.description} onChange={(e) => setEditCurriculumForm((f) => ({ ...f, description: e.target.value }))} sx={inputSx} />
+        </Stack>
+      </PremiumDialog>
     </Box>
   );
 }

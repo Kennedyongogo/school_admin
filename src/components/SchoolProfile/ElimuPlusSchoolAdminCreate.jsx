@@ -9,42 +9,26 @@ import {
   Tooltip,
   CircularProgress,
   Alert,
-  Card,
-  CardContent,
   Avatar,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
+  Grid,
 } from "@mui/material";
 import { ArrowBack as ArrowBackIcon, Person as PersonIcon } from "@mui/icons-material";
 import Swal from "sweetalert2";
-
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
-const accentLight = "#FEE2E2";
-const backgroundLight = "#FEF2F2";
-
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-const authMultipartHeaders = (token) => ({
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-const fullMainBleedSx = (theme) => ({
-  width: `calc(100% + ${theme.spacing(6)})`,
-  maxWidth: "none",
-  marginLeft: theme.spacing(-3),
-  marginRight: theme.spacing(-3),
-  marginTop: "1px",
-  marginBottom: "1px",
-  boxSizing: "border-box",
-});
+import {
+  authHeaders,
+  authMultipartHeaders,
+  inputSx,
+  pageShellSx,
+  primaryRed,
+  primaryDark,
+  primaryBtnSx,
+  ghostBtnSx,
+} from "./elimuPlusShared";
+import { ElimuPlusHero, FormSection } from "./elimuPlusUi";
 
 const adminTypes = [
   { value: "super_admin", label: "Super Admin" },
@@ -70,7 +54,7 @@ export default function ElimuPlusSchoolAdminCreate() {
 
   const goBack = () => navigate("/elimu-plus", { state: { tab: 4 } });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!profilePhoto) {
       setProfilePhotoPreview(null);
       return undefined;
@@ -90,17 +74,12 @@ export default function ElimuPlusSchoolAdminCreate() {
     setPageLoading(true);
     setError(null);
     try {
-      console.log('Fetching from endpoint: /api/admins/users-without-profile');
       const res = await fetch("/api/school-admins/users-without-profile", { headers: authHeaders(token) });
-      console.log('Response status:', res.status);
       const data = await res.json().catch(() => ({}));
-      console.log('Response data:', data);
       if (res.ok && data.success && Array.isArray(data.data)) {
         setEligibleUsers(data.data);
-        console.log('Eligible users set:', data.data);
       } else {
         setEligibleUsers([]);
-        console.log('No eligible users or error');
       }
     } catch (e) {
       setError(e.message || "Could not load form data.");
@@ -158,6 +137,7 @@ export default function ElimuPlusSchoolAdminCreate() {
         icon: "success",
         title: "School admin profile created",
         text: data.data?.user?.full_name ? `${data.data.user.full_name} can sign in as admin.` : undefined,
+        confirmButtonColor: primaryRed,
         timer: 2000,
         showConfirmButton: false,
       });
@@ -170,129 +150,89 @@ export default function ElimuPlusSchoolAdminCreate() {
   };
 
   return (
-    <Box
-      component="form"
-      onSubmit={handleSubmit}
-      sx={(theme) => ({
-        ...fullMainBleedSx(theme),
-        marginTop: theme.spacing(-2.5),
-        minHeight: "100%",
-        background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
-      })}
-    >
-      <Box
-        sx={{
-          background: `linear-gradient(135deg, ${accentDark} 0%, ${accent} 55%, #EF4444 100%)`,
-          px: { xs: 1.5, sm: 2 },
-          py: { xs: 1.5, sm: 2 },
-          color: "white",
-          boxShadow: `0 8px 24px ${accent}33`,
-        }}
-      >
-        <Stack direction="row" alignItems="center" spacing={1.5}>
-          <Tooltip title="Back to Elimu Plus">
-            <IconButton
-              type="button"
-              onClick={goBack}
-              aria-label="Back to Elimu Plus"
-              sx={{
-                color: "#fff",
-                bgcolor: "rgba(255,255,255,0.15)",
-                "&:hover": { bgcolor: "rgba(255,255,255,0.28)" },
-              }}
-            >
-              <ArrowBackIcon />
-            </IconButton>
-          </Tooltip>
-          <PersonIcon sx={{ fontSize: 32, opacity: 0.95 }} />
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
-              Create school admin profile
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.92, mt: 0.25 }}>
-              Choose an existing user account (no admin profile yet), set admin type, and optional profile photo.
-            </Typography>
-          </Box>
-        </Stack>
-      </Box>
+    <Box component="form" onSubmit={handleSubmit} sx={{ ...pageShellSx, minHeight: "100%" }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+        <Tooltip title="Back to Elimu Plus">
+          <IconButton onClick={goBack} aria-label="Back" sx={{ bgcolor: "#fff", border: "1px solid rgba(220,38,38,0.12)", "&:hover": { bgcolor: "#FEE2E2" } }}>
+            <ArrowBackIcon sx={{ color: primaryDark }} />
+          </IconButton>
+        </Tooltip>
+      </Stack>
 
-      <Box sx={{ px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 }, width: "100%", boxSizing: "border-box" }}>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
+      <ElimuPlusHero
+        title="Create school admin profile"
+        subtitle="Choose an existing user account (no admin profile yet), set admin type, and optional profile photo."
+        icon={<PersonIcon sx={{ fontSize: 26, color: "#fff" }} />}
+      />
 
-        {pageLoading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <CircularProgress sx={{ color: accent }} />
-          </Box>
-        ) : (
-          <Card
-            elevation={0}
-            sx={{
-              width: "100%",
-              borderRadius: 2,
-              border: `1px solid ${accentLight}`,
-              boxShadow: `0 8px 28px -12px ${accent}33`,
-              overflow: "hidden",
-            }}
-          >
-            <CardContent sx={{ px: { xs: 2, sm: 3 }, py: 3 }}>
-              <Stack spacing={2.5} sx={{ width: "100%", maxWidth: "100%" }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: accentDark, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                  Profile photo (school admin record)
-                </Typography>
+      {error ? (
+        <Alert severity="error" sx={{ mt: 2, borderRadius: "14px" }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      ) : null}
+
+      {pageLoading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+          <CircularProgress sx={{ color: primaryRed }} />
+        </Box>
+      ) : (
+        <>
+          <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
+            <Grid item xs={12} md={6}>
+              <FormSection title="Profile photo">
                 <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                  <Avatar src={profilePhotoPreview || undefined} sx={{ width: 72, height: 72, bgcolor: `${accent}22`, color: accentDark, fontWeight: 700 }}>
+                  <Avatar src={profilePhotoPreview || undefined} sx={{ width: 72, height: 72, bgcolor: `${primaryRed}22`, color: primaryDark, fontWeight: 700 }}>
                     {!profilePhotoPreview ? <PersonIcon /> : null}
                   </Avatar>
-                  <Button variant="outlined" component="label" sx={{ borderColor: accent, color: accentDark, fontWeight: 700 }}>
+                  <Button variant="outlined" component="label" sx={{ borderColor: primaryRed, color: primaryDark, fontWeight: 700, borderRadius: "12px", textTransform: "none" }}>
                     Choose photo
                     <input type="file" accept="image/*" hidden onChange={(e) => setProfilePhoto(e.target.files?.[0] || null)} />
                   </Button>
-                  {profilePhoto && (
-                    <Button size="small" type="button" onClick={() => setProfilePhoto(null)}>
+                  {profilePhoto ? (
+                    <Button size="small" type="button" onClick={() => setProfilePhoto(null)} sx={{ fontWeight: 600, textTransform: "none" }}>
                       Remove
                     </Button>
-                  )}
+                  ) : null}
                 </Stack>
+              </FormSection>
+            </Grid>
 
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: accentDark, letterSpacing: "0.04em", textTransform: "uppercase", pt: 1 }}>
-                  User account
-                </Typography>
-                <Typography variant="body2" sx={{ color: "#4B5563", lineHeight: 1.6 }}>
-                  The person already has a user account. Choose every user that does not yet have a school admin profile below.
-                </Typography>
-                <FormControl fullWidth required variant="outlined">
-                  <InputLabel id="eligible-user-label">User (no admin profile yet)</InputLabel>
-                  <Select
-                    labelId="eligible-user-label"
-                    label="User (no admin profile yet)"
-                    value={form.link_user_id}
-                    onChange={(e) => setForm({ ...form, link_user_id: e.target.value })}
-                    onOpen={() => console.log('Opening dropdown, eligibleUsers:', eligibleUsers)}
-                  >
-                    <MenuItem value="">
-                      <em>Select…</em>
-                    </MenuItem>
-                    {eligibleUsers.map((u) => (
-                      <MenuItem key={u.id} value={u.id}>
-                        {u.full_name} ({u.email})
+            <Grid item xs={12} md={6}>
+              <FormSection title="User account">
+                <Stack spacing={2}>
+                  <Typography variant="body2" sx={{ color: "#4B5563", lineHeight: 1.6 }}>
+                    The person already has a user account. Choose a user that does not yet have a school admin profile below.
+                  </Typography>
+                  <FormControl fullWidth required variant="outlined" sx={inputSx}>
+                    <InputLabel id="eligible-user-label">User (no admin profile yet)</InputLabel>
+                    <Select
+                      labelId="eligible-user-label"
+                      label="User (no admin profile yet)"
+                      value={form.link_user_id}
+                      onChange={(e) => setForm({ ...form, link_user_id: e.target.value })}
+                    >
+                      <MenuItem value="">
+                        <em>Select…</em>
                       </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                {eligibleUsers.length === 0 && (
-                  <Alert severity="info" sx={{ borderRadius: 2 }}>
-                    No users without a school admin profile. Create a user first under User management, then return here.
-                  </Alert>
-                )}
+                      {eligibleUsers.map((u) => (
+                        <MenuItem key={u.id} value={u.id}>
+                          {u.full_name} ({u.email})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  {eligibleUsers.length === 0 ? (
+                    <Alert severity="info" sx={{ borderRadius: "14px" }}>
+                      No users without a school admin profile. Create a user first under User management, then return here.
+                    </Alert>
+                  ) : null}
+                </Stack>
+              </FormSection>
+            </Grid>
 
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: accentDark, letterSpacing: "0.04em", textTransform: "uppercase", pt: 1 }}>
-                  Admin type
-                </Typography>
-                <FormControl fullWidth required variant="outlined">
+            <Grid item xs={12} md={6}>
+              <FormSection title="Admin type">
+                <FormControl fullWidth required variant="outlined" sx={inputSx}>
                   <InputLabel id="admin-type-label">Admin type</InputLabel>
                   <Select
                     labelId="admin-type-label"
@@ -310,29 +250,20 @@ export default function ElimuPlusSchoolAdminCreate() {
                     ))}
                   </Select>
                 </FormControl>
+              </FormSection>
+            </Grid>
+          </Grid>
 
-                <Box sx={{ pt: 2 }}>
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={saving}
-                    startIcon={saving ? <CircularProgress size={16} /> : null}
-                    sx={{
-                      px: 4,
-                      py: 1.25,
-                      fontWeight: 700,
-                      bgcolor: accent,
-                      "&:hover": { bgcolor: accentDark },
-                    }}
-                  >
-                    {saving ? "Creating…" : "Create School Admin Profile"}
-                  </Button>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        )}
-      </Box>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="flex-end" sx={{ mt: 3 }}>
+            <Button type="button" variant="text" onClick={goBack} sx={ghostBtnSx}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="contained" disabled={saving} startIcon={saving ? <CircularProgress size={18} color="inherit" /> : null} sx={primaryBtnSx}>
+              {saving ? "Creating…" : "Create school admin profile"}
+            </Button>
+          </Stack>
+        </>
+      )}
     </Box>
   );
 }

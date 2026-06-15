@@ -2,22 +2,16 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useStat
 import {
   Box,
   Typography,
-  Button,
   Alert,
   CircularProgress,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   Chip,
   IconButton,
   Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
   Stack,
   TablePagination,
@@ -30,38 +24,23 @@ import {
 } from "@mui/material";
 import {
   Delete as DeleteIcon,
-  Close as CloseIcon,
   Visibility as VisibilityIcon,
   Edit as EditIcon,
+  AccountTree as DeptIcon,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
-
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
-const accentLight = "#FEE2E2";
-
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-async function fetchAllPages(path, token) {
-  const out = [];
-  let pageNum = 1;
-  let totalPages = 1;
-  do {
-    const sep = path.includes("?") ? "&" : "?";
-    const res = await fetch(`${path}${sep}page=${pageNum}&limit=100`, { headers: authHeaders(token) });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success || !Array.isArray(data.data)) break;
-    out.push(...data.data);
-    totalPages = data.pagination?.totalPages ?? 1;
-    pageNum += 1;
-    if (pageNum > 50) break;
-  } while (pageNum <= totalPages);
-  return out;
-}
+import { authHeaders, fetchAllPages, inputSx, primaryRed, actionIconSx } from "./elimuPlusShared";
+import {
+  PremiumDialog,
+  DetailField,
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+} from "./elimuPlusUi";
 
 function teacherOptionLabel(t) {
   const u = t?.user || {};
@@ -294,7 +273,7 @@ const ElimuPlusDepartmentsTab = forwardRef(function ElimuPlusDepartmentsTab({ ac
       title: "Delete department?",
       text: row?.name ? `"${row.name}" will be removed.` : undefined,
       showCancelButton: true,
-      confirmButtonColor: accent,
+      confirmButtonColor: primaryRed,
       cancelButtonColor: "#6B7280",
       confirmButtonText: "Delete",
     });
@@ -322,34 +301,29 @@ const ElimuPlusDepartmentsTab = forwardRef(function ElimuPlusDepartmentsTab({ ac
   const hodName = viewRow?.HOD?.user?.full_name || viewRow?.HOD?.user?.username || "—";
 
   return (
-    <Box sx={{ pt: 2 }}>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-          <CircularProgress sx={{ color: accent }} />
-        </Box>
-      ) : (
-        <TableContainer
-          sx={{
-            borderRadius: 2,
-            border: `1px solid ${accentLight}`,
-            boxShadow: `0 8px 28px -12px ${accent}33`,
-            bgcolor: "rgba(255,255,255,0.98)",
-          }}
+    <TabPanelShell loading={loading} error={error} onDismissError={() => setError(null)}>
+      {!loading && (
+        <DataTableShell
+          pagination={
+            <TablePagination
+              component="div"
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              count={totalCount}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(_, newPage) => setPage(newPage)}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              labelRowsPerPage="Rows per page"
+              sx={tablePaginationSx}
+            />
+          }
         >
           <Table size="medium">
             <TableHead>
-              <TableRow
-                sx={{
-                  background: `linear-gradient(135deg, ${accent} 0%, ${accentDark} 100%)`,
-                  "& .MuiTableCell-head": { color: "#fff", fontWeight: 700, borderBottom: "none" },
-                }}
-              >
+              <TableRow sx={tableHeadRowSx}>
                 <TableCell width={72}>No.</TableCell>
                 <TableCell>Name</TableCell>
                 <TableCell>Head</TableCell>
@@ -362,14 +336,12 @@ const ElimuPlusDepartmentsTab = forwardRef(function ElimuPlusDepartmentsTab({ ac
               {rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4}>
-                    <Typography color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
-                      No departments yet. Use Add department in the header.
-                    </Typography>
+                    <EmptyTableRow message="No departments yet. Use Add department in the header." />
                   </TableCell>
                 </TableRow>
               ) : (
                 rows.map((r, idx) => (
-                  <TableRow key={r.id} hover>
+                  <TableRow key={r.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
                     <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>{page * rowsPerPage + idx + 1}</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>{r.name}</TableCell>
                     <TableCell sx={{ color: "text.secondary", maxWidth: 220 }} noWrap title={rowHodLabel(r)}>
@@ -377,17 +349,17 @@ const ElimuPlusDepartmentsTab = forwardRef(function ElimuPlusDepartmentsTab({ ac
                     </TableCell>
                     <TableCell align="right">
                       <Tooltip title="View">
-                        <IconButton size="small" aria-label="View department" onClick={() => openView(r)} sx={{ color: accentDark }}>
+                        <IconButton size="small" aria-label="View department" onClick={() => openView(r)} sx={actionIconSx}>
                           <VisibilityIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Edit">
-                        <IconButton size="small" aria-label="Edit department" onClick={() => openEdit(r)} sx={{ color: accentDark }}>
+                        <IconButton size="small" aria-label="Edit department" onClick={() => openEdit(r)} sx={actionIconSx}>
                           <EditIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Delete">
-                        <IconButton size="small" aria-label="Delete department" onClick={() => handleDelete(r)} sx={{ color: accent }}>
+                        <IconButton size="small" aria-label="Delete department" onClick={() => handleDelete(r)} sx={{ ...actionIconSx, "&:hover": { bgcolor: "#FEE2E2", color: primaryRed } }}>
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
@@ -397,203 +369,111 @@ const ElimuPlusDepartmentsTab = forwardRef(function ElimuPlusDepartmentsTab({ ac
               )}
             </TableBody>
           </Table>
-          <TablePagination
-            component="div"
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            count={totalCount}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={(_, newPage) => setPage(newPage)}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(parseInt(e.target.value, 10));
-              setPage(0);
-            }}
-            labelRowsPerPage="Rows per page"
-            sx={{
-              borderTop: `1px solid ${accentLight}`,
-              "& .MuiTablePagination-toolbar": { flexWrap: "wrap", gap: 1 },
-            }}
-          />
-        </TableContainer>
+        </DataTableShell>
       )}
 
-      <Dialog open={dialogOpen} onClose={() => !saving && setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
-          New department
-          <IconButton aria-label="Close" onClick={() => !saving && setDialogOpen(false)} sx={{ position: "absolute", right: 8, top: 8 }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {dialogError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {dialogError}
-            </Alert>
-          )}
-          <Stack spacing={2}>
-            <TextField label="Name" required fullWidth value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <TextField
-              label="Code"
-              required
-              fullWidth
-              value={form.code}
-              onChange={(e) => setForm({ ...form, code: e.target.value })}
-              helperText="Short unique code (e.g. SCI)"
-            />
-            <TextField label="Description" fullWidth multiline minRows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            <TextField label="Email" fullWidth type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            <TextField label="Phone" fullWidth value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            <TextField label="Room / location" fullWidth value={form.room_location} onChange={(e) => setForm({ ...form, room_location: e.target.value })} />
-            <FormControl fullWidth>
-              <InputLabel id="dept-create-hod-label">Head of department</InputLabel>
-              <Select
-                labelId="dept-create-hod-label"
-                label="Head of department"
-                value={form.head_of_department || ""}
-                onChange={(e) => setForm({ ...form, head_of_department: e.target.value })}
-              >
-                <MenuItem value="">
-                  <em>None</em>
-                </MenuItem>
-                {teachers.map((t) => (
-                  <MenuItem key={t.id} value={t.id}>
-                    {teacherOptionLabel(t)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => !saving && setDialogOpen(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button variant="contained" disabled={saving} onClick={handleCreateSubmit} sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark }, fontWeight: 700 }}>
-            {saving ? <CircularProgress size={22} color="inherit" /> : "Create"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <PremiumDialog
+        open={dialogOpen}
+        onClose={() => !saving && setDialogOpen(false)}
+        title="New department"
+        subtitle="Add an academic or administrative department"
+        icon={<DeptIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !saving && setDialogOpen(false)} disabled={saving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={saving} onClick={handleCreateSubmit}>
+              Create
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        {dialogError ? <Alert severity="error" sx={{ mb: 2, borderRadius: "12px" }}>{dialogError}</Alert> : null}
+        <Stack spacing={2}>
+          <TextField label="Name" required fullWidth value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} sx={inputSx} />
+          <TextField label="Code" required fullWidth value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} helperText="Short unique code (e.g. SCI)" sx={inputSx} />
+          <TextField label="Description" fullWidth multiline minRows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} sx={inputSx} />
+          <TextField label="Email" fullWidth type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} sx={inputSx} />
+          <TextField label="Phone" fullWidth value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} sx={inputSx} />
+          <TextField label="Room / location" fullWidth value={form.room_location} onChange={(e) => setForm({ ...form, room_location: e.target.value })} sx={inputSx} />
+          <FormControl fullWidth sx={inputSx}>
+            <InputLabel id="dept-create-hod-label">Head of department</InputLabel>
+            <Select labelId="dept-create-hod-label" label="Head of department" value={form.head_of_department || ""} onChange={(e) => setForm({ ...form, head_of_department: e.target.value })}>
+              <MenuItem value=""><em>None</em></MenuItem>
+              {teachers.map((t) => (
+                <MenuItem key={t.id} value={t.id}>{teacherOptionLabel(t)}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Stack>
+      </PremiumDialog>
 
-      <Dialog open={viewOpen} onClose={() => setViewOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
-          {viewRow?.name || "Department"}
-          <IconButton aria-label="Close" onClick={() => setViewOpen(false)} sx={{ position: "absolute", right: 8, top: 8 }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {viewRow && (
-            <Stack spacing={1.5}>
-              <Box>
-                <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                  Code
-                </Typography>
-                <Typography fontWeight={600}>{viewRow.code || "—"}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                  Description
-                </Typography>
-                <Typography>{viewRow.description?.trim() ? viewRow.description : "—"}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                  Email / Phone
-                </Typography>
-                <Typography>{[viewRow.email, viewRow.phone].filter(Boolean).join(" · ") || "—"}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                  Room / location
-                </Typography>
-                <Typography>{viewRow.room_location || "—"}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ display: "block", mb: 0.5 }}>
-                  Status
-                </Typography>
-                <Chip size="small" label={viewRow.is_active ? "Active" : "Inactive"} color={viewRow.is_active ? "success" : "default"} sx={{ fontWeight: 600 }} />
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                  Head of department
-                </Typography>
-                <Typography>{hodName}</Typography>
-              </Box>
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setViewOpen(false)} sx={{ fontWeight: 700 }}>
-            Close
-          </Button>
-          {viewRow && (
-            <Button
-              variant="contained"
-              startIcon={<EditIcon />}
-              onClick={() => {
-                setViewOpen(false);
-                openEdit(viewRow);
-              }}
-              sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark }, fontWeight: 700 }}
-            >
-              Edit
-            </Button>
-          )}
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={editOpen} onClose={() => !editSaving && setEditOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pr: 6 }}>
-          Edit department
-          <IconButton aria-label="Close" onClick={() => !editSaving && setEditOpen(false)} sx={{ position: "absolute", right: 8, top: 8 }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {editError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {editError}
-            </Alert>
-          )}
-          <Stack spacing={2}>
-            <TextField label="Name" required fullWidth value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
-            <TextField label="Code" required fullWidth value={editForm.code} onChange={(e) => setEditForm({ ...editForm, code: e.target.value })} />
-            <TextField label="Description" fullWidth multiline minRows={2} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
-            <TextField label="Email" fullWidth type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
-            <TextField label="Phone" fullWidth value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
-            <TextField label="Room / location" fullWidth value={editForm.room_location} onChange={(e) => setEditForm({ ...editForm, room_location: e.target.value })} />
-            <FormControl fullWidth>
-              <InputLabel id="dept-edit-hod-label">Head of department</InputLabel>
-              <Select
-                labelId="dept-edit-hod-label"
-                label="Head of department"
-                value={editForm.head_of_department || ""}
-                onChange={(e) => setEditForm({ ...editForm, head_of_department: e.target.value })}
-              >
-                <MenuItem value="">
-                  <em>None</em>
-                </MenuItem>
-                {teachers.map((t) => (
-                  <MenuItem key={t.id} value={t.id}>
-                    {teacherOptionLabel(t)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControlLabel control={<Checkbox checked={editForm.is_active} onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })} />} label="Active" />
+      <PremiumDialog
+        open={viewOpen}
+        onClose={() => setViewOpen(false)}
+        title={viewRow?.name || "Department"}
+        subtitle="Department overview"
+        icon={<DeptIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => setViewOpen(false)}>Close</DialogGhostButton>
+            {viewRow ? (
+              <DialogPrimaryButton startIcon={<EditIcon />} onClick={() => { setViewOpen(false); openEdit(viewRow); }}>
+                Edit
+              </DialogPrimaryButton>
+            ) : null}
+          </>
+        }
+      >
+        {viewRow ? (
+          <Stack spacing={1.5}>
+            <DetailField label="Code" value={viewRow.code} />
+            <DetailField label="Description" value={viewRow.description} />
+            <DetailField label="Email / Phone" value={[viewRow.email, viewRow.phone].filter(Boolean).join(" · ")} />
+            <DetailField label="Room / location" value={viewRow.room_location} />
+            <Box>
+              <Chip size="small" label={viewRow.is_active ? "Active" : "Inactive"} color={viewRow.is_active ? "success" : "default"} sx={{ fontWeight: 600 }} />
+            </Box>
+            <DetailField label="Head of department" value={hodName} />
           </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" disabled={editSaving} onClick={handleEditSubmit} sx={{ bgcolor: accent, "&:hover": { bgcolor: accentDark }, fontWeight: 700 }}>
-            {editSaving ? <CircularProgress size={22} color="inherit" /> : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+        ) : null}
+      </PremiumDialog>
+
+      <PremiumDialog
+        open={editOpen}
+        onClose={() => !editSaving && setEditOpen(false)}
+        title="Edit department"
+        subtitle="Update department details"
+        icon={<DeptIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}>Cancel</DialogGhostButton>
+            <DialogPrimaryButton loading={editSaving} onClick={handleEditSubmit}>Save</DialogPrimaryButton>
+          </>
+        }
+      >
+        {editError ? <Alert severity="error" sx={{ mb: 2, borderRadius: "12px" }}>{editError}</Alert> : null}
+        <Stack spacing={2}>
+          <TextField label="Name" required fullWidth value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} sx={inputSx} />
+          <TextField label="Code" required fullWidth value={editForm.code} onChange={(e) => setEditForm({ ...editForm, code: e.target.value })} sx={inputSx} />
+          <TextField label="Description" fullWidth multiline minRows={2} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} sx={inputSx} />
+          <TextField label="Email" fullWidth type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} sx={inputSx} />
+          <TextField label="Phone" fullWidth value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} sx={inputSx} />
+          <TextField label="Room / location" fullWidth value={editForm.room_location} onChange={(e) => setEditForm({ ...editForm, room_location: e.target.value })} sx={inputSx} />
+          <FormControl fullWidth sx={inputSx}>
+            <InputLabel id="dept-edit-hod-label">Head of department</InputLabel>
+            <Select labelId="dept-edit-hod-label" label="Head of department" value={editForm.head_of_department || ""} onChange={(e) => setEditForm({ ...editForm, head_of_department: e.target.value })}>
+              <MenuItem value=""><em>None</em></MenuItem>
+              {teachers.map((t) => (
+                <MenuItem key={t.id} value={t.id}>{teacherOptionLabel(t)}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControlLabel control={<Checkbox checked={editForm.is_active} onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })} />} label="Active" />
+        </Stack>
+      </PremiumDialog>
+    </TabPanelShell>
   );
 });
 

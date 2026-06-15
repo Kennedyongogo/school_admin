@@ -5,10 +5,6 @@ import {
   Button,
   Card,
   CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   FormControl,
   IconButton,
   InputLabel,
@@ -21,35 +17,10 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Delete as DeleteIcon, Edit as EditIcon } from "@mui/icons-material";
+import { Delete as DeleteIcon, Edit as EditIcon, Rule as RuleIcon } from "@mui/icons-material";
 import Swal from "sweetalert2";
-
-const primaryRed = "#DC2626";
-const primaryDark = "#B91C1C";
-const primaryLight = "#FEE2E2";
-
-const authJsonHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-async function fetchAllCurricula(token) {
-  const out = [];
-  let page = 1;
-  let totalPages = 1;
-  while (page <= totalPages && page <= 100) {
-    const params = new URLSearchParams({ page: String(page), limit: "100" });
-    const res = await fetch(`/api/curricula?${params}`, { headers: authJsonHeaders(token) });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success) throw new Error(data.message || `Could not load curricula (${res.status})`);
-    const chunk = Array.isArray(data.data) ? data.data : [];
-    out.push(...chunk);
-    totalPages = data.pagination?.totalPages ?? 1;
-    page += 1;
-  }
-  return out;
-}
+import { authJsonHeaders, fetchAllCurricula, primaryRed, primaryDark, primaryLight, inputSx, actionIconSx } from "./curriculumShared";
+import { PremiumDialog, TabPanelShell, DialogPrimaryButton, DialogGhostButton } from "./curriculumUi";
 
 async function fetchClassesForCurriculum(token, curriculumId) {
   if (!curriculumId) return [];
@@ -227,7 +198,6 @@ const CurriculumGradingSystemTab = forwardRef(function CurriculumGradingSystemTa
     const loadOverallDialogOptions = async () => {
       const token = localStorage.getItem("token");
       if (!token || !overallForm.curriculum_id) {
-        // For overall, only classes are needed, subjects not used
         setDialogClassOptions([]);
         return;
       }
@@ -285,6 +255,14 @@ const CurriculumGradingSystemTab = forwardRef(function CurriculumGradingSystemTa
       setSubjectOpen(false);
       setSubjectForm(defaultSubjectForm());
       await loadRows();
+      await Swal.fire({
+        icon: "success",
+        title: isEdit ? "Subject grading updated" : "Subject grading created",
+        text: isEdit ? "Changes saved successfully." : "The subject grading scale was added.",
+        confirmButtonColor: primaryRed,
+        timer: 1600,
+        showConfirmButton: false,
+      });
     } catch (e) {
       await Swal.fire({ icon: "error", title: "Save failed", text: e.message || "Could not save subject scale." });
     } finally {
@@ -298,11 +276,25 @@ const CurriculumGradingSystemTab = forwardRef(function CurriculumGradingSystemTa
     setOverallSaving(true);
     try {
       const isEdit = Boolean(overallForm.id);
+      const minScore = Number(overallForm.range_from);
+      const maxScore = Number(overallForm.range_to);
+      if (!overallForm.curriculum_id || !overallForm.curriculum_class_id) {
+        throw new Error("Curriculum and class are required.");
+      }
+      if (!Number.isFinite(minScore) || !Number.isFinite(maxScore)) {
+        throw new Error("Range from and range to must be valid numbers.");
+      }
+      if (minScore > maxScore) {
+        throw new Error("Range from cannot be greater than range to.");
+      }
+      if (!overallForm.overall_grade?.trim()) {
+        throw new Error("Overall grade is required.");
+      }
       const payload = {
         curriculum_id: overallForm.curriculum_id,
         curriculum_class_id: overallForm.curriculum_class_id,
-        range_from: Number(overallForm.range_from),
-        range_to: Number(overallForm.range_to),
+        min_score: minScore,
+        max_score: maxScore,
         overall_grade: overallForm.overall_grade.trim(),
         remarks: overallForm.remarks.trim() || null,
         is_pass: overallForm.is_pass === "" ? null : overallForm.is_pass === "true",
@@ -322,6 +314,14 @@ const CurriculumGradingSystemTab = forwardRef(function CurriculumGradingSystemTa
       setOverallOpen(false);
       setOverallForm(defaultOverallForm());
       await loadRows();
+      await Swal.fire({
+        icon: "success",
+        title: isEdit ? "Overall grading updated" : "Overall grading created",
+        text: isEdit ? "Changes saved successfully." : "The overall grading scale was added.",
+        confirmButtonColor: primaryRed,
+        timer: 1600,
+        showConfirmButton: false,
+      });
     } catch (e) {
       await Swal.fire({ icon: "error", title: "Save failed", text: e.message || "Could not save overall scale." });
     } finally {
@@ -347,14 +347,151 @@ const CurriculumGradingSystemTab = forwardRef(function CurriculumGradingSystemTa
       return;
     }
     await loadRows();
+    await Swal.fire({
+      icon: "success",
+      title: "Deleted",
+      text: "Grading scale removed.",
+      confirmButtonColor: primaryRed,
+      timer: 1400,
+      showConfirmButton: false,
+    });
   };
+
+  const renderSubjectCards = () => (
+    <Stack spacing={1}>
+      {!subjectRows.length ? <Alert severity="info">No subject grading scales yet.</Alert> : null}
+      {subjectRows.map((row) => (
+        <Card key={row.id} variant="outlined" sx={{ borderColor: primaryLight }}>
+          <CardContent sx={{ p: 1.25, "&:last-child": { pb: 1.25 } }}>
+            <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1}>
+              <Box>
+                <Typography sx={{ fontWeight: 800 }}>
+                  {row.curriculum_subject?.name || "Subject"}: {row.grade} ({row.min_mark} - {row.max_mark}
+                  {row.points != null ? ` · ${row.points} pts` : ""})
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {row.curriculum?.name || "Curriculum"} | {row.curriculum_class?.name || "Class"} | Active: {row.is_active ? "Yes" : "No"}
+                </Typography>
+                {row.remarks && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
+                    Remarks: {row.remarks}
+                  </Typography>
+                )}
+              </Box>
+              <Stack direction="row" spacing={0.5}>
+                <Tooltip title="Edit">
+                  <IconButton
+                    size="small"
+                    aria-label="Edit subject grading scale"
+                    onClick={() => {
+                      setSubjectForm({
+                        id: row.id,
+                        curriculum_id: row.curriculum_id || "",
+                        curriculum_class_id: row.curriculum_class_id || "",
+                        curriculum_subject_id: row.curriculum_subject_id || "",
+                        min_mark: String(row.min_mark ?? 0),
+                        max_mark: String(row.max_mark ?? 100),
+                        grade: row.grade || "",
+                        remarks: row.remarks || "",
+                        points: row.points == null ? "" : String(row.points),
+                        is_pass: row.is_pass == null ? "" : String(Boolean(row.is_pass)),
+                        sort_order: String(row.sort_order ?? 0),
+                        is_active: row.is_active !== false,
+                      });
+                      setSubjectOpen(true);
+                    }}
+                    sx={actionIconSx}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Delete">
+                  <IconButton
+                    size="small"
+                    aria-label="Delete subject grading scale"
+                    onClick={() => void removeScale("subject", row.id)}
+                    sx={{ ...actionIconSx, "&:hover": { bgcolor: "#FEE2E2", color: primaryRed } }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      ))}
+    </Stack>
+  );
+
+  const renderOverallCards = () => (
+    <Stack spacing={1}>
+      {!overallRows.length ? <Alert severity="info">No overall grading scales yet.</Alert> : null}
+      {overallRows.map((row) => (
+        <Card key={row.id} variant="outlined" sx={{ borderColor: primaryLight }}>
+          <CardContent sx={{ p: 1.25, "&:last-child": { pb: 1.25 } }}>
+            <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1}>
+              <Box>
+                <Typography sx={{ fontWeight: 800 }}>
+                  {row.overall_grade}: total marks {row.min_score} – {row.max_score}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {row.curriculum?.name || "Curriculum"} | {row.curriculum_class?.name || "Class"} | Active: {row.is_active ? "Yes" : "No"}
+                </Typography>
+                {row.remarks && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
+                    Remarks: {row.remarks}
+                  </Typography>
+                )}
+              </Box>
+              <Stack direction="row" spacing={0.5}>
+                <Tooltip title="Edit">
+                  <IconButton
+                    size="small"
+                    aria-label="Edit overall grading scale"
+                    onClick={() => {
+                      setOverallForm({
+                        id: row.id,
+                        curriculum_id: row.curriculum_id || "",
+                        curriculum_class_id: row.curriculum_class_id || "",
+                        range_from: String(row.min_score ?? 0),
+                        range_to: String(row.max_score ?? 0),
+                        overall_grade: row.overall_grade || "",
+                        remarks: row.remarks || "",
+                        is_pass: row.is_pass == null ? "" : String(Boolean(row.is_pass)),
+                        sort_order: String(row.sort_order ?? 0),
+                        is_active: row.is_active !== false,
+                      });
+                      setOverallOpen(true);
+                    }}
+                    sx={actionIconSx}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Delete">
+                  <IconButton
+                    size="small"
+                    aria-label="Delete overall grading scale"
+                    onClick={() => void removeScale("overall", row.id)}
+                    sx={{ ...actionIconSx, "&:hover": { bgcolor: "#FEE2E2", color: primaryRed } }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      ))}
+    </Stack>
+  );
 
   return (
     <Stack spacing={1.5}>
       <Card elevation={0} sx={{ borderRadius: 2, border: `1px solid ${primaryLight}` }}>
         <CardContent sx={{ p: 1.5 }}>
           <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ xs: "stretch", md: "center" }}>
-            <FormControl size="small" sx={{ minWidth: 260 }}>
+            <FormControl size="small" sx={{ minWidth: 260, ...inputSx }}>
               <InputLabel>Curriculum</InputLabel>
               <Select
                 label="Curriculum"
@@ -393,232 +530,126 @@ const CurriculumGradingSystemTab = forwardRef(function CurriculumGradingSystemTa
         <Tab label="Overall grading scales" />
       </Tabs>
 
-      {error ? <Alert severity="error">{error}</Alert> : null}
-      {loading ? (
-        <Alert severity="info">Loading grading scales...</Alert>
-      ) : subTab === 0 ? (
-        <Stack spacing={1}>
-          {!subjectRows.length ? <Alert severity="info">No subject grading scales yet.</Alert> : null}
-          {subjectRows.map((row) => (
-            <Card key={row.id} variant="outlined" sx={{ borderColor: primaryLight }}>
-              <CardContent sx={{ p: 1.25, "&:last-child": { pb: 1.25 } }}>
-                <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1}>
-                  <Box>
-                    <Typography sx={{ fontWeight: 800 }}>
-                      {row.curriculum_subject?.name || "Subject"}: {row.grade} ({row.min_mark} - {row.max_mark}{row.points != null ? ` · ${row.points} pts` : ""})
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {row.curriculum?.name || "Curriculum"} | {row.curriculum_class?.name || "Class"} | Active: {row.is_active ? "Yes" : "No"}
-                    </Typography>
-                    {row.remarks && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
-                        Remarks: {row.remarks}
-                      </Typography>
-                    )}
-                  </Box>
-                  <Stack direction="row" spacing={0.5}>
-                    <Tooltip title="Edit">
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setSubjectForm({
-                            id: row.id,
-                            curriculum_id: row.curriculum_id || "",
-                            curriculum_class_id: row.curriculum_class_id || "",
-                            curriculum_subject_id: row.curriculum_subject_id || "",
-                            min_mark: String(row.min_mark ?? 0),
-                            max_mark: String(row.max_mark ?? 100),
-                            grade: row.grade || "",
-                            remarks: row.remarks || "",
-                            points: row.points == null ? "" : String(row.points),
-                            is_pass: row.is_pass == null ? "" : String(Boolean(row.is_pass)),
-                            sort_order: String(row.sort_order ?? 0),
-                            is_active: row.is_active !== false,
-                          });
-                          setSubjectOpen(true);
-                        }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete">
-                      <IconButton size="small" color="error" onClick={() => void removeScale("subject", row.id)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Stack>
-                </Stack>
-              </CardContent>
-            </Card>
-          ))}
-        </Stack>
-      ) : (
-        <Stack spacing={1}>
-          {!overallRows.length ? <Alert severity="info">No overall grading scales yet.</Alert> : null}
-          {overallRows.map((row) => (
-            <Card key={row.id} variant="outlined" sx={{ borderColor: primaryLight }}>
-              <CardContent sx={{ p: 1.25, "&:last-child": { pb: 1.25 } }}>
-                <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1}>
-                  <Box>
-                    <Typography sx={{ fontWeight: 800 }}>
-                      {row.overall_grade}: total marks {row.min_score} – {row.max_score}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {row.curriculum?.name || "Curriculum"} | {row.curriculum_class?.name || "Class"} | Active: {row.is_active ? "Yes" : "No"}
-                    </Typography>
-                    {row.remarks && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
-                        Remarks: {row.remarks}
-                      </Typography>
-                    )}
-                  </Box>
-                  <Stack direction="row" spacing={0.5}>
-                    <Tooltip title="Edit">
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setOverallForm({
-                            id: row.id,
-                            curriculum_id: row.curriculum_id || "",
-                            curriculum_class_id: row.curriculum_class_id || "",
-                            range_from: String(row.min_score ?? 0),
-                            range_to: String(row.max_score ?? 0),
-                            overall_grade: row.overall_grade || "",
-                            remarks: row.remarks || "",
-                            is_pass: row.is_pass == null ? "" : String(Boolean(row.is_pass)),
-                            sort_order: String(row.sort_order ?? 0),
-                            is_active: row.is_active !== false,
-                          });
-                          setOverallOpen(true);
-                        }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete">
-                      <IconButton size="small" color="error" onClick={() => void removeScale("overall", row.id)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Stack>
-                </Stack>
-              </CardContent>
-            </Card>
-          ))}
-        </Stack>
-      )}
+      <TabPanelShell loading={loading} error={error || null} onDismissError={() => setError("")}>
+        {!loading && (subTab === 0 ? renderSubjectCards() : renderOverallCards())}
+      </TabPanelShell>
 
-      <Dialog open={subjectOpen} onClose={() => !subjectSaving && setSubjectOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{subjectForm.id ? "Edit subject grading scale" : "Create subject grading scale"}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={1.25} sx={{ mt: 0.75 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Curriculum</InputLabel>
-              <Select label="Curriculum" value={subjectForm.curriculum_id} onChange={(e) => setSubjectForm((f) => ({ ...f, curriculum_id: e.target.value }))}>
-                <MenuItem value="">Select</MenuItem>
-                {curriculumOptions.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth size="small">
-              <InputLabel>Class</InputLabel>
-              <Select label="Class" value={subjectForm.curriculum_class_id} onChange={(e) => setSubjectForm((f) => ({ ...f, curriculum_class_id: e.target.value }))}>
-                <MenuItem value="">Select</MenuItem>
-                {dialogClassOptions.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth size="small">
-              <InputLabel>Subject</InputLabel>
-              <Select label="Subject" value={subjectForm.curriculum_subject_id} onChange={(e) => setSubjectForm((f) => ({ ...f, curriculum_subject_id: e.target.value }))}>
-                <MenuItem value="">Select</MenuItem>
-                {dialogSubjectOptions.map((s) => (
-                  <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-              <TextField label="Min mark" type="number" size="small" fullWidth value={subjectForm.min_mark} onChange={(e) => setSubjectForm((f) => ({ ...f, min_mark: e.target.value }))} />
-              <TextField label="Max mark" type="number" size="small" fullWidth value={subjectForm.max_mark} onChange={(e) => setSubjectForm((f) => ({ ...f, max_mark: e.target.value }))} />
-            </Stack>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-              <TextField label="Grade" size="small" fullWidth value={subjectForm.grade} onChange={(e) => setSubjectForm((f) => ({ ...f, grade: e.target.value }))} />
-              <TextField label="Points (optional)" type="number" size="small" fullWidth value={subjectForm.points} onChange={(e) => setSubjectForm((f) => ({ ...f, points: e.target.value }))} />
-            </Stack>
-            <TextField label="Remarks" size="small" fullWidth multiline minRows={2} value={subjectForm.remarks} onChange={(e) => setSubjectForm((f) => ({ ...f, remarks: e.target.value }))} />
+      <PremiumDialog
+        open={subjectOpen}
+        onClose={() => !subjectSaving && setSubjectOpen(false)}
+        title={subjectForm.id ? "Edit subject grading scale" : "Create subject grading scale"}
+        subtitle="Define mark ranges and grades for a subject"
+        icon={<RuleIcon />}
+        maxWidth="md"
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !subjectSaving && setSubjectOpen(false)} disabled={subjectSaving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={subjectSaving} onClick={() => void saveSubjectScale()}>
+              Save
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        <Stack spacing={1.25}>
+          <FormControl fullWidth size="small" sx={inputSx}>
+            <InputLabel>Curriculum</InputLabel>
+            <Select label="Curriculum" value={subjectForm.curriculum_id} onChange={(e) => setSubjectForm((f) => ({ ...f, curriculum_id: e.target.value }))}>
+              <MenuItem value="">Select</MenuItem>
+              {curriculumOptions.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth size="small" sx={inputSx}>
+            <InputLabel>Class</InputLabel>
+            <Select label="Class" value={subjectForm.curriculum_class_id} onChange={(e) => setSubjectForm((f) => ({ ...f, curriculum_class_id: e.target.value }))}>
+              <MenuItem value="">Select</MenuItem>
+              {dialogClassOptions.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth size="small" sx={inputSx}>
+            <InputLabel>Subject</InputLabel>
+            <Select label="Subject" value={subjectForm.curriculum_subject_id} onChange={(e) => setSubjectForm((f) => ({ ...f, curriculum_subject_id: e.target.value }))}>
+              <MenuItem value="">Select</MenuItem>
+              {dialogSubjectOptions.map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <TextField label="Min mark" type="number" size="small" fullWidth value={subjectForm.min_mark} onChange={(e) => setSubjectForm((f) => ({ ...f, min_mark: e.target.value }))} sx={inputSx} />
+            <TextField label="Max mark" type="number" size="small" fullWidth value={subjectForm.max_mark} onChange={(e) => setSubjectForm((f) => ({ ...f, max_mark: e.target.value }))} sx={inputSx} />
           </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSubjectOpen(false)} disabled={subjectSaving}>Cancel</Button>
-          <Button variant="contained" onClick={() => void saveSubjectScale()} disabled={subjectSaving} sx={{ bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }}>
-            {subjectSaving ? "Saving..." : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <TextField label="Grade" size="small" fullWidth value={subjectForm.grade} onChange={(e) => setSubjectForm((f) => ({ ...f, grade: e.target.value }))} sx={inputSx} />
+            <TextField label="Points (optional)" type="number" size="small" fullWidth value={subjectForm.points} onChange={(e) => setSubjectForm((f) => ({ ...f, points: e.target.value }))} sx={inputSx} />
+          </Stack>
+          <TextField label="Remarks" size="small" fullWidth multiline minRows={2} value={subjectForm.remarks} onChange={(e) => setSubjectForm((f) => ({ ...f, remarks: e.target.value }))} sx={inputSx} />
+        </Stack>
+      </PremiumDialog>
 
-      <Dialog open={overallOpen} onClose={() => !overallSaving && setOverallOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{overallForm.id ? "Edit overall grading scale" : "Create overall grading scale"}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={1.25} sx={{ mt: 0.75 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Curriculum</InputLabel>
-              <Select label="Curriculum" value={overallForm.curriculum_id} onChange={(e) => setOverallForm((f) => ({ ...f, curriculum_id: e.target.value }))}>
-                <MenuItem value="">Select</MenuItem>
-                {curriculumOptions.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth size="small">
-              <InputLabel>Class</InputLabel>
-              <Select label="Class" value={overallForm.curriculum_class_id} onChange={(e) => setOverallForm((f) => ({ ...f, curriculum_class_id: e.target.value }))}>
-                <MenuItem value="">Select</MenuItem>
-                {dialogClassOptions.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Typography variant="caption" color="text.secondary">
-              When report card totals fall in this range (sum of selected exam marks), students receive this overall grade.
-            </Typography>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-              <TextField
-                label="Range from"
-                type="number"
-                size="small"
-                fullWidth
-                value={overallForm.range_from}
-                onChange={(e) => setOverallForm((f) => ({ ...f, range_from: e.target.value }))}
-              />
-              <TextField
-                label="Range to"
-                type="number"
-                size="small"
-                fullWidth
-                value={overallForm.range_to}
-                onChange={(e) => setOverallForm((f) => ({ ...f, range_to: e.target.value }))}
-              />
-            </Stack>
-            <TextField
-              label="Overall grade"
-              size="small"
-              fullWidth
-              placeholder="e.g. A, B+, Pass"
-              value={overallForm.overall_grade}
-              onChange={(e) => setOverallForm((f) => ({ ...f, overall_grade: e.target.value }))}
-            />
-            <TextField label="Remarks" size="small" fullWidth multiline minRows={2} value={overallForm.remarks} onChange={(e) => setOverallForm((f) => ({ ...f, remarks: e.target.value }))} />
+      <PremiumDialog
+        open={overallOpen}
+        onClose={() => !overallSaving && setOverallOpen(false)}
+        title={overallForm.id ? "Edit overall grading scale" : "Create overall grading scale"}
+        subtitle="Define total mark ranges and overall grades"
+        icon={<RuleIcon />}
+        maxWidth="md"
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !overallSaving && setOverallOpen(false)} disabled={overallSaving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={overallSaving} onClick={() => void saveOverallScale()}>
+              Save
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        <Stack spacing={1.25}>
+          <FormControl fullWidth size="small" sx={inputSx}>
+            <InputLabel>Curriculum</InputLabel>
+            <Select label="Curriculum" value={overallForm.curriculum_id} onChange={(e) => setOverallForm((f) => ({ ...f, curriculum_id: e.target.value }))}>
+              <MenuItem value="">Select</MenuItem>
+              {curriculumOptions.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth size="small" sx={inputSx}>
+            <InputLabel>Class</InputLabel>
+            <Select label="Class" value={overallForm.curriculum_class_id} onChange={(e) => setOverallForm((f) => ({ ...f, curriculum_class_id: e.target.value }))}>
+              <MenuItem value="">Select</MenuItem>
+              {dialogClassOptions.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Typography variant="caption" color="text.secondary">
+            When report card totals fall in this range (sum of selected exam marks), students receive this overall grade. Set ranges to match your school&apos;s total mark scale — not limited to 0–100.
+          </Typography>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <TextField label="Range from" type="number" size="small" fullWidth value={overallForm.range_from} onChange={(e) => setOverallForm((f) => ({ ...f, range_from: e.target.value }))} helperText="Minimum total marks" inputProps={{ min: 0, step: "any" }} sx={inputSx} />
+            <TextField label="Range to" type="number" size="small" fullWidth value={overallForm.range_to} onChange={(e) => setOverallForm((f) => ({ ...f, range_to: e.target.value }))} helperText="Maximum total marks" inputProps={{ min: 0, step: "any" }} sx={inputSx} />
           </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOverallOpen(false)} disabled={overallSaving}>Cancel</Button>
-          <Button variant="contained" onClick={() => void saveOverallScale()} disabled={overallSaving} sx={{ bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }}>
-            {overallSaving ? "Saving..." : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+          <TextField label="Overall grade" size="small" fullWidth placeholder="e.g. A, B+, Pass" value={overallForm.overall_grade} onChange={(e) => setOverallForm((f) => ({ ...f, overall_grade: e.target.value }))} sx={inputSx} />
+          <TextField label="Remarks" size="small" fullWidth multiline minRows={2} value={overallForm.remarks} onChange={(e) => setOverallForm((f) => ({ ...f, remarks: e.target.value }))} sx={inputSx} />
+        </Stack>
+      </PremiumDialog>
     </Stack>
   );
 });

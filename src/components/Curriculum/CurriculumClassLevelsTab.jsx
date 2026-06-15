@@ -2,15 +2,12 @@ import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperat
 import {
   Box,
   Typography,
-  Button,
   IconButton,
   Stack,
-  CircularProgress,
   Alert,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   TablePagination,
@@ -19,46 +16,27 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
 } from "@mui/material";
 import {
   Delete as DeleteIcon,
-  Close as CloseIcon,
   Visibility as ViewIcon,
   Edit as EditIcon,
+  CalendarMonth as CalendarMonthIcon,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
-
-const primaryRed = "#DC2626";
-const primaryDark = "#B91C1C";
-const primaryLight = "#FEE2E2";
-
-const authJsonHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-async function fetchAllCurricula(token) {
-  const out = [];
-  let page = 1;
-  let totalPages = 1;
-  while (page <= totalPages && page <= 100) {
-    const params = new URLSearchParams({ page: String(page), limit: "100" });
-    const res = await fetch(`/api/curricula?${params}`, { headers: authJsonHeaders(token) });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success) throw new Error(data.message || `Could not load curricula (${res.status})`);
-    const chunk = Array.isArray(data.data) ? data.data : [];
-    out.push(...chunk);
-    totalPages = data.pagination?.totalPages ?? 1;
-    page += 1;
-  }
-  return out;
-}
+import { authJsonHeaders, fetchAllCurricula, truncateText, primaryRed, primaryDark, inputSx, actionIconSx } from "./curriculumShared";
+import {
+  PremiumDialog,
+  DetailField,
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+} from "./curriculumUi";
 
 async function fetchClassesForCurriculum(token, curriculumId) {
   const out = [];
@@ -77,13 +55,6 @@ async function fetchClassesForCurriculum(token, curriculumId) {
     page += 1;
   }
   return out;
-}
-
-function truncate(text, max = 160) {
-  if (!text || typeof text !== "string") return "—";
-  const t = text.trim();
-  if (!t) return "—";
-  return t.length <= max ? t : `${t.slice(0, max)}…`;
 }
 
 const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
@@ -461,7 +432,7 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
               maxWidth: "100%",
             }}
           >
-            <FormControl size="small" sx={{ width: { xs: "min(100%, 320px)", sm: 280 } }} disabled={curriculaLoading}>
+            <FormControl size="small" sx={{ width: { xs: "min(100%, 320px)", sm: 280 }, ...inputSx }} disabled={curriculaLoading}>
               <InputLabel id="terms-filter-curriculum-label">Filter by curriculum</InputLabel>
               <Select
                 labelId="terms-filter-curriculum-label"
@@ -469,193 +440,8 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
                 value={filterCurriculumId}
                 onChange={(e) => handleFilterCurriculumChange(e.target.value)}
               >
-              <MenuItem value="">
-                <em>All curricula</em>
-              </MenuItem>
-              {curriculaOptions.map((c) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.name}
-                  {c.type ? ` — ${c.type}` : ""}
-                </MenuItem>
-              ))}
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ width: { xs: "min(100%, 320px)", sm: 280 } }} disabled={!filterCurriculumId || classesLoading}>
-              <InputLabel id="terms-filter-class-label">Filter by class</InputLabel>
-              <Select
-                labelId="terms-filter-class-label"
-                label="Filter by class"
-                value={filterClassId}
-                onChange={(e) => handleFilterClassChange(e.target.value)}
-              >
-              <MenuItem value="">
-                <em>All classes</em>
-              </MenuItem>
-              {classOptions.map((c) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.name}
-                  {c.code ? ` (${c.code})` : ""}
-                </MenuItem>
-              ))}
-              </Select>
-            </FormControl>
-          </Stack>
-        </Box>
-
-        {levelsError && (
-          <Alert severity="error" sx={{ borderRadius: 2 }} onClose={() => setLevelsError(null)}>
-            {levelsError}
-          </Alert>
-        )}
-
-        <TableContainer
-          sx={{
-            borderRadius: 2,
-            overflow: "auto",
-            border: `1px solid ${primaryLight}`,
-            boxShadow: `0 8px 28px -12px ${primaryRed}33`,
-            bgcolor: "rgba(255,255,255,0.98)",
-          }}
-        >
-          <Table size="medium" sx={{ minWidth: 420, tableLayout: "fixed" }}>
-            <TableHead>
-              <TableRow
-                sx={{
-                  background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-                  "& .MuiTableCell-head": {
-                    color: "#fff",
-                    fontWeight: 700,
-                    fontSize: "0.8rem",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.04em",
-                    borderBottom: "none",
-                  },
-                }}
-              >
-                <TableCell width={56}>No.</TableCell>
-                <TableCell>Curriculum</TableCell>
-                <TableCell>Term</TableCell>
-                <TableCell align="right" sx={{ width: actionsWidth, minWidth: actionsWidth, whiteSpace: "nowrap" }}>
-                  Actions
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loadingLevels ? (
-                <TableRow>
-                  <TableCell colSpan={tableColSpan} sx={{ borderBottom: "none" }}>
-                    <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-                      <CircularProgress sx={{ color: primaryRed }} />
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ) : rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={tableColSpan}>
-                    <Typography color="text.secondary" sx={{ py: 4, textAlign: "center" }}>
-                      No terms yet. Use Add term in the header after choosing curriculum and class.
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                rows.map((r, idx) => (
-                  <TableRow key={r.id} hover>
-                    <TableCell sx={{ color: "text.secondary" }}>{page * rowsPerPage + idx + 1}</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>{curriculumMeta(r)?.name || "—"}</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>{r.name}</TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        width: actionsWidth,
-                        minWidth: actionsWidth,
-                        whiteSpace: "nowrap",
-                        verticalAlign: "middle",
-                        py: 0.5,
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          display: "inline-flex",
-                          flexDirection: "row",
-                          flexWrap: "nowrap",
-                          alignItems: "center",
-                          justifyContent: "flex-end",
-                          gap: 0,
-                        }}
-                      >
-                        <Tooltip title="View">
-                          <IconButton size="small" aria-label="View term" onClick={() => setViewRow(r)} sx={{ color: primaryDark, flexShrink: 0 }}>
-                            <ViewIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Edit">
-                          <IconButton size="small" aria-label="Edit term" onClick={() => openEdit(r)} sx={{ color: primaryRed, flexShrink: 0 }}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                          <IconButton size="small" aria-label="Delete term" onClick={() => handleDelete(r)} sx={{ color: primaryRed, flexShrink: 0 }}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-          <TablePagination
-            component="div"
-            count={totalRows}
-            page={page}
-            onPageChange={(_, p) => setPage(p)}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(parseInt(e.target.value, 10));
-              setPage(0);
-            }}
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            sx={{
-              borderTop: `1px solid ${primaryLight}`,
-              "& .MuiTablePagination-toolbar": { fontWeight: 600 },
-            }}
-          />
-        </TableContainer>
-      </Stack>
-
-      <Dialog open={dialogOpen} onClose={() => !saving && setDialogOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle
-          sx={{
-            background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mb: 2,
-          }}
-        >
-          New term
-          <IconButton onClick={() => setDialogOpen(false)} disabled={saving} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2, pb: 2, overflow: "visible" }}>
-          <Stack spacing={2}>
-            <FormControl fullWidth required sx={{ mt: 0.5 }} disabled={curriculaLoading}>
-              <InputLabel id="dlg-term-curriculum-label">Curriculum</InputLabel>
-              <Select
-                labelId="dlg-term-curriculum-label"
-                label="Curriculum"
-                value={dialogCurriculumId}
-                onChange={(e) => {
-                  setDialogCurriculumId(e.target.value);
-                  setDialogClassId("");
-                }}
-              >
                 <MenuItem value="">
-                  <em>Select curriculum</em>
+                  <em>All curricula</em>
                 </MenuItem>
                 {curriculaOptions.map((c) => (
                   <MenuItem key={c.id} value={c.id}>
@@ -665,13 +451,19 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
                 ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth required disabled={!dialogCurriculumId || dialogClassesLoading}>
-              <InputLabel id="dlg-term-class-label">Class</InputLabel>
-              <Select labelId="dlg-term-class-label" label="Class" value={dialogClassId} onChange={(e) => setDialogClassId(e.target.value)}>
+
+            <FormControl size="small" sx={{ width: { xs: "min(100%, 320px)", sm: 280 }, ...inputSx }} disabled={!filterCurriculumId || classesLoading}>
+              <InputLabel id="terms-filter-class-label">Filter by class</InputLabel>
+              <Select
+                labelId="terms-filter-class-label"
+                label="Filter by class"
+                value={filterClassId}
+                onChange={(e) => handleFilterClassChange(e.target.value)}
+              >
                 <MenuItem value="">
-                  <em>Select class</em>
+                  <em>All classes</em>
                 </MenuItem>
-                {dialogClassOptions.map((c) => (
+                {classOptions.map((c) => (
                   <MenuItem key={c.id} value={c.id}>
                     {c.name}
                     {c.code ? ` (${c.code})` : ""}
@@ -679,114 +471,224 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
                 ))}
               </Select>
             </FormControl>
-            <TextField label="Term name" fullWidth required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} helperText='e.g. "Term 1", "Phase A"' />
-            <TextField label="Display order" fullWidth value={form.level_order} onChange={(e) => setForm((f) => ({ ...f, level_order: e.target.value }))} helperText="Lower numbers appear first in lists." />
-            <TextField label="Description" fullWidth multiline minRows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
           </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setDialogOpen(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleCreateSubmit} disabled={saving} sx={{ bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }}>
-            {saving ? "Saving…" : "Create"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        </Box>
 
-      <Dialog open={!!viewRow} onClose={() => setViewRow(null)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle
-          sx={{
-            background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mb: 2,
-          }}
-        >
-          Term details
-          <IconButton onClick={() => setViewRow(null)} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2, pb: 2 }}>
-          {viewRow && (
-            <Stack spacing={1.5}>
-              <Typography variant="body2" color="text.secondary">
-                Curriculum
-              </Typography>
-              <Typography sx={{ fontWeight: 700 }}>{curriculumMeta(viewRow)?.name || "—"}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
-                Class
-              </Typography>
-              <Typography sx={{ fontWeight: 600 }}>
-                {classMeta(viewRow)?.name || "—"}
-                {classMeta(viewRow)?.code ? ` (${classMeta(viewRow)?.code})` : ""}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Term name
-              </Typography>
-              <Typography sx={{ fontWeight: 600 }}>{viewRow.name}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Display order
-              </Typography>
-              <Typography>{viewRow.level_order ?? "—"}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Description
-              </Typography>
-              <Typography sx={{ whiteSpace: "pre-wrap" }}>{truncate(viewRow.description, 600)}</Typography>
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setViewRow(null)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={editOpen} onClose={() => !editSaving && setEditOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle
-          sx={{
-            background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 100%)`,
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mb: 2,
-          }}
-        >
-          Edit term
-          <IconButton onClick={() => setEditOpen(false)} disabled={editSaving} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2, pb: 2, overflow: "visible" }}>
-          <Stack spacing={2}>
-            <TextField label="Curriculum" fullWidth value={curriculumMeta(editRow)?.name || ""} disabled />
-            <TextField
-              label="Class"
-              fullWidth
-              value={
-                editRow
-                  ? `${classMeta(editRow)?.name || ""}${classMeta(editRow)?.code ? ` (${classMeta(editRow)?.code})` : ""}`
-                  : ""
+        <TabPanelShell loading={loadingLevels} error={levelsError} onDismissError={() => setLevelsError(null)}>
+          {!loadingLevels && (
+            <DataTableShell
+              pagination={
+                <TablePagination
+                  component="div"
+                  count={totalRows}
+                  page={page}
+                  onPageChange={(_, p) => setPage(p)}
+                  rowsPerPage={rowsPerPage}
+                  onRowsPerPageChange={(e) => {
+                    setRowsPerPage(parseInt(e.target.value, 10));
+                    setPage(0);
+                  }}
+                  rowsPerPageOptions={[5, 10, 25, 50]}
+                  labelRowsPerPage="Rows per page"
+                  sx={tablePaginationSx}
+                />
               }
-              disabled
+            >
+              <Table size="medium" sx={{ minWidth: 420, tableLayout: "fixed" }}>
+                <TableHead>
+                  <TableRow sx={tableHeadRowSx}>
+                    <TableCell width={56}>No.</TableCell>
+                    <TableCell>Curriculum</TableCell>
+                    <TableCell>Term</TableCell>
+                    <TableCell align="right" sx={{ width: actionsWidth, minWidth: actionsWidth, whiteSpace: "nowrap" }}>
+                      Actions
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={tableColSpan}>
+                        <EmptyTableRow message="No terms yet. Use Add term in the header after choosing curriculum and class." />
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    rows.map((r, idx) => (
+                      <TableRow key={r.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
+                        <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>{page * rowsPerPage + idx + 1}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{curriculumMeta(r)?.name || "—"}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{r.name}</TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{
+                            width: actionsWidth,
+                            minWidth: actionsWidth,
+                            whiteSpace: "nowrap",
+                            verticalAlign: "middle",
+                            py: 0.5,
+                          }}
+                        >
+                          <Tooltip title="View">
+                            <IconButton size="small" aria-label="View term" onClick={() => setViewRow(r)} sx={actionIconSx}>
+                              <ViewIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Edit">
+                            <IconButton size="small" aria-label="Edit term" onClick={() => openEdit(r)} sx={actionIconSx}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete">
+                            <IconButton
+                              size="small"
+                              aria-label="Delete term"
+                              onClick={() => handleDelete(r)}
+                              sx={{ ...actionIconSx, "&:hover": { bgcolor: "#FEE2E2", color: primaryRed } }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </DataTableShell>
+          )}
+        </TabPanelShell>
+      </Stack>
+
+      <PremiumDialog
+        open={dialogOpen}
+        onClose={() => !saving && setDialogOpen(false)}
+        title="New term"
+        subtitle="Add a term to a curriculum class"
+        icon={<CalendarMonthIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !saving && setDialogOpen(false)} disabled={saving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={saving} onClick={handleCreateSubmit}>
+              Create
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        <Stack spacing={2}>
+          <FormControl fullWidth required sx={inputSx} disabled={curriculaLoading}>
+            <InputLabel id="dlg-term-curriculum-label">Curriculum</InputLabel>
+            <Select
+              labelId="dlg-term-curriculum-label"
+              label="Curriculum"
+              value={dialogCurriculumId}
+              onChange={(e) => {
+                setDialogCurriculumId(e.target.value);
+                setDialogClassId("");
+              }}
+            >
+              <MenuItem value="">
+                <em>Select curriculum</em>
+              </MenuItem>
+              {curriculaOptions.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                  {c.type ? ` — ${c.type}` : ""}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth required sx={inputSx} disabled={!dialogCurriculumId || dialogClassesLoading}>
+            <InputLabel id="dlg-term-class-label">Class</InputLabel>
+            <Select labelId="dlg-term-class-label" label="Class" value={dialogClassId} onChange={(e) => setDialogClassId(e.target.value)}>
+              <MenuItem value="">
+                <em>Select class</em>
+              </MenuItem>
+              {dialogClassOptions.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                  {c.code ? ` (${c.code})` : ""}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField label="Term name" fullWidth required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} helperText='e.g. "Term 1", "Phase A"' sx={inputSx} />
+          <TextField label="Display order" fullWidth value={form.level_order} onChange={(e) => setForm((f) => ({ ...f, level_order: e.target.value }))} helperText="Lower numbers appear first in lists." sx={inputSx} />
+          <TextField label="Description" fullWidth multiline minRows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} sx={inputSx} />
+        </Stack>
+      </PremiumDialog>
+
+      <PremiumDialog
+        open={!!viewRow}
+        onClose={() => setViewRow(null)}
+        title={viewRow?.name || "Term details"}
+        subtitle="Term overview"
+        icon={<CalendarMonthIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => setViewRow(null)}>Close</DialogGhostButton>
+            {viewRow ? (
+              <DialogPrimaryButton startIcon={<EditIcon />} onClick={() => { setViewRow(null); openEdit(viewRow); }}>
+                Edit
+              </DialogPrimaryButton>
+            ) : null}
+          </>
+        }
+      >
+        {viewRow ? (
+          <Stack spacing={1.5}>
+            <DetailField label="Curriculum" value={curriculumMeta(viewRow)?.name} />
+            <DetailField
+              label="Class"
+              value={
+                classMeta(viewRow)?.name
+                  ? `${classMeta(viewRow)?.name}${classMeta(viewRow)?.code ? ` (${classMeta(viewRow)?.code})` : ""}`
+                  : "—"
+              }
             />
-            <TextField label="Term name" fullWidth required value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
-            <TextField label="Display order" fullWidth value={editForm.level_order} onChange={(e) => setEditForm((f) => ({ ...f, level_order: e.target.value }))} />
-            <TextField label="Description" fullWidth multiline minRows={2} value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} />
+            <DetailField label="Term name" value={viewRow.name} />
+            <DetailField label="Display order" value={viewRow.level_order ?? "—"} />
+            <DetailField label="Description" value={truncateText(viewRow.description, 600)} />
           </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setEditOpen(false)} disabled={editSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleEditSubmit} disabled={editSaving} sx={{ bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }}>
-            {editSaving ? "Saving…" : "Save"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        ) : null}
+      </PremiumDialog>
+
+      <PremiumDialog
+        open={editOpen}
+        onClose={() => !editSaving && setEditOpen(false)}
+        title="Edit term"
+        subtitle="Update term details"
+        icon={<CalendarMonthIcon />}
+        footer={
+          <>
+            <DialogGhostButton onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}>
+              Cancel
+            </DialogGhostButton>
+            <DialogPrimaryButton loading={editSaving} onClick={handleEditSubmit}>
+              Save
+            </DialogPrimaryButton>
+          </>
+        }
+      >
+        <Stack spacing={2}>
+          <TextField label="Curriculum" fullWidth value={curriculumMeta(editRow)?.name || ""} disabled sx={inputSx} />
+          <TextField
+            label="Class"
+            fullWidth
+            value={
+              editRow
+                ? `${classMeta(editRow)?.name || ""}${classMeta(editRow)?.code ? ` (${classMeta(editRow)?.code})` : ""}`
+                : ""
+            }
+            disabled
+            sx={inputSx}
+          />
+          <TextField label="Term name" fullWidth required value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} sx={inputSx} />
+          <TextField label="Display order" fullWidth value={editForm.level_order} onChange={(e) => setEditForm((f) => ({ ...f, level_order: e.target.value }))} sx={inputSx} />
+          <TextField label="Description" fullWidth multiline minRows={2} value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} sx={inputSx} />
+        </Stack>
+      </PremiumDialog>
     </>
   );
 });

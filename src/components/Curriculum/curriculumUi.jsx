@@ -1,0 +1,15 @@
+export {
+  ElimuPlusHero as CurriculumHero,
+  ElimuPlusTabs as CurriculumTabs,
+  PremiumDialog,
+  DetailField,
+  FormSection,
+  HeroActionButton,
+  DataTableShell,
+  TabPanelShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  DialogPrimaryButton,
+  DialogGhostButton,
+  EmptyTableRow,
+} from "../SchoolProfile/elimuPlusUi";

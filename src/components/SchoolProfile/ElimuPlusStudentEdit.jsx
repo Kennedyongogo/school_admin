@@ -14,56 +14,27 @@ import {
   Tooltip,
   CircularProgress,
   Alert,
-  Card,
-  CardContent,
   FormControlLabel,
   Checkbox,
   Avatar,
+  Grid,
 } from "@mui/material";
 import { ArrowBack as ArrowBackIcon, Edit as EditIcon } from "@mui/icons-material";
 import Swal from "sweetalert2";
 import { levelsForClass, studentLevelIdFromRow } from "./studentFormLevels";
-
-const accent = "#DC2626";
-const accentDark = "#B91C1C";
-const accentLight = "#FEE2E2";
-const backgroundLight = "#FEF2F2";
-
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-const authMultipartHeaders = (token) => ({
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
-
-async function fetchAllPages(path, token) {
-  const out = [];
-  let page = 1;
-  let totalPages = 1;
-  do {
-    const sep = path.includes("?") ? "&" : "?";
-    const res = await fetch(`${path}${sep}page=${page}&limit=100`, { headers: authHeaders(token) });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success || !Array.isArray(data.data)) break;
-    out.push(...data.data);
-    totalPages = data.pagination?.totalPages ?? 1;
-    page += 1;
-    if (page > 50) break;
-  } while (page <= totalPages);
-  return out;
-}
-
-function profilePhotoUrl(stored) {
-  if (!stored || typeof stored !== "string") return null;
-  const t = stored.trim();
-  if (!t) return null;
-  if (/^https?:\/\//i.test(t)) return t;
-  return t.startsWith("/") ? t : `/${t}`;
-}
+import {
+  authHeaders,
+  authMultipartHeaders,
+  fetchAllPages,
+  inputSx,
+  pageShellSx,
+  primaryRed,
+  primaryDark,
+  primaryBtnSx,
+  ghostBtnSx,
+  resolveAssetUrl,
+} from "./elimuPlusShared";
+import { ElimuPlusHero, FormSection } from "./elimuPlusUi";
 
 function rowToForm(row) {
   const u = row?.user || {};
@@ -99,16 +70,6 @@ function rowToForm(row) {
     student_profile_picture_url: row?.profile_picture ?? "",
   };
 }
-
-const fullMainBleedSx = (theme) => ({
-  width: `calc(100% + ${theme.spacing(6)})`,
-  maxWidth: "none",
-  marginLeft: theme.spacing(-3),
-  marginRight: theme.spacing(-3),
-  marginTop: "1px",
-  marginBottom: "1px",
-  boxSizing: "border-box",
-});
 
 export default function ElimuPlusStudentEdit() {
   const navigate = useNavigate();
@@ -254,6 +215,7 @@ export default function ElimuPlusStudentEdit() {
       await Swal.fire({
         icon: "success",
         title: "Student updated",
+        confirmButtonColor: primaryRed,
         timer: 1400,
         showConfirmButton: false,
       });
@@ -265,164 +227,181 @@ export default function ElimuPlusStudentEdit() {
     }
   };
 
+  const photoSrc = profilePhotoPreview || resolveAssetUrl(form.student_profile_picture_url);
+
+  if (pageLoading) {
+    return (
+      <Box sx={{ ...pageShellSx, display: "flex", justifyContent: "center", alignItems: "center", minHeight: 360 }}>
+        <CircularProgress sx={{ color: primaryRed }} />
+      </Box>
+    );
+  }
+
   return (
-    <Box
-      component="form"
-      onSubmit={handleSubmit}
-      sx={(theme) => ({
-        ...fullMainBleedSx(theme),
-        marginTop: theme.spacing(-2.5),
-        minHeight: "100%",
-        background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
-      })}
-    >
-      <Box
-        sx={{
-          background: `linear-gradient(135deg, ${accentDark} 0%, ${accent} 55%, #EF4444 100%)`,
-          px: { xs: 1.5, sm: 2 },
-          py: { xs: 1.5, sm: 2 },
-          color: "white",
-          boxShadow: `0 8px 24px ${accent}33`,
-        }}
-      >
-        <Stack direction="row" alignItems="center" spacing={1.5}>
-          <Tooltip title="Back to Elimu Plus">
-            <IconButton
-              type="button"
-              onClick={goBack}
-              aria-label="Back to Elimu Plus"
-              sx={{ color: "#fff", bgcolor: "rgba(255,255,255,0.15)", "&:hover": { bgcolor: "rgba(255,255,255,0.28)" } }}
-            >
-              <ArrowBackIcon />
-            </IconButton>
-          </Tooltip>
-          <EditIcon sx={{ fontSize: 30, opacity: 0.95 }} />
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
-              Edit student profile
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.92, mt: 0.25 }}>
-              Update full student details.
-            </Typography>
-          </Box>
-        </Stack>
-      </Box>
+    <Box component="form" onSubmit={handleSubmit} sx={{ ...pageShellSx, minHeight: "100%" }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+        <Tooltip title="Back to Elimu Plus">
+          <IconButton onClick={goBack} aria-label="Back" sx={{ bgcolor: "#fff", border: "1px solid rgba(220,38,38,0.12)", "&:hover": { bgcolor: "#FEE2E2" } }}>
+            <ArrowBackIcon sx={{ color: primaryDark }} />
+          </IconButton>
+        </Tooltip>
+      </Stack>
 
-      <Box sx={{ px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 }, width: "100%", boxSizing: "border-box" }}>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
+      <ElimuPlusHero
+        title="Edit student profile"
+        subtitle="Update full student details."
+        icon={<EditIcon sx={{ fontSize: 26, color: "#fff" }} />}
+      />
 
-        {pageLoading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <CircularProgress sx={{ color: accent }} />
-          </Box>
-        ) : (
-          <Card elevation={0} sx={{ width: "100%", borderRadius: 2, border: `1px solid ${accentLight}`, boxShadow: `0 8px 28px -12px ${accent}33`, overflow: "hidden" }}>
-            <CardContent sx={{ px: { xs: 2, sm: 3 }, py: 3 }}>
-              <Stack spacing={2.5} sx={{ width: "100%", maxWidth: "100%" }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: accentDark, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                  Student profile photo
-                </Typography>
-                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                  <Avatar src={profilePhotoPreview || profilePhotoUrl(form.student_profile_picture_url) || undefined} sx={{ width: 72, height: 72, bgcolor: `${accent}22`, color: accentDark, fontWeight: 700 }}>
-                    {!profilePhotoPreview && !form.student_profile_picture_url ? "?" : null}
-                  </Avatar>
-                  <Button variant="outlined" component="label" sx={{ borderColor: accent, color: accentDark, fontWeight: 700 }}>
-                    Choose photo
-                    <input type="file" accept="image/*" hidden onChange={(e) => setProfilePhoto(e.target.files?.[0] || null)} />
-                  </Button>
-                  {(profilePhoto || form.student_profile_picture_url) && (
-                    <Button size="small" type="button" onClick={() => { setProfilePhoto(null); setForm((prev) => ({ ...prev, student_profile_picture_url: "" })); }}>
-                      Remove
-                    </Button>
-                  )}
-                </Stack>
+      {error ? (
+        <Alert severity="error" sx={{ mt: 2, borderRadius: "14px" }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      ) : null}
 
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: accentDark, letterSpacing: "0.04em", textTransform: "uppercase", pt: 1 }}>
-                  Account (user)
-                </Typography>
-                <Stack spacing={2}>
-                  <TextField label="Full name" required fullWidth value={form.user_full_name} onChange={(e) => setForm((prev) => ({ ...prev, user_full_name: e.target.value }))} />
-                  <TextField label="Email" fullWidth type="email" value={form.user_email} onChange={(e) => setForm((prev) => ({ ...prev, user_email: e.target.value }))} />
-                  <TextField label="Username" fullWidth value={form.user_username} onChange={(e) => setForm((prev) => ({ ...prev, user_username: e.target.value }))} />
-                  <TextField label="Phone" fullWidth value={form.user_phone} onChange={(e) => setForm((prev) => ({ ...prev, user_phone: e.target.value }))} />
-                  <TextField label="Address" fullWidth multiline minRows={2} value={form.user_address} onChange={(e) => setForm((prev) => ({ ...prev, user_address: e.target.value }))} />
-                  <TextField label="Profile image URL" fullWidth value={form.user_profile_image} onChange={(e) => setForm((prev) => ({ ...prev, user_profile_image: e.target.value }))} />
-                </Stack>
+      <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
+        <Grid item xs={12} md={6}>
+          <FormSection title="Student profile photo">
+            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+              <Avatar src={photoSrc || undefined} sx={{ width: 72, height: 72, bgcolor: `${primaryRed}22`, color: primaryDark, fontWeight: 700 }}>
+                {!photoSrc ? "?" : null}
+              </Avatar>
+              <Button variant="outlined" component="label" sx={{ borderColor: primaryRed, color: primaryDark, fontWeight: 700, borderRadius: "12px", textTransform: "none" }}>
+                Choose photo
+                <input type="file" accept="image/*" hidden onChange={(e) => setProfilePhoto(e.target.files?.[0] || null)} />
+              </Button>
+              {(profilePhoto || form.student_profile_picture_url) ? (
+                <Button
+                  size="small"
+                  type="button"
+                  onClick={() => {
+                    setProfilePhoto(null);
+                    setForm((prev) => ({ ...prev, student_profile_picture_url: "" }));
+                  }}
+                  sx={{ fontWeight: 600, textTransform: "none" }}
+                >
+                  Remove
+                </Button>
+              ) : null}
+            </Stack>
+          </FormSection>
+        </Grid>
 
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: accentDark, letterSpacing: "0.04em", textTransform: "uppercase", pt: 1 }}>
-                  Student record
-                </Typography>
-                <Stack spacing={2}>
-                  <TextField label="Admission number" required fullWidth value={form.admission_number} onChange={(e) => setForm((prev) => ({ ...prev, admission_number: e.target.value }))} />
-                  <TextField label="Date of birth" type="date" required fullWidth InputLabelProps={{ shrink: true }} value={form.date_of_birth} onChange={(e) => setForm((prev) => ({ ...prev, date_of_birth: e.target.value }))} />
-                  <FormControl fullWidth>
-                    <InputLabel id="stu-edit-gender">Gender</InputLabel>
-                    <Select labelId="stu-edit-gender" label="Gender" value={form.gender} onChange={(e) => setForm((prev) => ({ ...prev, gender: e.target.value }))}>
-                      <MenuItem value="male">Male</MenuItem>
-                      <MenuItem value="female">Female</MenuItem>
-                      <MenuItem value="other">Other</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <FormControl fullWidth required>
-                    <InputLabel id="stu-edit-curr">Curriculum</InputLabel>
-                    <Select labelId="stu-edit-curr" label="Curriculum" value={form.curriculum_id === "" ? "" : form.curriculum_id} onChange={(e) => setForm((prev) => ({ ...prev, curriculum_id: e.target.value, curriculum_class_id: "", curriculum_class_level_id: "" }))}>
-                      <MenuItem value=""><em>Select…</em></MenuItem>
-                      {curricula.map((c) => (
-                        <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <FormControl fullWidth required disabled={!form.curriculum_id}>
-                    <InputLabel id="stu-edit-cc">Class</InputLabel>
-                    <Select labelId="stu-edit-cc" label="Class" value={form.curriculum_class_id === "" ? "" : form.curriculum_class_id} onChange={(e) => setForm((prev) => ({ ...prev, curriculum_class_id: e.target.value, curriculum_class_level_id: "" }))}>
-                      <MenuItem value=""><em>Select…</em></MenuItem>
-                      {allClasses.filter((cl) => cl.curriculum_id === form.curriculum_id).map((cl) => (
-                        <MenuItem key={cl.id} value={cl.id}>{cl.name}{cl.code ? ` (${cl.code})` : ""}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <FormControl fullWidth required disabled={!form.curriculum_class_id}>
-                    <InputLabel id="stu-edit-level">Term / level</InputLabel>
-                    <Select labelId="stu-edit-level" label="Term / level" value={form.curriculum_class_level_id === "" ? "" : form.curriculum_class_level_id} onChange={(e) => setForm((prev) => ({ ...prev, curriculum_class_level_id: e.target.value }))}>
-                      <MenuItem value="">
-                        <em>{form.curriculum_class_id ? (levelOptions.length ? "Select…" : "No levels for this class") : "Select class first"}</em>
-                      </MenuItem>
-                      {levelOptions.map((lv) => (
-                        <MenuItem key={lv.id} value={lv.id}>{lv.name}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <Typography variant="body2" color="text.secondary">
-                    Homeroom teacher is assigned automatically from the teacher marked as class teacher for this curriculum class.
-                    {form.class_teacher_label ? <> Current: <strong>{form.class_teacher_label}</strong></> : " None configured for this class yet."}
-                  </Typography>
-                  <TextField label="Enrollment date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={form.enrollment_date} onChange={(e) => setForm((prev) => ({ ...prev, enrollment_date: e.target.value }))} />
-                  <TextField label="Graduation year" fullWidth type="number" inputProps={{ min: 1900, max: 2100 }} value={form.graduation_year} onChange={(e) => setForm((prev) => ({ ...prev, graduation_year: e.target.value }))} />
-                  <TextField label="Blood group" fullWidth value={form.blood_group} onChange={(e) => setForm((prev) => ({ ...prev, blood_group: e.target.value }))} />
-                  <TextField label="Medical conditions" fullWidth multiline minRows={2} value={form.medical_conditions} onChange={(e) => setForm((prev) => ({ ...prev, medical_conditions: e.target.value }))} />
-                  <TextField label="Emergency contact name" fullWidth value={form.emergency_contact_name} onChange={(e) => setForm((prev) => ({ ...prev, emergency_contact_name: e.target.value }))} />
-                  <TextField label="Emergency contact phone" fullWidth value={form.emergency_contact_phone} onChange={(e) => setForm((prev) => ({ ...prev, emergency_contact_phone: e.target.value }))} />
-                  <FormControlLabel control={<Checkbox checked={form.is_alumni} onChange={(e) => setForm((prev) => ({ ...prev, is_alumni: e.target.checked }))} />} label="Alumni" />
-                </Stack>
+        <Grid item xs={12} md={6}>
+          <FormSection title="Account (user)">
+            <Stack spacing={2}>
+              <TextField label="Full name" required fullWidth value={form.user_full_name} onChange={(e) => setForm((prev) => ({ ...prev, user_full_name: e.target.value }))} sx={inputSx} />
+              <TextField label="Email" fullWidth type="email" value={form.user_email} onChange={(e) => setForm((prev) => ({ ...prev, user_email: e.target.value }))} sx={inputSx} />
+              <TextField label="Username" fullWidth value={form.user_username} onChange={(e) => setForm((prev) => ({ ...prev, user_username: e.target.value }))} sx={inputSx} />
+              <TextField label="Phone" fullWidth value={form.user_phone} onChange={(e) => setForm((prev) => ({ ...prev, user_phone: e.target.value }))} sx={inputSx} />
+              <TextField label="Address" fullWidth multiline minRows={2} value={form.user_address} onChange={(e) => setForm((prev) => ({ ...prev, user_address: e.target.value }))} sx={inputSx} />
+              <TextField label="Profile image URL" fullWidth value={form.user_profile_image} onChange={(e) => setForm((prev) => ({ ...prev, user_profile_image: e.target.value }))} sx={inputSx} />
+            </Stack>
+          </FormSection>
+        </Grid>
 
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="flex-end" sx={{ pt: 2 }}>
-                  <Button type="button" variant="outlined" onClick={goBack} sx={{ borderColor: accent, color: accentDark, fontWeight: 700 }}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" variant="contained" disabled={saving} startIcon={saving ? <CircularProgress size={18} color="inherit" /> : null} sx={{ bgcolor: accent, fontWeight: 700, "&:hover": { bgcolor: accentDark }, minWidth: 160 }}>
-                    {saving ? "Saving..." : "Save changes"}
-                  </Button>
-                </Stack>
-              </Stack>
-            </CardContent>
-          </Card>
-        )}
-      </Box>
+        <Grid item xs={12}>
+          <FormSection title="Student record">
+            <Stack spacing={2}>
+              <TextField label="Admission number" required fullWidth value={form.admission_number} onChange={(e) => setForm((prev) => ({ ...prev, admission_number: e.target.value }))} sx={inputSx} />
+              <TextField label="Date of birth" type="date" required fullWidth InputLabelProps={{ shrink: true }} value={form.date_of_birth} onChange={(e) => setForm((prev) => ({ ...prev, date_of_birth: e.target.value }))} sx={inputSx} />
+              <FormControl fullWidth sx={inputSx}>
+                <InputLabel id="stu-edit-gender">Gender</InputLabel>
+                <Select labelId="stu-edit-gender" label="Gender" value={form.gender} onChange={(e) => setForm((prev) => ({ ...prev, gender: e.target.value }))}>
+                  <MenuItem value="male">Male</MenuItem>
+                  <MenuItem value="female">Female</MenuItem>
+                  <MenuItem value="other">Other</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl fullWidth required sx={inputSx}>
+                <InputLabel id="stu-edit-curr">Curriculum</InputLabel>
+                <Select
+                  labelId="stu-edit-curr"
+                  label="Curriculum"
+                  value={form.curriculum_id === "" ? "" : form.curriculum_id}
+                  onChange={(e) => setForm((prev) => ({ ...prev, curriculum_id: e.target.value, curriculum_class_id: "", curriculum_class_level_id: "" }))}
+                >
+                  <MenuItem value="">
+                    <em>Select…</em>
+                  </MenuItem>
+                  {curricula.map((c) => (
+                    <MenuItem key={c.id} value={c.id}>
+                      {c.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth required disabled={!form.curriculum_id} sx={inputSx}>
+                <InputLabel id="stu-edit-cc">Class</InputLabel>
+                <Select
+                  labelId="stu-edit-cc"
+                  label="Class"
+                  value={form.curriculum_class_id === "" ? "" : form.curriculum_class_id}
+                  onChange={(e) => setForm((prev) => ({ ...prev, curriculum_class_id: e.target.value, curriculum_class_level_id: "" }))}
+                >
+                  <MenuItem value="">
+                    <em>Select…</em>
+                  </MenuItem>
+                  {allClasses.filter((cl) => cl.curriculum_id === form.curriculum_id).map((cl) => (
+                    <MenuItem key={cl.id} value={cl.id}>
+                      {cl.name}
+                      {cl.code ? ` (${cl.code})` : ""}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth required disabled={!form.curriculum_class_id} sx={inputSx}>
+                <InputLabel id="stu-edit-level">Term / level</InputLabel>
+                <Select
+                  labelId="stu-edit-level"
+                  label="Term / level"
+                  value={form.curriculum_class_level_id === "" ? "" : form.curriculum_class_level_id}
+                  onChange={(e) => setForm((prev) => ({ ...prev, curriculum_class_level_id: e.target.value }))}
+                >
+                  <MenuItem value="">
+                    <em>{form.curriculum_class_id ? (levelOptions.length ? "Select…" : "No levels for this class") : "Select class first"}</em>
+                  </MenuItem>
+                  {levelOptions.map((lv) => (
+                    <MenuItem key={lv.id} value={lv.id}>
+                      {lv.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Typography variant="body2" color="text.secondary">
+                Homeroom teacher is assigned automatically from the teacher marked as class teacher for this curriculum class.
+                {form.class_teacher_label ? (
+                  <>
+                    {" "}
+                    Current: <strong>{form.class_teacher_label}</strong>
+                  </>
+                ) : (
+                  " None configured for this class yet."
+                )}
+              </Typography>
+              <TextField label="Enrollment date" type="date" fullWidth InputLabelProps={{ shrink: true }} value={form.enrollment_date} onChange={(e) => setForm((prev) => ({ ...prev, enrollment_date: e.target.value }))} sx={inputSx} />
+              <TextField label="Graduation year" fullWidth type="number" inputProps={{ min: 1900, max: 2100 }} value={form.graduation_year} onChange={(e) => setForm((prev) => ({ ...prev, graduation_year: e.target.value }))} sx={inputSx} />
+              <TextField label="Blood group" fullWidth value={form.blood_group} onChange={(e) => setForm((prev) => ({ ...prev, blood_group: e.target.value }))} sx={inputSx} />
+              <TextField label="Medical conditions" fullWidth multiline minRows={2} value={form.medical_conditions} onChange={(e) => setForm((prev) => ({ ...prev, medical_conditions: e.target.value }))} sx={inputSx} />
+              <TextField label="Emergency contact name" fullWidth value={form.emergency_contact_name} onChange={(e) => setForm((prev) => ({ ...prev, emergency_contact_name: e.target.value }))} sx={inputSx} />
+              <TextField label="Emergency contact phone" fullWidth value={form.emergency_contact_phone} onChange={(e) => setForm((prev) => ({ ...prev, emergency_contact_phone: e.target.value }))} sx={inputSx} />
+              <FormControlLabel
+                control={<Checkbox checked={form.is_alumni} onChange={(e) => setForm((prev) => ({ ...prev, is_alumni: e.target.checked }))} sx={{ color: primaryRed, "&.Mui-checked": { color: primaryRed } }} />}
+                label="Alumni"
+              />
+            </Stack>
+          </FormSection>
+        </Grid>
+      </Grid>
+
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="flex-end" sx={{ mt: 3 }}>
+        <Button type="button" variant="text" onClick={goBack} sx={ghostBtnSx}>
+          Cancel
+        </Button>
+        <Button type="submit" variant="contained" disabled={saving} startIcon={saving ? <CircularProgress size={18} color="inherit" /> : null} sx={primaryBtnSx}>
+          {saving ? "Saving…" : "Save changes"}
+        </Button>
+      </Stack>
     </Box>
   );
 }
-
