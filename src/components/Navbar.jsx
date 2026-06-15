@@ -25,12 +25,11 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
-import Tooltip from "@mui/material/Tooltip";
 import { Box, Typography } from "@mui/material";
 import Header from "./Header/Header";
 
 const drawerWidth = 280;
-const drawerCollapsedWidth = 72;
+const drawerCollapsedWidth = 80;
 
 const navRed = "#DC2626";
 const navRedDark = "#B91C1C";
@@ -80,7 +79,7 @@ const DrawerHeader = styled("div", {
   alignItems: "center",
   justifyContent: open ? "space-between" : "center",
   padding: open ? theme.spacing(2, 2, 1.5, 2) : theme.spacing(1.5, 0.5),
-  minHeight: open ? 80 : 64,
+  minHeight: open ? 80 : 72,
   flexShrink: 0,
 }));
 
@@ -187,50 +186,78 @@ function NavIconBox({ selected, children, compact }) {
 
 function NavItem({ item, open, selected, onNavigate }) {
   return (
-    <Tooltip title={item.text} placement="right" disableHoverListener={open}>
-      <ListItemButton
-        onClick={() => onNavigate(item.path)}
-        selected={selected}
+    <ListItemButton
+      onClick={() => onNavigate(item.path)}
+      selected={selected}
+      sx={{
+        flexDirection: open ? "row" : "column",
+        alignItems: "center",
+        justifyContent: open ? "flex-start" : "center",
+        gap: open ? 1.5 : 0.35,
+        px: open ? 1.5 : 0.5,
+        py: open ? 0.85 : 0.75,
+        mx: open ? 1.5 : 0.5,
+        mb: 0.5,
+        borderRadius: "12px",
+        minHeight: open ? 46 : 68,
+        whiteSpace: open ? "nowrap" : "normal",
+        textAlign: "center",
+        transition: "all 0.2s ease",
+        bgcolor: selected ? navRedActiveBg : "transparent",
+        "&:hover": {
+          bgcolor: selected ? navRedActiveBg : navRedHoverBg,
+          transform: open ? "translateX(2px)" : "none",
+        },
+        "&.Mui-selected": {
+          bgcolor: navRedActiveBg,
+          "&:hover": { bgcolor: navRedActiveBg },
+        },
+      }}
+    >
+      <ListItemIcon
         sx={{
-          justifyContent: open ? "flex-start" : "center",
-          gap: open ? 1.5 : 0,
-          px: open ? 1.5 : 1,
-          py: open ? 0.85 : 1,
-          mx: open ? 1.5 : 0.75,
-          mb: 0.5,
-          borderRadius: "12px",
-          minHeight: 46,
-          transition: "all 0.2s ease",
-          bgcolor: selected ? navRedActiveBg : "transparent",
-          "&:hover": {
-            bgcolor: selected ? navRedActiveBg : navRedHoverBg,
-            transform: open ? "translateX(2px)" : "none",
-          },
-          "&.Mui-selected": {
-            bgcolor: navRedActiveBg,
-            "&:hover": { bgcolor: navRedActiveBg },
-          },
+          minWidth: open ? 38 : 0,
+          justifyContent: "center",
+          mb: 0,
         }}
       >
-        <ListItemIcon sx={{ minWidth: open ? 38 : "auto", justifyContent: "center" }}>
-          <NavIconBox selected={selected} compact={!open}>
-            {cloneElement(item.icon)}
-          </NavIconBox>
-        </ListItemIcon>
-        {open && (
-          <ListItemText
-            primary={item.text}
-            primaryTypographyProps={{
-              fontFamily: fontBody,
-              fontSize: "0.9rem",
-              fontWeight: selected ? 700 : 500,
-              color: selected ? navRed : textPrimary,
-              letterSpacing: "-0.01em",
-            }}
-          />
-        )}
-      </ListItemButton>
-    </Tooltip>
+        <NavIconBox selected={selected} compact={!open}>
+          {cloneElement(item.icon)}
+        </NavIconBox>
+      </ListItemIcon>
+      {open ? (
+        <ListItemText
+          primary={item.text}
+          primaryTypographyProps={{
+            fontFamily: fontBody,
+            fontSize: "0.9rem",
+            fontWeight: selected ? 700 : 500,
+            color: selected ? navRed : textPrimary,
+            letterSpacing: "-0.01em",
+          }}
+        />
+      ) : (
+        <Typography
+          component="span"
+          sx={{
+            fontFamily: fontBody,
+            fontSize: "0.625rem",
+            fontWeight: selected ? 700 : 500,
+            color: selected ? navRed : textMuted,
+            lineHeight: 1.15,
+            letterSpacing: "-0.01em",
+            maxWidth: "100%",
+            px: 0.25,
+            overflow: "hidden",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+          }}
+        >
+          {item.text}
+        </Typography>
+      )}
+    </ListItemButton>
   );
 }
 
@@ -354,7 +381,7 @@ const Navbar = (props) => {
               </Box>
             </Box>
           ) : (
-            <Tooltip title="Elimu Plus Admin" placement="right">
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.35 }}>
               <Box
                 sx={{
                   width: 40,
@@ -369,7 +396,21 @@ const Navbar = (props) => {
               >
                 <School sx={{ color: "#fff", fontSize: 22 }} />
               </Box>
-            </Tooltip>
+              <Typography
+                sx={{
+                  fontFamily: fontBody,
+                  fontSize: "0.6rem",
+                  fontWeight: 700,
+                  color: navRed,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  lineHeight: 1.1,
+                  textAlign: "center",
+                }}
+              >
+                Admin
+              </Typography>
+            </Box>
           )}
           {open && (
             <IconButton
@@ -451,57 +492,72 @@ const Navbar = (props) => {
         <Divider sx={{ borderColor: alpha(navRed, 0.08), mx: open ? 2 : 1 }} />
 
         <Box sx={{ py: 1.5, flexShrink: 0 }}>
-          <Tooltip title="Logout" placement="right" disableHoverListener={open}>
-            <ListItemButton
-              onClick={logout}
-              sx={{
-                justifyContent: open ? "flex-start" : "center",
-                gap: open ? 1.5 : 0,
-                px: open ? 1.5 : 1,
-                py: 1,
-                mx: open ? 1.5 : 0.75,
-                borderRadius: "12px",
-                minHeight: 46,
-                "&:hover": {
-                  bgcolor: alpha(navRed, 0.08),
-                  "& .logout-icon": {
-                    bgcolor: alpha(navRed, 0.15),
-                    color: navRed,
-                  },
+          <ListItemButton
+            onClick={logout}
+            sx={{
+              flexDirection: open ? "row" : "column",
+              alignItems: "center",
+              justifyContent: open ? "flex-start" : "center",
+              gap: open ? 1.5 : 0.35,
+              px: open ? 1.5 : 0.5,
+              py: open ? 1 : 0.75,
+              mx: open ? 1.5 : 0.5,
+              borderRadius: "12px",
+              minHeight: open ? 46 : 68,
+              whiteSpace: open ? "nowrap" : "normal",
+              textAlign: "center",
+              "&:hover": {
+                bgcolor: alpha(navRed, 0.08),
+                "& .logout-icon": {
+                  bgcolor: alpha(navRed, 0.15),
+                  color: navRed,
                 },
-              }}
-            >
-              <ListItemIcon sx={{ minWidth: open ? 38 : "auto", justifyContent: "center" }}>
-                <Box
-                  className="logout-icon"
-                  sx={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: "11px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    bgcolor: alpha(textMuted, 0.1),
-                    color: textMuted,
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  <Logout sx={{ fontSize: 20 }} />
-                </Box>
-              </ListItemIcon>
-              {open && (
-                <ListItemText
-                  primary="Sign out"
-                  primaryTypographyProps={{
-                    fontFamily: fontBody,
-                    fontSize: "0.9rem",
-                    fontWeight: 600,
-                    color: textPrimary,
-                  }}
-                />
-              )}
-            </ListItemButton>
-          </Tooltip>
+              },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: open ? 38 : 0, justifyContent: "center" }}>
+              <Box
+                className="logout-icon"
+                sx={{
+                  width: open ? 38 : 36,
+                  height: open ? 38 : 36,
+                  borderRadius: "11px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  bgcolor: alpha(textMuted, 0.1),
+                  color: textMuted,
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <Logout sx={{ fontSize: 20 }} />
+              </Box>
+            </ListItemIcon>
+            {open ? (
+              <ListItemText
+                primary="Sign out"
+                primaryTypographyProps={{
+                  fontFamily: fontBody,
+                  fontSize: "0.9rem",
+                  fontWeight: 600,
+                  color: textPrimary,
+                }}
+              />
+            ) : (
+              <Typography
+                component="span"
+                sx={{
+                  fontFamily: fontBody,
+                  fontSize: "0.625rem",
+                  fontWeight: 600,
+                  color: textMuted,
+                  lineHeight: 1.15,
+                }}
+              >
+                Sign out
+              </Typography>
+            )}
+          </ListItemButton>
         </Box>
       </Drawer>
     </Box>

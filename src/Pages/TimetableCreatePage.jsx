@@ -1,78 +1,46 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Box,
-  Button,
   Alert,
-  Card,
-  CardContent,
+  Box,
   CircularProgress,
+  FormControlLabel,
+  Checkbox,
   IconButton,
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import EventNoteIcon from "@mui/icons-material/EventNote";
+import EventNoteOutlinedIcon from "@mui/icons-material/EventNoteOutlined";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { TimePicker } from "@mui/x-date-pickers/TimePicker";
 import { format, isValid, parseISO } from "date-fns";
-import Swal from "sweetalert2";
 import { showTeacherOverlapSweetAlert } from "../utils/timetableOverlapAlert";
-
-const primaryRed = "#DC2626";
-const primaryDark = "#B91C1C";
-const primaryLight = "#FEE2E2";
-const backgroundLight = "#FEF2F2";
-
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
+import {
+  authHeaders,
+  fullMainBleedSx,
+  elimuViewportSx,
+  warmCream,
+  primaryRed,
+} from "../components/Timetable/timetableShared";
+import {
+  TimetableHero,
+  FormSection,
+  TimetableFilterSelect,
+  TimetablePrimaryButton,
+  TimetableGhostButton,
+  timetableInputSx,
+  timetableSwal,
+} from "../components/Timetable/timetableUi";
 
 function formatTimeForApi(value) {
   if (!value || !value.isValid?.()) return "";
   return value.format("HH:mm:ss");
 }
-
-const fullMainBleedSx = (theme) => ({
-  width: `calc(100% + ${theme.spacing(6)})`,
-  maxWidth: "none",
-  marginLeft: theme.spacing(-3),
-  marginRight: theme.spacing(-3),
-  marginTop: theme.spacing(-2.5),
-  marginBottom: "1px",
-  boxSizing: "border-box",
-  minHeight: "100%",
-  background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
-});
-
-/** Match ElimuPlusSchoolProfileForm.jsx */
-const labelSx = {
-  color: primaryDark,
-  fontWeight: 600,
-  "&.Mui-focused": { color: primaryRed },
-};
-
-const outlinedFieldSx = {
-  width: "100%",
-  maxWidth: "100%",
-  "& .MuiOutlinedInput-root": {
-    width: "100%",
-    borderRadius: 2,
-    bgcolor: "rgba(255,255,255,0.95)",
-    "& fieldset": { borderColor: "#FECACA" },
-    "&:hover fieldset": { borderColor: primaryRed },
-    "&.Mui-focused fieldset": {
-      borderColor: primaryRed,
-      boxShadow: `0 0 0 2px ${primaryLight}`,
-    },
-  },
-  "& .MuiInputLabel-root": { ...labelSx },
-};
 
 export default function TimetableCreatePage() {
   const [searchParams] = useSearchParams();
@@ -304,7 +272,7 @@ export default function TimetableCreatePage() {
       const lJson = await lRes.json().catch(() => ({}));
       if (!lRes.ok || !lJson.success) throw new Error(lJson.message || "Timetable created but lesson failed");
 
-      await Swal.fire({
+      await timetableSwal({
         icon: "success",
         title: "Timetable created",
         html: `Your lesson timetable and first lesson were saved for <strong>${format(parsedDate, "MMM d, yyyy")}</strong>.`,
@@ -336,92 +304,61 @@ export default function TimetableCreatePage() {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Box component="form" onSubmit={submit} sx={(theme) => ({ ...fullMainBleedSx(theme) })}>
-        <Box
-          sx={{
-            background: `linear-gradient(135deg, ${primaryDark} 0%, ${primaryRed} 55%, #EF4444 100%)`,
-            px: { xs: 2, sm: 3 },
-            py: { xs: 1.5, sm: 2 },
-            color: "#fff",
-            boxShadow: `0 8px 24px ${primaryRed}33`,
-          }}
-        >
-          <Stack direction="row" alignItems="center" spacing={1.5}>
-            <IconButton
-              type="button"
-              aria-label="Back"
-              onClick={() => navigate(`/timetable/day/${isoDate}`)}
-              sx={{
-                color: "#fff",
-                bgcolor: "rgba(255,255,255,0.15)",
-                "&:hover": { bgcolor: "rgba(255,255,255,0.28)" },
-              }}
-            >
-              <ArrowBackIcon />
-            </IconButton>
-            <EventNoteIcon sx={{ fontSize: 34 }} />
-            <Box>
-              <Typography variant="overline" sx={{ opacity: 0.9 }}>
-                Create timetable
-              </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 800 }}>
-                {format(parsedDate, "EEEE, MMM d, yyyy")}
-              </Typography>
-            </Box>
-          </Stack>
-        </Box>
-
-        <Box
-          sx={{
-            width: "100%",
-            maxWidth: "100%",
-            boxSizing: "border-box",
-            px: { xs: 2, sm: 3 },
-            py: { xs: 2, sm: 3 },
-            pb: 4,
-          }}
-        >
-          {error && (
-            <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>
-              {error}
-            </Alert>
-          )}
-
-          {loading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-              <CircularProgress sx={{ color: primaryRed }} />
-            </Box>
-          ) : (
-            <Card
-              elevation={0}
-              sx={{
-                width: "100%",
-                borderRadius: 0,
-                border: "none",
-                borderBottom: `1px solid ${primaryLight}`,
-                boxShadow: "none",
-                overflow: "hidden",
-              }}
-            >
-              <CardContent
+      <Box
+        component="form"
+        onSubmit={submit}
+        sx={(theme) => ({
+          ...fullMainBleedSx(theme),
+          ...elimuViewportSx,
+          bgcolor: warmCream,
+          px: { xs: 1.5, sm: 2, md: 3 },
+          py: { xs: 2, sm: 2.5 },
+          gap: 2,
+          display: "flex",
+          flexDirection: "column",
+        })}
+      >
+        <TimetableHero
+          title={format(parsedDate, "EEEE, MMM d, yyyy")}
+          subtitle="Create a lesson timetable and schedule the first lesson for this day."
+          icon={<EventNoteOutlinedIcon sx={{ fontSize: 28, color: "#fff" }} />}
+          actions={
+            <Tooltip title="Back to day view">
+              <IconButton
+                type="button"
+                onClick={() => navigate(`/timetable/day/${isoDate}`)}
                 sx={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  px: { xs: 0, sm: 0 },
-                  pt: { xs: 0.5, sm: 1 },
-                  pb: 1,
-                  "&:last-child": { pb: 2 },
+                  color: "#fff",
+                  bgcolor: "rgba(255,255,255,0.15)",
+                  border: "1px solid rgba(255,255,255,0.22)",
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.28)" },
                 }}
               >
-                <Stack spacing={2.5} sx={{ width: "100%", maxWidth: "100%" }}>
-                <TextField
-                  select
-                  required
+                <ArrowBackIcon />
+              </IconButton>
+            </Tooltip>
+          }
+        />
+
+        {error ? (
+          <Alert severity="error" sx={{ borderRadius: "16px" }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        ) : null}
+
+        {loading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+            <CircularProgress sx={{ color: primaryRed }} />
+          </Box>
+        ) : (
+          <Stack spacing={2.5}>
+            <FormSection title="Curriculum & class">
+              <Stack spacing={2}>
+                <TimetableFilterSelect
                   label="Curriculum"
-                  fullWidth
+                  required
                   value={curriculumId}
                   onChange={(e) => setCurriculumId(e.target.value)}
-                  sx={outlinedFieldSx}
                 >
                   <MenuItem value="">
                     <em>Select curriculum</em>
@@ -431,17 +368,13 @@ export default function TimetableCreatePage() {
                       {c.name}
                     </MenuItem>
                   ))}
-                </TextField>
-
-                <TextField
-                  select
-                  required
+                </TimetableFilterSelect>
+                <TimetableFilterSelect
                   label="Curriculum class"
-                  fullWidth
+                  required
                   disabled={!curriculumId}
                   value={classId}
                   onChange={(e) => setClassId(e.target.value)}
-                  sx={outlinedFieldSx}
                 >
                   <MenuItem value="">
                     <em>Select class</em>
@@ -451,18 +384,13 @@ export default function TimetableCreatePage() {
                       {cl.name} ({cl.code})
                     </MenuItem>
                   ))}
-                </TextField>
-
-                <TextField
-                  select
-                  required
+                </TimetableFilterSelect>
+                <TimetableFilterSelect
                   label="Curriculum term"
-                  fullWidth
+                  required
                   disabled={!classId}
                   value={levelId}
                   onChange={(e) => setLevelId(e.target.value)}
-                  helperText={classId && levels.length === 0 ? "No terms defined for this class yet." : " "}
-                  sx={outlinedFieldSx}
                 >
                   <MenuItem value="">
                     <em>Select term</em>
@@ -472,17 +400,18 @@ export default function TimetableCreatePage() {
                       {lv.name}
                     </MenuItem>
                   ))}
-                </TextField>
+                </TimetableFilterSelect>
+              </Stack>
+            </FormSection>
 
-                <TextField
-                  select
-                  required
+            <FormSection title="Lesson details">
+              <Stack spacing={2}>
+                <TimetableFilterSelect
                   label="Subject offering"
-                  fullWidth
+                  required
                   disabled={!classId}
                   value={curriculumSubjectId}
                   onChange={(e) => setCurriculumSubjectId(e.target.value)}
-                  sx={outlinedFieldSx}
                 >
                   <MenuItem value="">
                     <em>Select subject</em>
@@ -492,22 +421,13 @@ export default function TimetableCreatePage() {
                       {s.name}
                     </MenuItem>
                   ))}
-                </TextField>
-
-                <TextField
-                  select
-                  required
+                </TimetableFilterSelect>
+                <TimetableFilterSelect
                   label="Teacher"
-                  fullWidth
+                  required
                   disabled={!curriculumSubjectId}
                   value={teacherId}
                   onChange={(e) => setTeacherId(e.target.value)}
-                  helperText={
-                    curriculumSubjectId
-                      ? "Only teachers assigned to this subject offering."
-                      : "Choose a subject first."
-                  }
-                  sx={outlinedFieldSx}
                 >
                   <MenuItem value="">
                     <em>Select teacher</em>
@@ -517,93 +437,69 @@ export default function TimetableCreatePage() {
                       {teacherLabel(t)}
                     </MenuItem>
                   ))}
-                </TextField>
-
-                <TextField
-                  select
+                </TimetableFilterSelect>
+                <TimetableFilterSelect
                   label="Lesson delivery"
-                  fullWidth
                   value={deliveryMode}
                   onChange={(e) => {
                     const next = e.target.value;
                     setDeliveryMode(next);
                     if (next !== "online") setMediaMode("optional");
                   }}
-                  helperText="Physical for in-room lessons; online for remote / video sessions."
-                  sx={outlinedFieldSx}
                 >
                   <MenuItem value="physical">Physical (classroom)</MenuItem>
                   <MenuItem value="online">Online</MenuItem>
-                </TextField>
-
+                </TimetableFilterSelect>
                 {deliveryMode === "online" ? (
-                  <TextField
-                    select
+                  <TimetableFilterSelect
                     label="Online media"
-                    fullWidth
                     value={mediaMode}
                     onChange={(e) => setMediaMode(e.target.value)}
-                    helperText="Optional is recommended — students join without camera/mic until they choose to turn them on."
-                    sx={outlinedFieldSx}
                   >
                     <MenuItem value="optional">Optional — camera/mic off until turned on</MenuItem>
                     <MenuItem value="audio">Audio class — microphone on when joining</MenuItem>
                     <MenuItem value="video">Video class — camera and microphone on when joining</MenuItem>
-                  </TextField>
+                  </TimetableFilterSelect>
                 ) : null}
-
-                <Stack spacing={2.5} sx={{ width: "100%" }}>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
                   <TimePicker
                     label="Start time"
                     ampm
                     value={startTime}
                     onChange={(v) => setStartTime(v)}
-                    slotProps={{
-                      textField: { fullWidth: true, required: true, sx: outlinedFieldSx },
-                    }}
+                    slotProps={{ textField: { fullWidth: true, required: true, sx: timetableInputSx } }}
                   />
                   <TimePicker
                     label="End time"
                     ampm
                     value={endTime}
                     onChange={(v) => setEndTime(v)}
-                    slotProps={{
-                      textField: { fullWidth: true, required: true, sx: outlinedFieldSx },
-                    }}
+                    slotProps={{ textField: { fullWidth: true, required: true, sx: timetableInputSx } }}
                   />
                 </Stack>
-
                 <TextField
                   label="Timetable name"
                   fullWidth
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  sx={outlinedFieldSx}
+                  sx={timetableInputSx}
                 />
-
-                <Typography variant="caption" color="text.secondary">
-                  The lesson is saved for the calendar date shown in the header. You can review or remove it on the next
-                  screen.
-                </Typography>
-
-                <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ width: "100%", pt: 0.5 }}>
-                  <Button type="button" onClick={() => navigate(`/timetable/day/${isoDate}`)} disabled={saving}>
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={saving || !formReady || levels.length === 0}
-                    sx={{ bgcolor: primaryRed, fontWeight: 800, "&:hover": { bgcolor: primaryDark } }}
-                  >
-                    {saving ? <CircularProgress size={22} color="inherit" /> : "Save timetable"}
-                  </Button>
-                </Stack>
               </Stack>
-              </CardContent>
-            </Card>
-          )}
-        </Box>
+            </FormSection>
+
+            <Stack direction="row" spacing={1.5} justifyContent="flex-end">
+              <TimetableGhostButton type="button" onClick={() => navigate(`/timetable/day/${isoDate}`)} disabled={saving}>
+                Cancel
+              </TimetableGhostButton>
+              <TimetablePrimaryButton
+                type="submit"
+                disabled={saving || !formReady || levels.length === 0}
+              >
+                {saving ? <CircularProgress size={22} color="inherit" /> : "Save timetable"}
+              </TimetablePrimaryButton>
+            </Stack>
+          </Stack>
+        )}
       </Box>
     </LocalizationProvider>
   );

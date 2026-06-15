@@ -2,33 +2,34 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box,
-  Alert,
-  CircularProgress,
-  IconButton,
-  Paper,
   Stack,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import { format, isValid, parseISO } from "date-fns";
-
-const primaryRed = "#DC2626";
-const primaryDark = "#B91C1C";
-const primaryLight = "#FEE2E2";
-const backgroundLight = "#FEF2F2";
-
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  Accept: "application/json",
-  Authorization: `Bearer ${token}`,
-});
+import {
+  authHeaders,
+  fullMainBleedSx,
+  elimuViewportSx,
+  warmCream,
+} from "../components/Timetable/timetableShared";
+import {
+  TimetableHero,
+  HeroActionButton,
+  TabPanelShell,
+  DataTableShell,
+  tableHeadRowSx,
+  EmptyTableRow,
+  TimetableActionButton,
+  TimetableInfoBanner,
+} from "../components/Timetable/timetableUi";
 
 const WEEKDAYS = [
   { value: 1, label: "Monday" },
@@ -39,23 +40,6 @@ const WEEKDAYS = [
   { value: 6, label: "Saturday" },
   { value: 7, label: "Sunday" },
 ];
-
-const fullMainBleedSx = (theme) => ({
-  width: `calc(100% + ${theme.spacing(6)})`,
-  maxWidth: "none",
-  marginLeft: theme.spacing(-3),
-  marginRight: theme.spacing(-3),
-  marginTop: theme.spacing(-2.5),
-  marginBottom: "1px",
-  boxSizing: "border-box",
-  minHeight: "100%",
-  background: `linear-gradient(180deg, ${backgroundLight} 0%, #fff 45%)`,
-});
-
-function teacherLabel(t) {
-  const u = t?.user;
-  return u?.full_name || u?.username || "Teacher";
-}
 
 function lessonSortKey(row) {
   const d = row.lesson_date || "";
@@ -146,133 +130,98 @@ export default function TimetableManagePage() {
         return row.lesson_date;
       }
     }
-    const wd = WEEKDAYS.find((w) => w.value === row.day_of_week)?.label || "—";
-    return wd;
+    return WEEKDAYS.find((w) => w.value === row.day_of_week)?.label || "—";
   };
 
   return (
-    <Box sx={(theme) => ({ ...fullMainBleedSx(theme) })}>
-      <Box
-        sx={{
-          background: `linear-gradient(135deg, ${primaryDark} 0%, ${primaryRed} 55%, #EF4444 100%)`,
-          px: { xs: 2, sm: 3 },
-          py: { xs: 1.5, sm: 2 },
-          color: "#fff",
-          boxShadow: `0 8px 24px ${primaryRed}33`,
+    <Box
+      sx={(theme) => ({
+        ...fullMainBleedSx(theme),
+        ...elimuViewportSx,
+        bgcolor: warmCream,
+        px: { xs: 1.5, sm: 2, md: 3 },
+        py: { xs: 2, sm: 2.5 },
+        gap: 2,
+        display: "flex",
+        flexDirection: "column",
+      })}
+    >
+      <TimetableHero
+        title={`${timetable?.curriculum_class?.name || "Class"} · ${timetable?.name || "Timetable"}`}
+        subtitle={
+          [
+            termLabel ? `Term: ${termLabel}` : null,
+            anchorLabel ? `Calendar date: ${anchorLabel}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || "Review and remove lessons on this timetable."
+        }
+        icon={<ScheduleOutlinedIcon sx={{ fontSize: 28, color: "#fff" }} />}
+        actions={
+          <HeroActionButton startIcon={<ArrowBackIcon />} onClick={back}>
+            Back
+          </HeroActionButton>
+        }
+      />
+
+      <TimetableInfoBanner>
+        Lessons are added when you create a timetable from the calendar. Remove a row here if you need to delete a lesson.
+      </TimetableInfoBanner>
+
+      <TabPanelShell
+        loading={loading}
+        error={error || actionError}
+        onDismissError={() => {
+          setError(null);
+          setActionError(null);
         }}
       >
-        <Stack direction="row" alignItems="flex-start" spacing={1}>
-          <IconButton
-            aria-label="Back"
-            onClick={back}
-            sx={{
-              color: "#fff",
-              bgcolor: "rgba(255,255,255,0.15)",
-              "&:hover": { bgcolor: "rgba(255,255,255,0.28)" },
-            }}
-          >
-            <ArrowBackIcon />
-          </IconButton>
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="overline" sx={{ opacity: 0.9 }}>
-              Timetable
-            </Typography>
-            <Typography variant="h5" sx={{ fontWeight: 800 }}>
-              {timetable?.curriculum_class?.name || "Class"} · {timetable?.name || "Timetable"}
-            </Typography>
-            {termLabel && (
-              <Typography variant="body2" sx={{ opacity: 0.92, mt: 0.5 }}>
-                Term: {termLabel}
-              </Typography>
-            )}
-            {anchorLabel && (
-              <Typography variant="body2" sx={{ opacity: 0.92, mt: 0.5 }}>
-                Anchor date from calendar: {anchorLabel}
-              </Typography>
-            )}
-          </Box>
-        </Stack>
-      </Box>
-
-      <Box sx={{ px: { xs: 2, sm: 3 }, pb: 4, pt: 2 }}>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-        {actionError && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
-            {actionError}
-          </Alert>
-        )}
-
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <CircularProgress sx={{ color: primaryRed }} />
-          </Box>
-        ) : (
-          <Paper sx={{ borderRadius: 2, border: `1px solid ${primaryLight}`, overflow: "hidden" }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800, p: 2, pb: 0, color: primaryDark }}>
-              Lesson
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ px: 2, pb: 1.5, pt: 0.5 }}>
-              Lessons are added when you create a timetable from the calendar. Remove a row if you need to delete a
-              lesson.
-            </Typography>
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ bgcolor: `${primaryRed}12` }}>
-                    <TableCell>Date</TableCell>
-                    <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>Day</TableCell>
-                    <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>P</TableCell>
-                    <TableCell>Subject</TableCell>
-                    <TableCell align="right" width={56}>
-                      {" "}
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {lessons.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5}>
-                        <Typography color="text.secondary" sx={{ py: 2 }}>
-                          No lesson on this timetable yet.
-                        </Typography>
+        <DataTableShell>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={tableHeadRowSx}>
+                <TableCell>Date</TableCell>
+                <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>Day</TableCell>
+                <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>Period</TableCell>
+                <TableCell>Subject</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {lessons.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} sx={{ border: 0, p: 0 }}>
+                    <EmptyTableRow colSpan={5} message="No lessons on this timetable yet." />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                lessons.map((row) => {
+                  const wd = WEEKDAYS.find((w) => w.value === row.day_of_week)?.label || "—";
+                  return (
+                    <TableRow key={row.id} hover>
+                      <TableCell sx={{ fontWeight: 600 }}>{rowDateLabel(row)}</TableCell>
+                      <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>{wd}</TableCell>
+                      <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                        {row.period_index ?? "—"}
+                      </TableCell>
+                      <TableCell>{row.curriculum_subject?.name || "—"}</TableCell>
+                      <TableCell align="right">
+                        <TimetableActionButton
+                          title="Remove lesson"
+                          color="error"
+                          onClick={() => removeLesson(row.id)}
+                        >
+                          <DeleteOutlineIcon fontSize="small" />
+                        </TimetableActionButton>
                       </TableCell>
                     </TableRow>
-                  ) : (
-                    lessons.map((row) => {
-                      const wd = WEEKDAYS.find((w) => w.value === row.day_of_week)?.label || "—";
-                      const subName = row.curriculum_subject?.name || "—";
-                      return (
-                        <TableRow key={row.id} hover>
-                          <TableCell>{rowDateLabel(row)}</TableCell>
-                          <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>{wd}</TableCell>
-                          <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
-                            {row.period_index ?? "—"}
-                          </TableCell>
-                          <TableCell>{subName}</TableCell>
-                          <TableCell align="right">
-                            <IconButton
-                              size="small"
-                              aria-label="Remove lesson"
-                              onClick={() => removeLesson(row.id)}
-                              sx={{ color: primaryRed }}
-                            >
-                              <DeleteOutlineIcon fontSize="small" />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        )}
-      </Box>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </DataTableShell>
+      </TabPanelShell>
     </Box>
   );
 }
