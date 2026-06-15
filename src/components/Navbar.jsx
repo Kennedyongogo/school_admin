@@ -24,7 +24,6 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
 import { Box, Typography } from "@mui/material";
 import Header from "./Header/Header";
 
@@ -193,7 +192,7 @@ function NavItem({ item, open, selected, onNavigate }) {
         flexDirection: open ? "row" : "column",
         alignItems: "center",
         justifyContent: open ? "flex-start" : "center",
-        gap: open ? 1.5 : 0.35,
+        gap: open ? 0.75 : 0.35,
         px: open ? 1.5 : 0.5,
         py: open ? 0.85 : 0.75,
         mx: open ? 1.5 : 0.5,
@@ -214,48 +213,57 @@ function NavItem({ item, open, selected, onNavigate }) {
         },
       }}
     >
-      <ListItemIcon
-        sx={{
-          minWidth: open ? 38 : 0,
-          justifyContent: "center",
-          mb: 0,
-        }}
-      >
-        <NavIconBox selected={selected} compact={!open}>
-          {cloneElement(item.icon)}
-        </NavIconBox>
-      </ListItemIcon>
       {open ? (
-        <ListItemText
-          primary={item.text}
-          primaryTypographyProps={{
-            fontFamily: fontBody,
-            fontSize: "0.9rem",
-            fontWeight: selected ? 700 : 500,
-            color: selected ? navRed : textPrimary,
-            letterSpacing: "-0.01em",
-          }}
-        />
+        <>
+          <NavIconBox selected={selected}>
+            {cloneElement(item.icon)}
+          </NavIconBox>
+          <Typography
+            component="span"
+            sx={{
+              fontFamily: fontBody,
+              fontSize: "0.9rem",
+              fontWeight: selected ? 700 : 500,
+              color: selected ? navRed : textPrimary,
+              letterSpacing: "-0.01em",
+            }}
+          >
+            {item.text}
+          </Typography>
+        </>
       ) : (
-        <Typography
-          component="span"
-          sx={{
-            fontFamily: fontBody,
-            fontSize: "0.625rem",
-            fontWeight: selected ? 700 : 500,
-            color: selected ? navRed : textMuted,
-            lineHeight: 1.15,
-            letterSpacing: "-0.01em",
-            maxWidth: "100%",
-            px: 0.25,
-            overflow: "hidden",
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-          }}
-        >
-          {item.text}
-        </Typography>
+        <>
+          <ListItemIcon
+            sx={{
+              minWidth: 0,
+              justifyContent: "center",
+              mb: 0,
+            }}
+          >
+            <NavIconBox selected={selected} compact>
+              {cloneElement(item.icon)}
+            </NavIconBox>
+          </ListItemIcon>
+          <Typography
+            component="span"
+            sx={{
+              fontFamily: fontBody,
+              fontSize: "0.625rem",
+              fontWeight: selected ? 700 : 500,
+              color: selected ? navRed : textMuted,
+              lineHeight: 1.15,
+              letterSpacing: "-0.01em",
+              maxWidth: "100%",
+              px: 0.25,
+              overflow: "hidden",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+            }}
+          >
+            {item.text}
+          </Typography>
+        </>
       )}
     </ListItemButton>
   );
@@ -498,7 +506,7 @@ const Navbar = (props) => {
               flexDirection: open ? "row" : "column",
               alignItems: "center",
               justifyContent: open ? "flex-start" : "center",
-              gap: open ? 1.5 : 0.35,
+              gap: open ? 0.75 : 0.35,
               px: open ? 1.5 : 0.5,
               py: open ? 1 : 0.75,
               mx: open ? 1.5 : 0.5,
@@ -515,47 +523,70 @@ const Navbar = (props) => {
               },
             }}
           >
-            <ListItemIcon sx={{ minWidth: open ? 38 : 0, justifyContent: "center" }}>
-              <Box
-                className="logout-icon"
-                sx={{
-                  width: open ? 38 : 36,
-                  height: open ? 38 : 36,
-                  borderRadius: "11px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  bgcolor: alpha(textMuted, 0.1),
-                  color: textMuted,
-                  transition: "all 0.2s ease",
-                }}
-              >
-                <Logout sx={{ fontSize: 20 }} />
-              </Box>
-            </ListItemIcon>
             {open ? (
-              <ListItemText
-                primary="Sign out"
-                primaryTypographyProps={{
-                  fontFamily: fontBody,
-                  fontSize: "0.9rem",
-                  fontWeight: 600,
-                  color: textPrimary,
-                }}
-              />
+              <>
+                <Box
+                  className="logout-icon"
+                  sx={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: "11px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    bgcolor: alpha(textMuted, 0.1),
+                    color: textMuted,
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  <Logout sx={{ fontSize: 20 }} />
+                </Box>
+                <Typography
+                  component="span"
+                  sx={{
+                    fontFamily: fontBody,
+                    fontSize: "0.9rem",
+                    fontWeight: 600,
+                    color: textPrimary,
+                  }}
+                >
+                  Sign out
+                </Typography>
+              </>
             ) : (
-              <Typography
-                component="span"
-                sx={{
-                  fontFamily: fontBody,
-                  fontSize: "0.625rem",
-                  fontWeight: 600,
-                  color: textMuted,
-                  lineHeight: 1.15,
-                }}
-              >
-                Sign out
-              </Typography>
+              <>
+                <ListItemIcon sx={{ minWidth: 0, justifyContent: "center" }}>
+                  <Box
+                    className="logout-icon"
+                    sx={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: "11px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      bgcolor: alpha(textMuted, 0.1),
+                      color: textMuted,
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <Logout sx={{ fontSize: 20 }} />
+                  </Box>
+                </ListItemIcon>
+                <Typography
+                  component="span"
+                  sx={{
+                    fontFamily: fontBody,
+                    fontSize: "0.625rem",
+                    fontWeight: 600,
+                    color: textMuted,
+                    lineHeight: 1.15,
+                  }}
+                >
+                  Sign out
+                </Typography>
+              </>
             )}
           </ListItemButton>
         </Box>
