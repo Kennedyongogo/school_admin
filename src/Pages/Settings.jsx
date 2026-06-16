@@ -31,6 +31,7 @@ import {
   Home as HomeIcon,
   Shield,
   VerifiedUser,
+  History as HistoryIcon,
 } from "@mui/icons-material";
 
 const primaryRed = "#DC2626";
@@ -816,6 +817,65 @@ export default function Settings({ user }) {
                 </Stack>
               </Box>
             </SettingsSection>
+          </Box>
+
+          <Box
+            component={motion.div}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            sx={{
+              mt: 2.5,
+              p: 2.5,
+              borderRadius: "18px",
+              border: `1px solid ${primaryLight}`,
+              bgcolor: "#fff",
+              display: "flex",
+              alignItems: { xs: "flex-start", sm: "center" },
+              justifyContent: "space-between",
+              gap: 2,
+              flexWrap: "wrap",
+            }}
+          >
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Box
+                sx={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: "12px",
+                  bgcolor: primaryLight,
+                  color: primaryRed,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <HistoryIcon />
+              </Box>
+              <Box>
+                <Typography sx={{ fontFamily: fontDisplay, fontWeight: 700, color: textPrimary }}>
+                  Audit Trail
+                </Typography>
+                <Typography sx={{ fontFamily: fontBody, fontSize: "0.85rem", color: textSecondary }}>
+                  Review admin portal activity and system logs.
+                </Typography>
+              </Box>
+            </Stack>
+            <Button
+              variant="outlined"
+              onClick={() => navigate("/audit")}
+              sx={{
+                borderColor: primaryRed,
+                color: primaryRed,
+                fontFamily: fontBody,
+                fontWeight: 700,
+                borderRadius: "12px",
+                textTransform: "none",
+                "&:hover": { borderColor: primaryDark, bgcolor: primaryLight },
+              }}
+            >
+              Open audit trail
+            </Button>
           </Box>
         </Stack>
       )}

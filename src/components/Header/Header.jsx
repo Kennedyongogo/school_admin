@@ -37,6 +37,7 @@ const PAGE_TITLES = [
   { prefix: "/users", title: "Users", subtitle: "Account management" },
   { prefix: "/elimu-plus", title: "Elimu Plus", subtitle: "School profile & records" },
   { prefix: "/settings", title: "Settings", subtitle: "Preferences & security" },
+  { prefix: "/audit", title: "Audit Trail", subtitle: "Admin activity & system logs" },
 ];
 
 const buildImageUrl = (imageUrl) => {

@@ -1,44 +1,230 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import {
-  Box,
-  Typography,
-  Grid,
-  Button,
-  Chip,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Stack,
-  Divider,
-  CircularProgress,
   Alert,
-  Paper,
+  Avatar,
+  Box,
+  Chip,
+  CircularProgress,
+  IconButton,
+  Stack,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
-  TableRow,
   TablePagination,
+  TableRow,
   Tooltip,
-  Tabs,
-  Tab,
+  Typography,
 } from "@mui/material";
+import HistoryIcon from "@mui/icons-material/History";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import LanOutlinedIcon from "@mui/icons-material/LanOutlined";
+import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
+import CategoryOutlinedIcon from "@mui/icons-material/CategoryOutlined";
+import FingerprintOutlinedIcon from "@mui/icons-material/FingerprintOutlined";
 import {
-  Visibility as ViewIcon,
-  History as HistoryIcon,
-} from "@mui/icons-material";
-import { useTheme } from "@mui/material/styles";
+  ElimuPlusHero,
+  ElimuPlusTabs,
+  DataTableShell,
+  tableHeadRowSx,
+  tablePaginationSx,
+  TabPanelShell,
+  PremiumDialog,
+  DetailField,
+  DialogGhostButton,
+} from "../SchoolProfile/elimuPlusUi";
+import { fadeUp } from "../Users/usersUi";
+import {
+  primaryRed,
+  primaryDark,
+  primaryLight,
+  warmCream,
+  textPrimary,
+  textSecondary,
+  textMuted,
+  fontBody,
+  fontDisplay,
+  elimuViewportSx,
+  actionIconSx,
+  hrPanelCardSx,
+} from "../HR/hrShared";
+import { getInitials } from "../Users/usersShared";
 
-const Audit = () => {
-  const theme = useTheme();
+const resourceTypes = [
+  { value: 0, label: "All" },
+  { value: 1, label: "Exams" },
+  { value: 2, label: "Students" },
+  { value: 3, label: "Teachers" },
+  { value: 4, label: "Fees" },
+  { value: 5, label: "Report cards" },
+  { value: 6, label: "Curriculum" },
+  { value: 7, label: "Admissions" },
+  { value: 8, label: "Users" },
+  { value: 9, label: "System" },
+  { value: 10, label: "Other" },
+];
+
+const resourceTypeValues = [
+  "",
+  "exam",
+  "student",
+  "teacher",
+  "fee_invoice",
+  "report_card",
+  "curriculum",
+  "admission_application",
+  "user",
+  "system",
+  "other",
+];
+
+const ACTION_STYLES = {
+  create: { color: "#16A34A", bg: "#DCFCE7" },
+  read: { color: "#2563EB", bg: "#DBEAFE" },
+  update: { color: "#D97706", bg: "#FEF3C7" },
+  delete: { color: "#DC2626", bg: "#FEE2E2" },
+  login: { color: "#7C3AED", bg: "#EDE9FE" },
+  logout: { color: "#6B7280", bg: "#F3F4F6" },
+  default: { color: "#57534E", bg: "#F5F5F4" },
+};
+
+const STATUS_STYLES = {
+  success: { color: "#16A34A", bg: "#DCFCE7" },
+  failed: { color: "#DC2626", bg: "#FEE2E2" },
+  pending: { color: "#D97706", bg: "#FEF3C7" },
+};
+
+function formatActionText(action) {
+  return String(action || "other")
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function formatResourceType(type) {
+  if (!type) return "Other";
+  return String(type)
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function formatDate(dateString) {
+  if (!dateString) return "—";
+  const d = new Date(dateString);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function actionStyle(action) {
+  const key = String(action || "").toLowerCase();
+  if (ACTION_STYLES[key]) return ACTION_STYLES[key];
+  if (key.includes("delete")) return ACTION_STYLES.delete;
+  if (key.includes("create")) return ACTION_STYLES.create;
+  if (key.includes("update")) return ACTION_STYLES.update;
+  if (key.includes("login")) return ACTION_STYLES.login;
+  if (key.includes("read")) return ACTION_STYLES.read;
+  return ACTION_STYLES.default;
+}
+
+function statusStyle(status) {
+  return STATUS_STYLES[String(status || "").toLowerCase()] || ACTION_STYLES.default;
+}
+
+function AuditChip({ label, tone }) {
+  return (
+    <Chip
+      label={label}
+      size="small"
+      sx={{
+        fontFamily: fontBody,
+        fontWeight: 700,
+        fontSize: "0.72rem",
+        height: 26,
+        borderRadius: "8px",
+        color: tone.color,
+        bgcolor: tone.bg,
+        border: `1px solid ${tone.color}22`,
+      }}
+    />
+  );
+}
+
+function JsonBlock({ title, data, variant = "neutral" }) {
+  if (!data || (typeof data === "object" && !Object.keys(data).length)) return null;
+  const palette =
+    variant === "old"
+      ? { bg: "#FEF2F2", border: "rgba(220,38,38,0.18)", label: primaryDark }
+      : variant === "new"
+        ? { bg: "#F0FDF4", border: "rgba(22,163,74,0.18)", label: "#16A34A" }
+        : { bg: warmCream, border: "rgba(220,38,38,0.08)", label: textSecondary };
+
+  return (
+    <Box
+      sx={{
+        borderRadius: "16px",
+        border: `1px solid ${palette.border}`,
+        bgcolor: palette.bg,
+        overflow: "hidden",
+      }}
+    >
+      <Box sx={{ px: 2, py: 1.25, borderBottom: `1px solid ${palette.border}` }}>
+        <Typography sx={{ fontFamily: fontBody, fontSize: "0.72rem", fontWeight: 800, color: palette.label, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          {title}
+        </Typography>
+      </Box>
+      <Box
+        component="pre"
+        sx={{
+          m: 0,
+          p: 2,
+          fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+          fontSize: "0.78rem",
+          lineHeight: 1.55,
+          color: textPrimary,
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          maxHeight: 220,
+          overflow: "auto",
+        }}
+      >
+        {JSON.stringify(data, null, 2)}
+      </Box>
+    </Box>
+  );
+}
+
+function StatPill({ label, value, accent = primaryRed }) {
+  return (
+    <Box
+      sx={{
+        ...hrPanelCardSx,
+        px: 2,
+        py: 1.5,
+        minWidth: 140,
+        flex: 1,
+      }}
+    >
+      <Typography sx={{ fontFamily: fontBody, fontSize: "0.72rem", fontWeight: 700, color: textMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+        {label}
+      </Typography>
+      <Typography sx={{ fontFamily: fontDisplay, fontWeight: 800, fontSize: "1.5rem", color: accent, lineHeight: 1.2, mt: 0.25 }}>
+        {value}
+      </Typography>
+    </Box>
+  );
+}
+
+export default function Audit() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -49,790 +235,311 @@ const Audit = () => {
   const [totalLogs, setTotalLogs] = useState(0);
   const [selectedTab, setSelectedTab] = useState(0);
 
-  const resourceTypes = [
-    { value: "", label: "All" },
-    { value: "admin_user", label: "Admin User" },
-    { value: "project", label: "Project" },
-    { value: "document", label: "Document" },
-    { value: "contact", label: "Contact" },
-    { value: "system", label: "System" },
-    { value: "other", label: "Other" },
-  ];
-
-  useEffect(() => {
-    fetchAuditLogs();
-  }, [page, rowsPerPage, selectedTab]);
-
-  const fetchAuditLogs = async () => {
+  const fetchAuditLogs = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const token = localStorage.getItem("token");
-
       if (!token) {
-        setError("No authentication token found. Please login again.");
+        setError("No authentication token found. Please sign in again.");
         return;
       }
 
       const queryParams = new URLSearchParams({
-        page: (page + 1).toString(),
-        limit: rowsPerPage.toString(),
+        page: String(page + 1),
+        limit: String(rowsPerPage),
       });
-
-      const selectedResourceType = resourceTypes[selectedTab].value;
-      if (selectedResourceType) queryParams.append("resource_type", selectedResourceType);
+      const resourceType = resourceTypeValues[selectedTab];
+      if (resourceType) queryParams.append("resource_type", resourceType);
 
       const response = await fetch(`/api/audit-trail?${queryParams}`, {
-        method: "GET",
         headers: {
-          "Content-Type": "application/json",
+          Accept: "application/json",
           Authorization: `Bearer ${token}`,
         },
       });
-
       const data = await response.json();
 
       if (data.success) {
         setAuditLogs(data.data || []);
         setTotalLogs(data.pagination?.total || 0);
       } else {
-        setError(
-          "Failed to fetch audit logs: " + (data.message || "Unknown error")
-        );
+        setError(data.message || "Could not load audit logs.");
       }
     } catch (err) {
-      setError("Error fetching audit logs: " + err.message);
+      setError(err.message || "Could not load audit logs.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, rowsPerPage, selectedTab]);
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "success":
-        return "success";
-      case "failed":
-        return "error";
-      case "pending":
-        return "warning";
-      default:
-        return "default";
-    }
-  };
+  useEffect(() => {
+    void fetchAuditLogs();
+  }, [fetchAuditLogs]);
 
-  const getActionColor = (action) => {
-    if (action.includes("delete")) return "error";
-    if (action.includes("create")) return "success";
-    if (action.includes("update") || action.includes("login")) return "info";
-    return "default";
-  };
-
-  const formatActionText = (action) => {
-    return action
-      .split("_")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
-  };
-
-  const formatResourceType = (type) => {
-    return type
-      .split("_")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
+  const pageStats = useMemo(() => {
+    const success = auditLogs.filter((l) => l.status === "success").length;
+    const failed = auditLogs.filter((l) => l.status === "failed").length;
+    return { success, failed };
+  }, [auditLogs]);
 
   const handleViewLog = (log) => {
     setSelectedLog(log);
     setOpenViewDialog(true);
   };
 
-  const handleTabChange = (event, newValue) => {
-    setSelectedTab(newValue);
+  const closeDialog = () => {
+    setOpenViewDialog(false);
+    setSelectedLog(null);
+  };
+
+  const handleTabChange = (value) => {
+    setSelectedTab(value);
     setPage(0);
   };
 
-  if (error && auditLogs.length === 0) {
-    return (
-      <Box p={3}>
-        <Alert severity="error">{error}</Alert>
-      </Box>
-    );
-  }
-
   return (
     <Box
+      component={motion.div}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       sx={{
-        background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
-        minHeight: "100vh",
+        ...elimuViewportSx,
+        gap: 2,
+        pb: 3,
       }}
     >
-      <Paper
-        elevation={0}
-        sx={{
-          borderRadius: 0,
-          overflow: "hidden",
-          background: "rgba(255, 255, 255, 0.95)",
-          backdropFilter: "blur(10px)",
-          border: "none",
-          boxShadow: "none",
-          minHeight: "100vh",
-        }}
-      >
-        {/* Header Section */}
-        <Box
-          sx={{
-            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-            p: 3,
-            color: "white",
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
-          <Box
-            sx={{
-              position: "absolute",
-              top: -50,
-              right: -50,
-              width: 200,
-              height: 200,
-              background: "rgba(255, 255, 255, 0.1)",
-              borderRadius: "50%",
-              zIndex: 0,
-            }}
-          />
-          <Box
-            sx={{
-              position: "absolute",
-              bottom: -30,
-              left: -30,
-              width: 150,
-              height: 150,
-              background: "rgba(255, 255, 255, 0.05)",
-              borderRadius: "50%",
-              zIndex: 0,
-            }}
-          />
-          <Box
-            display="flex"
-            flexDirection={{ xs: "column", sm: "row" }}
-            justifyContent="space-between"
-            alignItems={{ xs: "flex-start", sm: "center" }}
-            gap={{ xs: 2, sm: 0 }}
-            position="relative"
-            zIndex={1}
-          >
-            <Box>
-              <Typography
-                variant="h4"
-                sx={{
-                  fontWeight: 800,
-                  mb: 1,
-                  textShadow: "0 2px 4px rgba(0,0,0,0.3)",
-                  fontSize: { xs: "1.5rem", sm: "2rem", md: "2.125rem" },
-                }}
-              >
-                Audit Trail Management
-              </Typography>
-              <Typography variant="body1" sx={{ opacity: 0.9 }}>
-                View and track all system activities and changes
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
-
-        {/* Content Section */}
-        <Box
-          sx={{ p: { xs: 1, sm: 2, md: 3 }, minHeight: "calc(100vh - 200px)" }}
-        >
-          {/* Resource Type Tabs */}
-          <Paper
-            elevation={0}
-            sx={{
-              mb: 2,
-              borderRadius: 3,
-              backgroundColor: "rgba(255, 255, 255, 0.8)",
-              border: "1px solid rgba(102, 126, 234, 0.1)",
-              overflow: "hidden",
-            }}
-          >
-            <Tabs
-              value={selectedTab}
-              onChange={handleTabChange}
-              variant="scrollable"
-              scrollButtons="auto"
+      <ElimuPlusHero
+        title="Audit Trail"
+        subtitle="Track admin portal activity — who did what, when, and whether it succeeded."
+        icon={<HistoryIcon sx={{ fontSize: 26 }} />}
+        actions={
+          <Tooltip title="Refresh logs">
+            <IconButton
+              onClick={() => void fetchAuditLogs()}
+              disabled={loading}
               sx={{
-                "& .MuiTab-root": {
-                  textTransform: "none",
-                  fontWeight: 600,
-                  minHeight: 48,
-                  color: "#667eea",
-                  "&.Mui-selected": {
-                    color: "#667eea",
-                    backgroundColor: "rgba(102, 126, 234, 0.1)",
-                  },
-                },
-                "& .MuiTabs-indicator": {
-                  backgroundColor: "#667eea",
-                  height: 3,
-                },
+                bgcolor: "rgba(255,255,255,0.15)",
+                color: "#fff",
+                border: "1px solid rgba(255,255,255,0.22)",
+                "&:hover": { bgcolor: "rgba(255,255,255,0.25)" },
               }}
             >
-              {resourceTypes.map((type, index) => (
-                <Tab
-                  key={type.value}
-                  label={type.label}
-                  sx={{
-                    px: 3,
-                    py: 1.5,
-                    fontSize: { xs: "0.875rem", sm: "1rem" },
-                  }}
-                />
-              ))}
-            </Tabs>
-          </Paper>
+              {loading ? <CircularProgress size={22} sx={{ color: "#fff" }} /> : <RefreshRoundedIcon />}
+            </IconButton>
+          </Tooltip>
+        }
+      />
 
-          {/* Audit Logs Table */}
-          <TableContainer
-            sx={{
-              borderRadius: 3,
-              overflowX: "auto",
-              backgroundColor: "rgba(255, 255, 255, 0.8)",
-              border: "1px solid rgba(102, 126, 234, 0.1)",
-              "&::-webkit-scrollbar": {
-                height: 8,
-              },
-              "&::-webkit-scrollbar-track": {
-                backgroundColor: "rgba(102, 126, 234, 0.1)",
-                borderRadius: 4,
-              },
-              "&::-webkit-scrollbar-thumb": {
-                backgroundColor: "rgba(102, 126, 234, 0.3)",
-                borderRadius: 4,
-                "&:hover": {
-                  backgroundColor: "rgba(102, 126, 234, 0.5)",
-                },
-              },
-            }}
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+        <StatPill label="Total entries" value={totalLogs.toLocaleString()} />
+        <StatPill label="Success on page" value={pageStats.success} accent="#16A34A" />
+        <StatPill label="Failed on page" value={pageStats.failed} accent={primaryRed} />
+      </Stack>
+
+      <Box component={motion.div} variants={fadeUp} custom={1} initial="hidden" animate="visible">
+        <ElimuPlusTabs activeTab={selectedTab} onChange={handleTabChange} tabs={resourceTypes} />
+      </Box>
+
+      <Box
+        component={motion.div}
+        variants={fadeUp}
+        custom={2}
+        initial="hidden"
+        animate="visible"
+        sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
+      >
+        <TabPanelShell error={error} loading={loading} onDismissError={() => setError(null)}>
+          <DataTableShell
+            pagination={
+              <TablePagination
+                component="div"
+                count={totalLogs}
+                page={page}
+                onPageChange={(_, newPage) => setPage(newPage)}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={(e) => {
+                  setRowsPerPage(parseInt(e.target.value, 10));
+                  setPage(0);
+                }}
+                rowsPerPageOptions={[5, 10, 25, 50]}
+                sx={tablePaginationSx}
+              />
+            }
           >
-            <Table sx={{ minWidth: 800 }}>
+            <Table sx={{ minWidth: 640 }}>
               <TableHead>
-                <TableRow
-                  sx={{
-                    background:
-                      "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                    "& .MuiTableCell-head": {
-                      color: "white",
-                      fontWeight: 700,
-                      fontSize: { xs: "0.8rem", sm: "0.95rem" },
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                      border: "none",
-                      whiteSpace: "nowrap",
-                    },
-                  }}
-                >
-                  <TableCell>No</TableCell>
+                <TableRow sx={tableHeadRowSx}>
+                  <TableCell width={56}>#</TableCell>
                   <TableCell>User</TableCell>
                   <TableCell>Action</TableCell>
-                  <TableCell>Resource Type</TableCell>
                   <TableCell>Status</TableCell>
-                  <TableCell>Date & Time</TableCell>
-                  <TableCell>Actions</TableCell>
+                  <TableCell align="center" width={88}>
+                    View
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {loading ? (
+                {auditLogs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                      <CircularProgress sx={{ color: "#667eea" }} />
-                    </TableCell>
-                  </TableRow>
-                ) : error ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                      <Alert severity="error" sx={{ mb: 2 }}>
-                        {error}
-                      </Alert>
-                      <Button
-                        variant="contained"
-                        onClick={fetchAuditLogs}
-                        sx={{
-                          background:
-                            "linear-gradient(45deg, #667eea, #764ba2)",
-                        }}
-                      >
-                        Retry
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ) : auditLogs.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                      <Typography variant="h6" color="text.secondary">
-                        No audit logs found.
-                      </Typography>
+                    <TableCell colSpan={5}>
+                      <Box sx={{ py: 6, textAlign: "center" }}>
+                        <HistoryIcon sx={{ fontSize: 40, color: primaryLight, mb: 1 }} />
+                        <Typography sx={{ fontFamily: fontDisplay, fontWeight: 700, color: textPrimary }}>
+                          No audit logs yet
+                        </Typography>
+                        <Typography sx={{ fontFamily: fontBody, fontSize: "0.88rem", color: textMuted, mt: 0.5 }}>
+                          Activity will appear here as staff use the admin portal.
+                        </Typography>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  auditLogs.map((log, idx) => (
-                    <TableRow
-                      key={log.id}
-                      sx={{
-                        "&:nth-of-type(even)": {
-                          backgroundColor: "rgba(102, 126, 234, 0.02)",
-                        },
-                        "&:hover": {
-                          backgroundColor: "rgba(102, 126, 234, 0.08)",
-                          transform: { xs: "none", sm: "scale(1.01)" },
-                        },
-                        transition: "all 0.2s ease",
-                        cursor: "pointer",
-                        "& .MuiTableCell-root": {
-                          fontSize: { xs: "0.75rem", sm: "0.875rem" },
-                          padding: { xs: "8px 4px", sm: "16px" },
-                        },
-                      }}
-                    >
-                      <TableCell sx={{ fontWeight: 600, color: "#667eea" }}>
-                        {page * rowsPerPage + idx + 1}
-                      </TableCell>
-                      <TableCell>
-                        <Typography
-                          variant="body2"
-                          fontWeight="600"
-                          sx={{ color: "#2c3e50" }}
-                        >
-                          {log.user?.full_name || "System"}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: "#7f8c8d" }}>
-                          {log.user?.email || "N/A"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={formatActionText(log.action)}
-                          color={getActionColor(log.action)}
-                          size="small"
-                          sx={{
-                            textTransform: "capitalize",
-                            fontWeight: 600,
-                            borderRadius: 2,
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography
-                          variant="body2"
-                          sx={{ color: "#7f8c8d", fontWeight: 600 }}
-                        >
-                          {formatResourceType(log.resource_type)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={log.status}
-                          color={getStatusColor(log.status)}
-                          size="small"
-                          sx={{
-                            textTransform: "capitalize",
-                            fontWeight: 600,
-                            borderRadius: 2,
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography
-                          variant="body2"
-                          sx={{ color: "#7f8c8d", fontWeight: 600 }}
-                        >
-                          {formatDate(log.createdAt)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Tooltip title="View Audit Log Details" arrow>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleViewLog(log)}
-                            sx={{
-                              color: "#27ae60",
-                              backgroundColor: "rgba(39, 174, 96, 0.1)",
-                              "&:hover": {
-                                backgroundColor: "rgba(39, 174, 96, 0.2)",
-                                transform: "scale(1.1)",
-                              },
-                              transition: "all 0.2s ease",
-                              borderRadius: 2,
-                            }}
-                          >
-                            <ViewIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  auditLogs.map((log, idx) => {
+                    const name = log.user?.full_name || "System";
+                    return (
+                      <TableRow
+                        key={log.id}
+                        hover
+                        sx={{
+                          "&:nth-of-type(even)": { bgcolor: "rgba(220,38,38,0.02)" },
+                          "&:hover": { bgcolor: "rgba(220,38,38,0.04)" },
+                          "& .MuiTableCell-root": {
+                            fontFamily: fontBody,
+                            borderColor: "rgba(220,38,38,0.06)",
+                            py: 1.5,
+                          },
+                        }}
+                      >
+                        <TableCell sx={{ fontWeight: 700, color: textMuted }}>
+                          {page * rowsPerPage + idx + 1}
+                        </TableCell>
+                        <TableCell>
+                          <Stack direction="row" spacing={1.25} alignItems="center">
+                            <Avatar
+                              sx={{
+                                width: 36,
+                                height: 36,
+                                fontSize: "0.82rem",
+                                fontWeight: 700,
+                                fontFamily: fontDisplay,
+                                bgcolor: primaryRed,
+                                color: "#fff",
+                              }}
+                            >
+                              {getInitials(name)}
+                            </Avatar>
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography sx={{ fontWeight: 700, color: textPrimary, fontSize: "0.88rem" }}>
+                                {name}
+                              </Typography>
+                              <Typography sx={{ fontSize: "0.75rem", color: textMuted }} noWrap>
+                                {log.user?.email || "System activity"}
+                              </Typography>
+                            </Box>
+                          </Stack>
+                        </TableCell>
+                        <TableCell>
+                          <AuditChip label={formatActionText(log.action)} tone={actionStyle(log.action)} />
+                        </TableCell>
+                        <TableCell>
+                          <AuditChip label={log.status || "—"} tone={statusStyle(log.status)} />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Tooltip title="View details">
+                            <IconButton size="small" onClick={() => handleViewLog(log)} sx={actionIconSx}>
+                              <VisibilityOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
-          </TableContainer>
-          <TablePagination
-            component="div"
-            count={totalLogs}
-            page={page}
-            onPageChange={handleChangePage}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            sx={{
-              backgroundColor: "rgba(255, 255, 255, 0.8)",
-              borderTop: "1px solid rgba(102, 126, 234, 0.1)",
-              "& .MuiTablePagination-toolbar": {
-                color: "#667eea",
-                fontWeight: 600,
-              },
-              "& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows":
-                {
-                  color: "#2c3e50",
-                  fontWeight: 600,
-                },
-            }}
-          />
-        </Box>
+          </DataTableShell>
+        </TabPanelShell>
+      </Box>
 
-        {/* Audit Log Details Dialog */}
-        <Dialog
-          open={openViewDialog}
-          onClose={() => {
-            setOpenViewDialog(false);
-            setSelectedLog(null);
-          }}
-          maxWidth="sm"
-          fullWidth
-          sx={{
-            "& .MuiDialog-paper": {
-              borderRadius: 4,
-              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.15)",
-              maxHeight: "85vh",
-              background: "rgba(255, 255, 255, 0.95)",
-              backdropFilter: "blur(10px)",
-              border: "1px solid rgba(102, 126, 234, 0.2)",
-              overflow: "hidden",
-            },
-            "& .MuiBackdrop-root": {
-              backgroundColor: "rgba(0, 0, 0, 0.5)",
-            },
-          }}
-        >
-          <DialogTitle
-            sx={{
-              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-              color: "white",
-              fontWeight: "bold",
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-              p: 3,
-              position: "relative",
-              overflow: "hidden",
-            }}
-          >
+      <PremiumDialog
+        open={openViewDialog}
+        onClose={closeDialog}
+        title="Audit log details"
+        subtitle={selectedLog ? formatDate(selectedLog.createdAt || selectedLog.created_at) : ""}
+        icon={<HistoryIcon />}
+        maxWidth="md"
+        footer={<DialogGhostButton onClick={closeDialog}>Close</DialogGhostButton>}
+      >
+        {selectedLog ? (
+          <Stack spacing={2}>
             <Box
               sx={{
-                position: "absolute",
-                top: -20,
-                right: -20,
-                width: 100,
-                height: 100,
-                background: "rgba(255, 255, 255, 0.1)",
-                borderRadius: "50%",
-                zIndex: 0,
-              }}
-            />
-            <Box
-              sx={{
-                position: "absolute",
-                bottom: -15,
-                left: -15,
-                width: 80,
-                height: 80,
-                background: "rgba(255, 255, 255, 0.05)",
-                borderRadius: "50%",
-                zIndex: 0,
-              }}
-            />
-            <HistoryIcon
-              sx={{ position: "relative", zIndex: 1, fontSize: 28 }}
-            />
-            <Box sx={{ position: "relative", zIndex: 1 }}>
-              <Typography
-                variant="h5"
-                sx={{
-                  fontWeight: 800,
-                  textShadow: "0 2px 4px rgba(0,0,0,0.3)",
-                }}
-              >
-                Audit Log Details
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
-                View complete audit trail information
-              </Typography>
-            </Box>
-          </DialogTitle>
-          <DialogContent
-            sx={{ p: 3, pt: 3, maxHeight: "70vh", overflowY: "auto" }}
-          >
-            {selectedLog && (
-              <Stack spacing={2}>
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    User
-                  </Typography>
-                  <Typography variant="body1" fontWeight="600">
-                    {selectedLog.user?.full_name || "System"}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {selectedLog.user?.email || "N/A"}
-                  </Typography>
-                </Box>
-
-                <Divider />
-
-                <Box
-                  display="flex"
-                  flexDirection={{ xs: "column", sm: "row" }}
-                  gap={2}
-                >
-                  <Box flex={1}>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Action
-                    </Typography>
-                    <Chip
-                      label={formatActionText(selectedLog.action)}
-                      color={getActionColor(selectedLog.action)}
-                      size="small"
-                      sx={{ mt: 0.5 }}
-                    />
-                  </Box>
-                  <Box flex={1}>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Status
-                    </Typography>
-                    <Chip
-                      label={selectedLog.status}
-                      color={getStatusColor(selectedLog.status)}
-                      size="small"
-                      sx={{ mt: 0.5 }}
-                    />
-                  </Box>
-                </Box>
-
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Resource Type
-                  </Typography>
-                  <Typography variant="body1">
-                    {formatResourceType(selectedLog.resource_type)}
-                  </Typography>
-                </Box>
-
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Resource ID
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontFamily: "monospace",
-                      backgroundColor: "rgba(102, 126, 234, 0.05)",
-                      p: 1,
-                      borderRadius: 1,
-                      wordBreak: "break-all",
-                    }}
-                  >
-                    {selectedLog.resource_id || "N/A"}
-                  </Typography>
-                </Box>
-
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Description
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      mt: 1,
-                      p: 2,
-                      backgroundColor: "rgba(102, 126, 234, 0.05)",
-                      borderRadius: 2,
-                      border: "1px solid rgba(102, 126, 234, 0.1)",
-                    }}
-                  >
-                    {selectedLog.description}
-                  </Typography>
-                </Box>
-
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    IP Address
-                  </Typography>
-                  <Typography variant="body2" fontFamily="monospace">
-                    {selectedLog.ip_address || "N/A"}
-                  </Typography>
-                </Box>
-
-                <Box>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Date & Time
-                  </Typography>
-                  <Typography variant="body2">
-                    {formatDate(selectedLog.createdAt)}
-                  </Typography>
-                </Box>
-
-                {selectedLog.old_values && (
-                  <Box>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Old Values
-                    </Typography>
-                    <Paper
-                      sx={{
-                        mt: 1,
-                        p: 2,
-                        backgroundColor: "rgba(231, 76, 60, 0.05)",
-                        borderRadius: 2,
-                        border: "1px solid rgba(231, 76, 60, 0.2)",
-                      }}
-                    >
-                      <pre
-                        style={{
-                          margin: 0,
-                          fontSize: "0.875rem",
-                          whiteSpace: "pre-wrap",
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {JSON.stringify(selectedLog.old_values, null, 2)}
-                      </pre>
-                    </Paper>
-                  </Box>
-                )}
-
-                {selectedLog.new_values && (
-                  <Box>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      New Values
-                    </Typography>
-                    <Paper
-                      sx={{
-                        mt: 1,
-                        p: 2,
-                        backgroundColor: "rgba(39, 174, 96, 0.05)",
-                        borderRadius: 2,
-                        border: "1px solid rgba(39, 174, 96, 0.2)",
-                      }}
-                    >
-                      <pre
-                        style={{
-                          margin: 0,
-                          fontSize: "0.875rem",
-                          whiteSpace: "pre-wrap",
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {JSON.stringify(selectedLog.new_values, null, 2)}
-                      </pre>
-                    </Paper>
-                  </Box>
-                )}
-
-                {selectedLog.metadata && (
-                  <Box>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Metadata
-                    </Typography>
-                    <Paper
-                      sx={{
-                        mt: 1,
-                        p: 2,
-                        backgroundColor: "rgba(102, 126, 234, 0.05)",
-                        borderRadius: 2,
-                        border: "1px solid rgba(102, 126, 234, 0.1)",
-                      }}
-                    >
-                      <pre
-                        style={{
-                          margin: 0,
-                          fontSize: "0.875rem",
-                          whiteSpace: "pre-wrap",
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {JSON.stringify(selectedLog.metadata, null, 2)}
-                      </pre>
-                    </Paper>
-                  </Box>
-                )}
-
-                {selectedLog.error_message && (
-                  <Box>
-                    <Typography variant="subtitle2" color="error">
-                      Error Message
-                    </Typography>
-                    <Alert severity="error" sx={{ mt: 1 }}>
-                      {selectedLog.error_message}
-                    </Alert>
-                  </Box>
-                )}
-              </Stack>
-            )}
-          </DialogContent>
-          <DialogActions
-            sx={{ p: 3, gap: 2, backgroundColor: "rgba(102, 126, 234, 0.05)" }}
-          >
-            <Button
-              onClick={() => {
-                setOpenViewDialog(false);
-                setSelectedLog(null);
-              }}
-              variant="outlined"
-              sx={{
-                borderColor: "#667eea",
-                color: "#667eea",
-                fontWeight: 600,
-                borderRadius: 2,
-                px: 3,
-                py: 1,
-                "&:hover": {
-                  borderColor: "#5a6fd8",
-                  backgroundColor: "rgba(102, 126, 234, 0.1)",
-                },
+                p: 2,
+                borderRadius: "18px",
+                background: `linear-gradient(135deg, ${warmCream} 0%, #fff 100%)`,
+                border: "1px solid rgba(220,38,38,0.08)",
               }}
             >
-              Close
-            </Button>
-          </DialogActions>
-        </Dialog>
-      </Paper>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Avatar
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    bgcolor: primaryRed,
+                    color: "#fff",
+                    fontFamily: fontDisplay,
+                    fontWeight: 700,
+                  }}
+                >
+                  {getInitials(selectedLog.user?.full_name || "System")}
+                </Avatar>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography sx={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: "1.1rem", color: textPrimary }}>
+                    {selectedLog.user?.full_name || "System"}
+                  </Typography>
+                  <Typography sx={{ fontFamily: fontBody, fontSize: "0.85rem", color: textSecondary }}>
+                    {selectedLog.user?.email || "No user email"}
+                  </Typography>
+                </Box>
+                <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap justifyContent="flex-end">
+                  <AuditChip label={formatActionText(selectedLog.action)} tone={actionStyle(selectedLog.action)} />
+                  <AuditChip label={selectedLog.status} tone={statusStyle(selectedLog.status)} />
+                </Stack>
+              </Stack>
+            </Box>
+
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                gap: 1.5,
+              }}
+            >
+              <DetailField icon={<CategoryOutlinedIcon fontSize="small" />} label="Resource type" value={formatResourceType(selectedLog.resource_type)} />
+              <DetailField icon={<FingerprintOutlinedIcon fontSize="small" />} label="Resource ID" value={selectedLog.resource_id || "—"} />
+              <DetailField icon={<LanOutlinedIcon fontSize="small" />} label="IP address" value={selectedLog.ip_address || "—"} />
+              <DetailField icon={<ScheduleOutlinedIcon fontSize="small" />} label="Date & time" value={formatDate(selectedLog.createdAt || selectedLog.created_at)} />
+            </Box>
+
+            <DetailField
+              icon={<DescriptionOutlinedIcon fontSize="small" />}
+              label="Description"
+              value={selectedLog.description || "—"}
+            />
+
+            <JsonBlock title="Previous values" data={selectedLog.old_values} variant="old" />
+            <JsonBlock title="New values" data={selectedLog.new_values} variant="new" />
+            <JsonBlock title="Metadata" data={selectedLog.metadata} variant="neutral" />
+
+            {selectedLog.error_message ? (
+              <Alert severity="error" sx={{ borderRadius: "14px", fontFamily: fontBody }}>
+                {selectedLog.error_message}
+              </Alert>
+            ) : null}
+          </Stack>
+        ) : null}
+      </PremiumDialog>
     </Box>
   );
-};
-
-export default Audit;
+}

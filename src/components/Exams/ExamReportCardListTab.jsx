@@ -25,17 +25,42 @@ import {
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import Swal from "sweetalert2";
+import { getApiBaseUrl } from "../../utils/apiBaseUrl";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
 const accentLight = "#FEE2E2";
 const PAGE_SIZE = 15;
 
-const authHeaders = (token) => ({
-  Accept: "application/json",
+const authHeaders = (token, accept = "application/json") => ({
+  Accept: accept,
   ...(token ? { Authorization: `Bearer ${token}` } : {}),
 });
+
+const openReportCardPdf = async (cardId, token, { download = false } = {}) => {
+  const base = getApiBaseUrl();
+  const res = await fetch(`${base}/api/report-cards/${cardId}/pdf`, {
+    headers: authHeaders(token, "application/pdf"),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || "Could not load report card PDF.");
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  if (download) {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `report-card-${cardId}.pdf`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
 
 function studentLabel(card) {
   const s = card?.student;
@@ -58,6 +83,8 @@ export default function ExamReportCardListTab({ refreshKey = 0 }) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
+  const [viewingId, setViewingId] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
   const [error, setError] = useState("");
   const [classFilter, setClassFilter] = useState("");
   const [classes, setClasses] = useState([]);
@@ -103,6 +130,30 @@ export default function ExamReportCardListTab({ refreshKey = 0 }) {
   useEffect(() => {
     void load();
   }, [load, refreshKey]);
+
+  const handleView = async (card) => {
+    if (!token || !card?.id) return;
+    setViewingId(card.id);
+    try {
+      await openReportCardPdf(card.id, token);
+    } catch (e) {
+      await Swal.fire({ icon: "error", title: "Could not open report card", text: e.message });
+    } finally {
+      setViewingId(null);
+    }
+  };
+
+  const handleDownload = async (card) => {
+    if (!token || !card?.id) return;
+    setDownloadingId(card.id);
+    try {
+      await openReportCardPdf(card.id, token, { download: true });
+    } catch (e) {
+      await Swal.fire({ icon: "error", title: "Could not download report card", text: e.message });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const handleDelete = async (card) => {
     const label = studentLabel(card);
@@ -191,7 +242,7 @@ export default function ExamReportCardListTab({ refreshKey = 0 }) {
                     <TableCell align="right">Marks</TableCell>
                     <TableCell>Grade</TableCell>
                     <TableCell>Date</TableCell>
-                    <TableCell align="center" width={100}>
+                    <TableCell align="center" width={132}>
                       Actions
                     </TableCell>
                   </TableRow>
@@ -216,20 +267,40 @@ export default function ExamReportCardListTab({ refreshKey = 0 }) {
                       <TableCell>{formatReportCardDate(card)}</TableCell>
                       <TableCell align="center">
                         <Stack direction="row" spacing={0.25} justifyContent="center">
-                          {card.pdf_url ? (
-                            <Tooltip title="Open PDF">
+                          <Tooltip title="View report card">
+                            <span>
                               <IconButton
                                 size="small"
-                                component="a"
-                                href={card.pdf_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                                aria-label="View report card"
+                                disabled={viewingId === card.id}
+                                onClick={() => void handleView(card)}
                                 sx={{ color: accentDark }}
                               >
-                                <DownloadOutlinedIcon fontSize="small" />
+                                {viewingId === card.id ? (
+                                  <CircularProgress size={18} sx={{ color: accent }} />
+                                ) : (
+                                  <VisibilityOutlinedIcon fontSize="small" />
+                                )}
                               </IconButton>
-                            </Tooltip>
-                          ) : null}
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Download PDF">
+                            <span>
+                              <IconButton
+                                size="small"
+                                aria-label="Download report card PDF"
+                                disabled={downloadingId === card.id}
+                                onClick={() => void handleDownload(card)}
+                                sx={{ color: accentDark }}
+                              >
+                                {downloadingId === card.id ? (
+                                  <CircularProgress size={18} sx={{ color: accent }} />
+                                ) : (
+                                  <DownloadOutlinedIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                           <Tooltip title="Delete report card">
                             <span>
                               <IconButton

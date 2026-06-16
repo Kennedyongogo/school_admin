@@ -3,6 +3,7 @@ import {
   Logout,
   PeopleAlt,
   Settings,
+  History,
   Event,
   School,
   MenuBook,
@@ -152,7 +153,10 @@ const MENU_SECTIONS = [
   },
   {
     label: "System",
-    items: [{ text: "Settings", icon: <Settings />, path: "/settings" }],
+    items: [
+      { text: "Settings", icon: <Settings />, path: "/settings" },
+      { text: "Audit Trail", icon: <History />, path: "/audit" },
+    ],
   },
 ];
 
@@ -290,6 +294,7 @@ const Navbar = (props) => {
     (path === "/curriculum" && location.pathname.startsWith("/curriculum")) ||
     (path === "/timetable" && location.pathname.startsWith("/timetable")) ||
     (path === "/settings" && location.pathname.startsWith("/settings")) ||
+    (path === "/audit" && location.pathname.startsWith("/audit")) ||
     (path === "/users" && location.pathname.startsWith("/users"));
 
   const logout = () => {
