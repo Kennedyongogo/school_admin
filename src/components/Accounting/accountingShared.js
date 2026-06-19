@@ -21,9 +21,11 @@ export {
 } from "../SchoolProfile/elimuPlusShared";
 
 export const ACCOUNTING_TABS = [
-  { label: "Fee structures", value: 0 },
-  { label: "Invoices", value: 1 },
-  { label: "Fee payments", value: 2 },
+  { label: "Dashboard", value: 0 },
+  { label: "Fee structures", value: 1 },
+  { label: "Invoices", value: 2 },
+  { label: "Fee payments", value: 3 },
+  { label: "Receipts", value: 4 },
 ];
 
 export function formatKes(n) {

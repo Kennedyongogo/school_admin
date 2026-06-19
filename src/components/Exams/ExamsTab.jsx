@@ -73,6 +73,14 @@ import {
   ExamGhostButton,
 } from "./examUi";
 import { formatDurationMinutes } from "./examShared";
+import {
+  EXAM_SCHEDULE_TIMEZONE,
+  buildScheduleDateTime,
+  formatScheduleTimeForApi,
+  localScheduleDateString,
+  normalizeTimePickerValue,
+  wallClockFromInstant,
+} from "./examScheduleTime";
 
 const accent = "#DC2626";
 const accentDark = "#B91C1C";
@@ -106,11 +114,6 @@ function parseScheduleTime(val) {
   if (s.length === 5) return dayjs(`1970-01-01T${s}:00`);
   const d = dayjs(`1970-01-01T${s}`);
   return d.isValid() ? d : null;
-}
-
-function formatScheduleTimeForApi(value) {
-  if (!value || !dayjs.isDayjs(value) || !value.isValid()) return "";
-  return value.format("HH:mm:ss");
 }
 
 /** Three proctoring modes — webcam and tab-switch rules are fixed per mode (backend applies the same). */
@@ -877,7 +880,7 @@ export default function ExamsTab() {
   const [passingMarks, setPassingMarks] = useState(0);
   const [status, setStatus] = useState("draft");
   const [scheduleEnabled, setScheduleEnabled] = useState(true);
-  const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [scheduleDate, setScheduleDate] = useState(() => localScheduleDateString());
   const [scheduleStartTime, setScheduleStartTime] = useState(() => defaultScheduleStartTime());
   const [scheduleEndTime, setScheduleEndTime] = useState(() => defaultScheduleEndTime());
   const [teacherId, setTeacherId] = useState("");
@@ -1456,7 +1459,7 @@ export default function ExamsTab() {
     setPassingMarks(0);
     setStatus("draft");
     setScheduleEnabled(true);
-    setScheduleDate(new Date().toISOString().slice(0, 10));
+    setScheduleDate(localScheduleDateString());
     setScheduleStartTime(defaultScheduleStartTime());
     setScheduleEndTime(defaultScheduleEndTime());
     setTeacherId("");
@@ -1503,15 +1506,17 @@ export default function ExamsTab() {
     setStatus(row.status || "draft");
     setScheduleEnabled(Boolean(row.start_time));
     if (row.start_time) {
-      const st = dayjs(row.start_time);
-      if (st.isValid()) {
-        setScheduleDate(st.format("YYYY-MM-DD"));
-        setScheduleStartTime(st);
+      const examTimezone = row.timezone || EXAM_SCHEDULE_TIMEZONE;
+      const startWall = wallClockFromInstant(row.start_time, examTimezone);
+      if (startWall) {
+        setScheduleDate(startWall.date);
+        setScheduleStartTime(startWall.time);
       }
     }
     if (row.end_time) {
-      const et = dayjs(row.end_time);
-      if (et.isValid()) setScheduleEndTime(et);
+      const examTimezone = row.timezone || EXAM_SCHEDULE_TIMEZONE;
+      const endWall = wallClockFromInstant(row.end_time, examTimezone);
+      if (endWall) setScheduleEndTime(endWall.time);
     }
     setTeacherId(row.teacher_id || "");
     setSessionStatus(row.session_status || "scheduled");
@@ -1838,9 +1843,9 @@ export default function ExamsTab() {
           ...(scheduleEnabled && scheduleDate && startStr && endStr
             ? {
                 teacher_id: teacherId || null,
-                start_time: `${scheduleDate}T${startStr}`,
-                end_time: `${scheduleDate}T${endStr}`,
-                timezone: "Africa/Nairobi",
+                start_time: buildScheduleDateTime(scheduleDate, scheduleStartTime),
+                end_time: buildScheduleDateTime(scheduleDate, scheduleEndTime),
+                timezone: EXAM_SCHEDULE_TIMEZONE,
                 session_status: sessionStatus || "scheduled",
                 is_active: scheduleIsActive,
               }
@@ -2417,7 +2422,10 @@ ${imageParts}--${boundary}--`;
                       label="Start time"
                       ampm
                       value={scheduleStartTime}
-                      onChange={(v) => setScheduleStartTime(v)}
+                      onChange={(v) => {
+                        const next = normalizeTimePickerValue(v);
+                        if (next) setScheduleStartTime(next);
+                      }}
                       viewRenderers={{
                         hours: renderTimeViewClock,
                         minutes: renderTimeViewClock,
@@ -2434,7 +2442,10 @@ ${imageParts}--${boundary}--`;
                       label="End time"
                       ampm
                       value={scheduleEndTime}
-                      onChange={(v) => setScheduleEndTime(v)}
+                      onChange={(v) => {
+                        const next = normalizeTimePickerValue(v);
+                        if (next) setScheduleEndTime(next);
+                      }}
                       viewRenderers={{
                         hours: renderTimeViewClock,
                         minutes: renderTimeViewClock,

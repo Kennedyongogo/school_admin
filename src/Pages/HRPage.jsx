@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Box,
+  MenuItem,
   Stack,
   Table,
   TableBody,
@@ -48,6 +49,7 @@ import {
   HRStatCard,
   HRFilterBar,
   HRFilterTextField,
+  HRFilterSelect,
   HRGhostButton,
   HRPrimaryButton,
   HRScopeToggle,
@@ -72,6 +74,12 @@ export default function HRPage() {
   const [tab, setTab] = useState(() => (typeof location.state?.tab === "number" ? location.state.tab : 0));
   const [scope, setScope] = useState("lessons");
   const [date, setDate] = useState("");
+  const [curriculumId, setCurriculumId] = useState("");
+  const [classId, setClassId] = useState("");
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [curriculumOptions, setCurriculumOptions] = useState([]);
+  const [classOptions, setClassOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [teachers, setTeachers] = useState([]);
@@ -82,6 +90,86 @@ export default function HRPage() {
       setTab(location.state.tab);
     }
   }, [location.state?.tab]);
+
+  useEffect(() => {
+    if (tab !== 1) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const out = [];
+        let page = 1;
+        let totalPages = 1;
+        while (page <= totalPages && page <= 100) {
+          const params = new URLSearchParams({ page: String(page), limit: "100" });
+          const res = await fetch(`/api/curricula?${params}`, {
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok || !json.success) break;
+          out.push(...(Array.isArray(json.data) ? json.data : []));
+          totalPages = json.pagination?.totalPages ?? 1;
+          page += 1;
+        }
+        if (!cancelled) setCurriculumOptions(out);
+      } catch {
+        if (!cancelled) setCurriculumOptions([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== 1 || !curriculumId) {
+      setClassOptions([]);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams({
+          curriculum_id: curriculumId,
+          page: "1",
+          limit: "1000",
+        });
+        const res = await fetch(`/api/curricula/all-classes?${params}`, {
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!cancelled) {
+          setClassOptions(Array.isArray(json.data) ? json.data : []);
+        }
+      } catch {
+        if (!cancelled) setClassOptions([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, curriculumId]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const load = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -96,6 +184,9 @@ export default function HRPage() {
       const params = new URLSearchParams();
       if (date) params.set("date", date);
       params.set("scope", scope);
+      if (curriculumId) params.set("curriculum_id", curriculumId);
+      if (classId) params.set("curriculum_class_id", classId);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       const query = params.toString() ? `?${params.toString()}` : "";
       const res = await fetch(`/api/reports/hr-attendance-overview${query}`, {
         headers: {
@@ -116,7 +207,7 @@ export default function HRPage() {
     } finally {
       setLoading(false);
     }
-  }, [date, scope]);
+  }, [date, scope, curriculumId, classId, debouncedSearch]);
 
   useEffect(() => {
     if (tab === 1) void load();
@@ -134,12 +225,13 @@ export default function HRPage() {
   }, [teachers, students]);
 
   const exportAttendanceCsv = () => {
+    const isExams = scope === "exams";
     const combinedHeader = [
       "Record Type",
       "Date",
       "Curriculum",
       "Class",
-      scope === "exams" ? "Exam" : "Subject",
+      isExams ? "Exam" : "Subject",
       "Teacher",
       "Student",
       "Admission",
@@ -153,10 +245,10 @@ export default function HRPage() {
 
     const teacherRows = teachers.map((r) => [
       "Teacher",
-      r.lesson_date || date || "",
+      r.lesson_date || (r.starts_at ? String(r.starts_at).slice(0, 10) : "") || date || "",
       r.curriculum?.name || "",
       r.curriculum_class?.name || "",
-      scope === "exams" ? r.exam?.title || "" : r.subject?.name || "",
+      isExams ? r.exam?.title || "" : r.subject?.name || "",
       r.teacher?.user?.full_name || r.teacher?.user?.username || "Unassigned",
       "",
       "",
@@ -170,15 +262,22 @@ export default function HRPage() {
 
     const studentRows = students.map((r) => [
       "Student",
-      r.lesson?.lesson_date || date || "",
-      r.lesson?.timetable?.curriculum_class?.curriculum?.name || "",
-      r.lesson?.timetable?.curriculum_class?.name || "",
-      scope === "exams" ? r.exam_schedule?.exam?.title || "" : r.lesson?.curriculum_subject?.name || "",
+      r.lesson?.lesson_date ||
+        (r.join_time ? String(r.join_time).slice(0, 10) : "") ||
+        date ||
+        "",
+      isExams
+        ? r.exam_schedule?.curriculum_class?.curriculum?.name || r.exam?.curriculum?.name || ""
+        : r.lesson?.timetable?.curriculum_class?.curriculum?.name || "",
+      isExams
+        ? r.exam_schedule?.curriculum_class?.name || r.exam?.curriculum_class?.name || ""
+        : r.lesson?.timetable?.curriculum_class?.name || "",
+      isExams ? r.exam_schedule?.title || r.exam?.title || "" : r.lesson?.curriculum_subject?.name || "",
       "",
       r.student?.user?.full_name || r.student?.user?.username || "",
       r.student?.admission_number || "",
-      fmtTime(r.lesson?.starts_at),
-      fmtTime(r.lesson?.ends_at),
+      fmtTime(isExams ? r.exam_schedule?.start_time || r.join_time : r.lesson?.starts_at),
+      fmtTime(isExams ? r.exam_schedule?.end_time || r.leave_time : r.lesson?.ends_at),
       r.join_time ? new Date(r.join_time).toLocaleString() : "",
       r.leave_time ? new Date(r.leave_time).toLocaleString() : "",
       r.duration_minutes != null ? r.duration_minutes : "",
@@ -186,6 +285,11 @@ export default function HRPage() {
     ]);
 
     const combinedRows = [...teacherRows, ...studentRows];
+    if (combinedRows.length === 0) {
+      window.alert("No rows to export for the current filters.");
+      return;
+    }
+
     const lines = [
       combinedHeader.map(escapeCsv).join(","),
       ...combinedRows.map((row) => row.map(escapeCsv).join(",")),
@@ -195,7 +299,15 @@ export default function HRPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `hr-attendance-${date || "all-dates"}.csv`;
+    const nameParts = [
+      "hr-attendance",
+      scope,
+      date || "all-dates",
+      curriculumId ? "curriculum" : null,
+      classId ? "class" : null,
+      debouncedSearch ? "search" : null,
+    ].filter(Boolean);
+    a.download = `${nameParts.join("-")}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -369,9 +481,18 @@ export default function HRPage() {
               actions={
                 <>
                   <HRGhostButton onClick={() => setDate(todayIso())}>Today</HRGhostButton>
-                  <HRGhostButton onClick={() => setDate("")}>All dates</HRGhostButton>
+                  <HRGhostButton
+                    onClick={() => {
+                      setDate("");
+                      setCurriculumId("");
+                      setClassId("");
+                      setSearch("");
+                    }}
+                  >
+                    Clear filters
+                  </HRGhostButton>
                   <HRPrimaryButton startIcon={<DownloadOutlinedIcon />} onClick={exportAttendanceCsv}>
-                    Export CSV
+                    Export filtered CSV
                   </HRPrimaryButton>
                 </>
               }
@@ -386,6 +507,40 @@ export default function HRPage() {
                   ]}
                 />
               </Box>
+              <HRFilterSelect
+                label="Curriculum"
+                value={curriculumId}
+                onChange={(e) => {
+                  setCurriculumId(e.target.value);
+                  setClassId("");
+                }}
+              >
+                <MenuItem value="">All curricula</MenuItem>
+                {curriculumOptions.map((c) => (
+                  <MenuItem key={c.id} value={c.id}>
+                    {c.name || c.type || "Curriculum"}
+                  </MenuItem>
+                ))}
+              </HRFilterSelect>
+              <HRFilterSelect
+                label="Class"
+                value={classId}
+                disabled={!curriculumId}
+                onChange={(e) => setClassId(e.target.value)}
+              >
+                <MenuItem value="">All classes</MenuItem>
+                {classOptions.map((c) => (
+                  <MenuItem key={c.id} value={c.id}>
+                    {c.name || c.code || "Class"}
+                  </MenuItem>
+                ))}
+              </HRFilterSelect>
+              <HRFilterTextField
+                label="Search name"
+                placeholder="Teacher or student name, admission no."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
               <HRFilterTextField
                 label="Filter by date"
                 type="date"

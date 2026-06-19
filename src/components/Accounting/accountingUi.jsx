@@ -5,6 +5,7 @@ import {
   Chip,
   FormControl,
   IconButton,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Select,
@@ -13,6 +14,8 @@ import {
   Typography,
 } from "@mui/material";
 import { Add as AddIcon, Delete as DeleteIcon } from "@mui/icons-material";
+import SearchIcon from "@mui/icons-material/Search";
+import { ElimuPlusTabs } from "../SchoolProfile/elimuPlusUi";
 import {
   fontBody,
   primaryRed,
@@ -39,6 +42,56 @@ export {
   tableHeadRowSx,
   tablePaginationSx,
 } from "../Curriculum/curriculumUi";
+
+/** Tabs with optional trailing slot (e.g. search) aligned on the same row. */
+export function AccountingTabsRow({ activeTab, onChange, tabs, trailing }) {
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: { xs: "column", lg: "row" },
+        alignItems: { lg: "center" },
+        justifyContent: "space-between",
+        gap: 1.5,
+        flexShrink: 0,
+      }}
+    >
+      <Box sx={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+        <ElimuPlusTabs activeTab={activeTab} onChange={onChange} tabs={tabs} />
+      </Box>
+      {trailing ? (
+        <Box sx={{ flexShrink: 0, width: { xs: "100%", lg: "auto" }, minWidth: { lg: 280 } }}>{trailing}</Box>
+      ) : null}
+    </Box>
+  );
+}
+
+export function AccountingTabSearchField({ value, onChange, placeholder = "Search…" }) {
+  return (
+    <TextField
+      size="small"
+      fullWidth
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      InputProps={{
+        startAdornment: (
+          <InputAdornment position="start">
+            <SearchIcon sx={{ fontSize: 20, color: textSecondary }} />
+          </InputAdornment>
+        ),
+      }}
+      sx={{
+        ...inputSx,
+        "& .MuiOutlinedInput-root": {
+          borderRadius: "12px",
+          bgcolor: "#fff",
+          fontFamily: fontBody,
+        },
+      }}
+    />
+  );
+}
 
 const INVOICE_STATUS = {
   paid: { label: "Paid", color: "#16a34a", bg: "#DCFCE7" },
@@ -267,5 +320,92 @@ export function FeeBreakdownView({ breakdown }) {
         </Box>
       ))}
     </Stack>
+  );
+}
+
+export function InvoiceAmountSummary({ termFee, amountPaid, balance, creditBalance }) {
+  const cards = [
+    {
+      label: "Total term fee",
+      value: termFee,
+      hint: "Full fee for this term/level (fixed when the invoice was created)",
+    },
+    {
+      label: "Paid so far",
+      value: amountPaid,
+      hint: "Sum of all payments recorded on this invoice",
+    },
+    {
+      label: "Outstanding balance",
+      value: balance,
+      highlight: true,
+      hint: "Amount the family still needs to pay",
+    },
+  ];
+
+  return (
+    <Box>
+      <AccountingInfoBanner>
+        <strong>How to read these amounts:</strong> The term fee is the total bill for this term/level. Payments reduce
+        the balance until it reaches zero. &ldquo;Amount due&rdquo; is not shown separately because it matches the term fee
+        when the invoice is created.
+      </AccountingInfoBanner>
+      <Box
+        sx={{
+          mt: 2,
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" },
+          gap: 1.5,
+        }}
+      >
+        {cards.map((card) => (
+          <Box
+            key={card.label}
+            sx={{
+              p: 2,
+              borderRadius: "16px",
+              bgcolor: card.highlight ? "#FFFBF7" : "#fff",
+              border: `1px solid ${card.highlight ? primaryRed : primaryLight}`,
+              boxShadow: card.highlight ? "0 8px 24px -16px rgba(220,38,38,0.25)" : "none",
+            }}
+          >
+            <Typography
+              sx={{
+                fontFamily: fontBody,
+                fontSize: "0.68rem",
+                fontWeight: 800,
+                color: textSecondary,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                mb: 0.75,
+              }}
+            >
+              {card.label}
+            </Typography>
+            <Typography sx={{ fontFamily: fontBody, fontWeight: 800, fontSize: "1.35rem", color: primaryDark }}>
+              KES {Number(card.value || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+            </Typography>
+            <Typography variant="caption" sx={{ display: "block", mt: 0.75, color: textSecondary, lineHeight: 1.45 }}>
+              {card.hint}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+      {Number(creditBalance) > 0.01 ? (
+        <Box
+          sx={{
+            mt: 1.5,
+            p: 1.5,
+            borderRadius: "14px",
+            bgcolor: "#ECFDF5",
+            border: "1px solid rgba(22,163,74,0.25)",
+          }}
+        >
+          <Typography sx={{ fontFamily: fontBody, fontSize: "0.88rem", color: "#166534" }}>
+            Level credit from overpayment: <strong>KES {Number(creditBalance).toLocaleString()}</strong>
+          </Typography>
+        </Box>
+      ) : null}
+    </Box>
   );
 }

@@ -6,6 +6,10 @@ import {
   Button,
   Chip,
   CircularProgress,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   Typography,
 } from "@mui/material";
@@ -19,6 +23,7 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import ClassIcon from "@mui/icons-material/Class";
 import PieChartIcon from "@mui/icons-material/PieChart";
 import WbSunnyOutlinedIcon from "@mui/icons-material/WbSunnyOutlined";
+import { inputSx } from "../components/SchoolProfile/elimuPlusShared";
 import {
   Bar,
   BarChart,
@@ -156,7 +161,7 @@ function StatCard({ icon, label, value, loading, gradient, delay = 0 }) {
   );
 }
 
-function ChartCard({ icon, title, subtitle, children, delay = 0, accentColor = accent, total }) {
+function ChartCard({ icon, title, subtitle, children, delay = 0, accentColor = accent, total, action }) {
   return (
     <Box
       component={motion.div}
@@ -181,7 +186,12 @@ function ChartCard({ icon, title, subtitle, children, delay = 0, accentColor = a
           background: `linear-gradient(135deg, ${warmCream} 0%, #fff 100%)`,
         }}
       >
-        <Stack direction="row" spacing={1.25} alignItems="flex-start" justifyContent="space-between">
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1.25}
+          alignItems={{ xs: "stretch", sm: "flex-start" }}
+          justifyContent="space-between"
+        >
           <Stack direction="row" spacing={1.25} alignItems="center">
             <Box
               sx={{
@@ -207,21 +217,25 @@ function ChartCard({ icon, title, subtitle, children, delay = 0, accentColor = a
               </Typography>
             </Box>
           </Stack>
-          {total != null ? (
-            <Chip
-              label={`${total} total`}
-              size="small"
-              sx={{
-                fontFamily: fontBody,
-                fontWeight: 700,
-                fontSize: "0.72rem",
-                bgcolor: `${accentColor}12`,
-                color: accentColor,
-                border: `1px solid ${accentColor}28`,
-                height: 26,
-              }}
-            />
-          ) : null}
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ xs: "stretch", sm: "center" }} flexShrink={0}>
+            {action || null}
+            {total != null ? (
+              <Chip
+                label={`${total} total`}
+                size="small"
+                sx={{
+                  fontFamily: fontBody,
+                  fontWeight: 700,
+                  fontSize: "0.72rem",
+                  bgcolor: `${accentColor}12`,
+                  color: accentColor,
+                  border: `1px solid ${accentColor}28`,
+                  height: 26,
+                  alignSelf: { xs: "flex-start", sm: "center" },
+                }}
+              />
+            ) : null}
+          </Stack>
         </Stack>
       </Box>
       <Box sx={{ p: { xs: 2, sm: 2.5 } }}>{children}</Box>
@@ -261,48 +275,69 @@ const chartTooltipStyle = {
   fontSize: 13,
 };
 
-function chartHeight(rowCount) {
-  return Math.max(240, rowCount * 58 + 48);
-}
-
-function HorizontalBarChart({ data, barColor, barColorEnd, valueLabel }) {
-  const height = chartHeight(data.length);
-  const gradientId = `bar-grad-${valueLabel.replace(/\s/g, "")}`;
-  const yWidth = Math.min(200, Math.max(130, Math.max(...data.map((d) => d.name.length), 8) * 7.2));
+function VerticalBarChart({ data, barColor, barColorEnd, valueLabel, xAxisLabel, yAxisLabel }) {
+  const height = 320;
+  const gradientId = `vbar-grad-${valueLabel.replace(/\s/g, "")}`;
+  const maxValue = Math.max(...data.map((d) => d.value), 0);
+  const yMax = maxValue === 0 ? 4 : Math.max(Math.ceil(maxValue * 1.2), maxValue + 1);
 
   return (
     <Box sx={{ width: "100%", height }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
-          layout="vertical"
           data={data}
-          margin={{ top: 4, right: 52, left: 4, bottom: 4 }}
-          barCategoryGap="22%"
+          margin={{ top: 24, right: 20, left: yAxisLabel ? 12 : 4, bottom: 8 }}
+          barCategoryGap="24%"
         >
           <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={barColor} stopOpacity={0.95} />
               <stop offset="100%" stopColor={barColorEnd || barColor} stopOpacity={1} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(28,25,23,0.06)" horizontal={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(28,25,23,0.06)" vertical={false} />
           <XAxis
-            type="number"
-            allowDecimals={false}
-            tick={{ fill: textSecondary, fontSize: 11, fontFamily: fontBody }}
-            axisLine={false}
-            tickLine={false}
+            dataKey="name"
+            angle={-32}
+            textAnchor="end"
+            height={88}
+            interval={0}
+            tick={{ fill: textPrimary, fontSize: 11, fontWeight: 600, fontFamily: fontBody }}
+            axisLine={{ stroke: "rgba(28,25,23,0.12)" }}
+            tickLine={{ stroke: "rgba(28,25,23,0.12)" }}
+            label={
+              xAxisLabel
+                ? {
+                    value: xAxisLabel,
+                    position: "insideBottom",
+                    offset: -4,
+                    style: { fill: textSecondary, fontFamily: fontBody, fontSize: 12, fontWeight: 600 },
+                  }
+                : undefined
+            }
           />
           <YAxis
-            type="category"
-            dataKey="name"
-            width={yWidth}
-            tick={{ fill: textPrimary, fontSize: 12, fontWeight: 600, fontFamily: fontBody }}
-            axisLine={false}
-            tickLine={false}
+            allowDecimals={false}
+            domain={[0, yMax]}
+            tick={{ fill: textSecondary, fontSize: 11, fontFamily: fontBody }}
+            axisLine={{ stroke: "rgba(28,25,23,0.12)" }}
+            tickLine={{ stroke: "rgba(28,25,23,0.12)" }}
+            width={44}
+            label={
+              yAxisLabel
+                ? {
+                    value: yAxisLabel,
+                    angle: -90,
+                    position: "insideLeft",
+                    offset: 8,
+                    style: { fill: textSecondary, fontFamily: fontBody, fontSize: 12, fontWeight: 600, textAnchor: "middle" },
+                  }
+                : undefined
+            }
           />
           <Tooltip
             formatter={(v) => [v, valueLabel]}
+            labelFormatter={(label) => label}
             contentStyle={chartTooltipStyle}
             cursor={{ fill: "rgba(220,38,38,0.04)" }}
           />
@@ -310,12 +345,12 @@ function HorizontalBarChart({ data, barColor, barColorEnd, valueLabel }) {
             dataKey="value"
             name={valueLabel}
             fill={`url(#${gradientId})`}
-            radius={[0, 10, 10, 0]}
-            maxBarSize={32}
+            radius={[8, 8, 0, 0]}
+            maxBarSize={56}
           >
             <LabelList
               dataKey="value"
-              position="right"
+              position="top"
               style={{ fill: textSecondary, fontFamily: fontBody, fontSize: 12, fontWeight: 700 }}
             />
           </Bar>
@@ -325,33 +360,111 @@ function HorizontalBarChart({ data, barColor, barColorEnd, valueLabel }) {
   );
 }
 
-function SectionHeading({ title, subtitle }) {
+function SectionHeading({ title, subtitle, action }) {
   return (
-    <Box sx={{ pt: 0.5, pb: 0.25 }}>
-      <Typography
-        sx={{
-          fontFamily: fontDisplay,
-          fontWeight: 700,
-          fontSize: "1.25rem",
-          color: textPrimary,
-          letterSpacing: "-0.02em",
-        }}
-      >
-        {title}
-      </Typography>
-      {subtitle ? (
-        <Typography sx={{ fontFamily: fontBody, fontSize: "0.85rem", color: textSecondary, mt: 0.35 }}>
-          {subtitle}
+    <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={1.5} sx={{ pt: 0.5, pb: 0.25 }}>
+      <Box>
+        <Typography
+          sx={{
+            fontFamily: fontDisplay,
+            fontWeight: 700,
+            fontSize: "1.25rem",
+            color: textPrimary,
+            letterSpacing: "-0.02em",
+          }}
+        >
+          {title}
         </Typography>
-      ) : null}
-    </Box>
+        {subtitle ? (
+          <Typography sx={{ fontFamily: fontBody, fontSize: "0.85rem", color: textSecondary, mt: 0.35 }}>
+            {subtitle}
+          </Typography>
+        ) : null}
+      </Box>
+      {action || null}
+    </Stack>
   );
+}
+
+function CurriculumFilter({ options, value, onChange, selectId = "dashboard-curriculum-filter" }) {
+  if (!options.length) return null;
+  const labelId = `${selectId}-label`;
+
+  return (
+    <FormControl
+      size="small"
+      sx={{
+        ...inputSx,
+        minWidth: { xs: "100%", sm: 240 },
+        maxWidth: { xs: "100%", sm: 320 },
+        bgcolor: "#fff",
+        borderRadius: "12px",
+        "& .MuiOutlinedInput-root": {
+          borderRadius: "12px",
+          fontFamily: fontBody,
+          fontWeight: 600,
+          fontSize: "0.85rem",
+        },
+      }}
+    >
+      <InputLabel id={labelId} sx={{ fontFamily: fontBody, fontSize: "0.85rem" }}>
+        Curriculum
+      </InputLabel>
+      <Select
+        labelId={labelId}
+        id={selectId}
+        value={value || ""}
+        label="Curriculum"
+        onChange={(e) => onChange(e.target.value)}
+        renderValue={(selected) => {
+          const option = options.find((item) => item.id === selected);
+          return option?.label || "Select curriculum";
+        }}
+        sx={{ fontFamily: fontBody }}
+      >
+        {options.map((option) => (
+          <MenuItem key={option.id} value={option.id} sx={{ fontFamily: fontBody, fontSize: "0.88rem" }}>
+            {option.label}
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  );
+}
+
+function pickDefaultCurriculumId(options, previous) {
+  if (!options.length) return null;
+  if (previous && options.some((option) => option.id === previous)) return previous;
+  return options[0].id;
+}
+
+function filterClassRowsByCurriculum(rows, curriculumId) {
+  if (!curriculumId) return [];
+  return (rows || []).filter(
+    (row) => row.class_id != null && String(row.curriculum_id) === String(curriculumId)
+  );
+}
+
+function filterSubjectRowsByCurriculum(rows, curriculumId) {
+  if (!curriculumId) return [];
+  return (rows || []).filter((row) => String(row.curriculum_id) === String(curriculumId));
+}
+
+function classRowLabel(row) {
+  return row.class_name || row.class_code || row.label || "Class";
+}
+
+function subjectChartLabel(row) {
+  if (row.class_id == null) return row.class_name || "General";
+  return classRowLabel(row);
 }
 
 export default function ElimuPlusDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [stats, setStats] = useState(null);
+  const [studentsCurriculumId, setStudentsCurriculumId] = useState(null);
+  const [subjectsCurriculumId, setSubjectsCurriculumId] = useState(null);
 
   const load = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -381,18 +494,49 @@ export default function ElimuPlusDashboardPage() {
     void load();
   }, [load]);
 
+  const curriculumOptions = useMemo(() => {
+    const rows = stats?.curricula || stats?.students_by_curriculum || [];
+    return rows
+      .filter((row) => row.id != null || row.curriculum_id != null)
+      .map((row) => ({
+        id: String(row.id ?? row.curriculum_id),
+        label: row.label || row.name || row.curriculum_name || row.type || "Curriculum",
+      }));
+  }, [stats]);
+
+  useEffect(() => {
+    setStudentsCurriculumId((prev) => pickDefaultCurriculumId(curriculumOptions, prev));
+  }, [curriculumOptions]);
+
+  useEffect(() => {
+    setSubjectsCurriculumId((prev) => pickDefaultCurriculumId(curriculumOptions, prev));
+  }, [curriculumOptions]);
+
+  const selectedStudentsCurriculum = useMemo(
+    () => curriculumOptions.find((option) => option.id === studentsCurriculumId) || null,
+    [curriculumOptions, studentsCurriculumId]
+  );
+  const selectedSubjectsCurriculum = useMemo(
+    () => curriculumOptions.find((option) => option.id === subjectsCurriculumId) || null,
+    [curriculumOptions, subjectsCurriculumId]
+  );
+
   const counts = stats?.counts || {};
   const barData = useMemo(
-    () => (stats?.bar_chart?.series || []).map((row) => ({ name: row.x, value: row.y })),
-    [stats]
+    () =>
+      filterClassRowsByCurriculum(stats?.students_by_class, studentsCurriculumId).map((row) => ({
+        name: classRowLabel(row),
+        value: row.student_count ?? 0,
+      })),
+    [stats, studentsCurriculumId]
   );
   const subjectsBarData = useMemo(
-    () => (stats?.subjects_bar_chart?.series || []).map((row) => ({ name: row.x, value: row.y })),
-    [stats]
-  );
-  const subjectsWithData = useMemo(
-    () => subjectsBarData.filter((row) => row.value > 0),
-    [subjectsBarData]
+    () =>
+      filterSubjectRowsByCurriculum(stats?.subjects_by_class, subjectsCurriculumId).map((row) => ({
+        name: subjectChartLabel(row),
+        value: row.subject_count ?? 0,
+      })),
+    [stats, subjectsCurriculumId]
   );
   const curriculumChartRows = useMemo(
     () =>
@@ -419,8 +563,12 @@ export default function ElimuPlusDashboardPage() {
     [barData]
   );
   const subjectsTotal = useMemo(
-    () => subjectsWithData.reduce((sum, row) => sum + row.value, 0),
-    [subjectsWithData]
+    () => subjectsBarData.reduce((sum, row) => sum + row.value, 0),
+    [subjectsBarData]
+  );
+  const allStudentsTotal = useMemo(
+    () => curriculumChartRows.reduce((sum, row) => sum + row.value, 0),
+    [curriculumChartRows]
   );
 
   const todayLabel = new Date().toLocaleDateString(undefined, {
@@ -631,25 +779,46 @@ export default function ElimuPlusDashboardPage() {
           {/* Class analytics — stacked full width */}
           <SectionHeading
             title="Class analytics"
-            subtitle="Enrollment and subject coverage broken down by class"
+            subtitle="Each chart has its own curriculum filter"
           />
 
           <Stack spacing={2.5} sx={{ width: "100%" }}>
+            {curriculumOptions.length === 0 ? (
+              <EmptyChart message="No curricula defined yet" hint="Create curricula under Curriculum to filter classes by programme." />
+            ) : (
+              <>
             <ChartCard
               icon={<ClassIcon fontSize="small" />}
               title="Students by class"
-              subtitle="Enrollment across curriculum classes"
+              subtitle={
+                selectedStudentsCurriculum
+                  ? `Enrollment in ${selectedStudentsCurriculum.label} classes`
+                  : "Enrollment across curriculum classes"
+              }
               delay={6}
               total={studentsTotal}
+              action={
+                <CurriculumFilter
+                  selectId="dashboard-students-curriculum-filter"
+                  options={curriculumOptions}
+                  value={studentsCurriculumId}
+                  onChange={setStudentsCurriculumId}
+                />
+              }
             >
               {barData.length === 0 ? (
-                <EmptyChart message="No class data yet" hint="Add students and assign them to classes." />
+                <EmptyChart
+                  message="No classes in this curriculum"
+                  hint="Add classes under Curriculum for the selected programme."
+                />
               ) : (
-                <HorizontalBarChart
+                <VerticalBarChart
                   data={barData}
                   barColor={accent}
                   barColorEnd={accentDark}
                   valueLabel="Students"
+                  xAxisLabel="Class"
+                  yAxisLabel="Students"
                 />
               )}
             </ChartCard>
@@ -657,30 +826,46 @@ export default function ElimuPlusDashboardPage() {
             <ChartCard
               icon={<MenuBookIcon fontSize="small" />}
               title="Subjects by class"
-              subtitle="Active subjects linked to each class"
+              subtitle={
+                selectedSubjectsCurriculum
+                  ? `Active subjects in ${selectedSubjectsCurriculum.label} (by class + general)`
+                  : "Active subjects linked to each class"
+              }
               delay={7}
               accentColor={accentBlue}
-              total={subjectsTotal || counts.active_subjects}
+              total={subjectsTotal}
+              action={
+                <CurriculumFilter
+                  selectId="dashboard-subjects-curriculum-filter"
+                  options={curriculumOptions}
+                  value={subjectsCurriculumId}
+                  onChange={setSubjectsCurriculumId}
+                />
+              }
             >
               {subjectsBarData.length === 0 ? (
                 <EmptyChart
-                  message="No subject data yet"
-                  hint="Add subjects under Curriculum and link them to a class."
+                  message="No classes in this curriculum"
+                  hint="Add classes under Curriculum for the selected programme."
                 />
-              ) : subjectsWithData.length === 0 ? (
+              ) : subjectsBarData.every((row) => row.value === 0) ? (
                 <EmptyChart
-                  message="Subjects exist but none are assigned to a class"
-                  hint={`You have ${counts.active_subjects ?? 0} active subject(s). Link them to a curriculum class to see the breakdown.`}
+                  message="No subjects assigned to these classes"
+                  hint={`Link active subjects to ${selectedSubjectsCurriculum?.label || "this curriculum"} classes under Curriculum.`}
                 />
               ) : (
-                <HorizontalBarChart
-                  data={subjectsWithData}
+                <VerticalBarChart
+                  data={subjectsBarData}
                   barColor={accentBlue}
                   barColorEnd="#1D4ED8"
                   valueLabel="Subjects"
+                  xAxisLabel="Class"
+                  yAxisLabel="Subjects"
                 />
               )}
             </ChartCard>
+              </>
+            )}
           </Stack>
 
           <SectionHeading title="Curriculum overview" subtitle="How students are distributed across programmes" />
@@ -690,7 +875,7 @@ export default function ElimuPlusDashboardPage() {
             subtitle="Distribution across programmes"
             delay={8}
             accentColor="#7C3AED"
-            total={studentsTotal}
+            total={allStudentsTotal}
           >
             {curriculumChartRows.length === 0 ? (
               <EmptyChart message="No curricula defined yet" hint="Create curricula to organise your school." />

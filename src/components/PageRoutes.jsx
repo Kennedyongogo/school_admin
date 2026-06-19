@@ -60,6 +60,7 @@ import AdminMeetingLiveRoomPage from "../Pages/AdminMeetingLiveRoomPage";
 import ExamManagementPage from "../Pages/ExamManagementPage";
 import ExamSubmissionsPage from "../Pages/ExamSubmissionsPage";
 import AccountingDashboardPage from "../Pages/AccountingDashboardPage";
+import FeeInvoiceViewPage from "../Pages/FeeInvoiceViewPage";
 import HRPage from "../Pages/HRPage";
 import ElimuPlusDashboardPage from "../Pages/ElimuPlusDashboardPage";
 import HRParentCreate from "./HR/HRParentCreate";
@@ -114,6 +115,7 @@ function PageRoutes() {
             <Route path="hr/parents/create" element={<HRParentCreate />} />
             <Route path="accounting" element={<AccountingDashboardPage />} />
             <Route path="accounting/fee-structures/create" element={<CurriculumFeeStructureCreate />} />
+            <Route path="accounting/invoices/:id" element={<FeeInvoiceViewPage />} />
             <Route path="exam" element={<ExamManagementPage />} />
             <Route path="exam/:examId/submissions" element={<ExamSubmissionsPage />} />
             <Route path="blogs" element={<Blogs />} />

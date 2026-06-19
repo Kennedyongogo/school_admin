@@ -45,7 +45,7 @@ function parentName(row) {
   return row?.parent?.user?.full_name || row?.parent?.user?.username || "—";
 }
 
-export default function FeePaymentsTab() {
+export default function FeePaymentsTab({ search = "" }) {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [error, setError] = useState("");
@@ -62,7 +62,9 @@ export default function FeePaymentsTab() {
     setError("");
     try {
       const apiPage = page + 1;
-      const res = await fetch(`/api/fee-payments?page=${apiPage}&limit=${rowsPerPage}`, {
+      const params = new URLSearchParams({ page: String(apiPage), limit: String(rowsPerPage) });
+      if (String(search || "").trim()) params.set("q", String(search).trim());
+      const res = await fetch(`/api/fee-payments?${params}`, {
         headers: authJsonHeaders(token),
       });
       const data = await res.json().catch(() => ({}));
@@ -76,7 +78,11 @@ export default function FeePaymentsTab() {
     } finally {
       setLoading(false);
     }
-  }, [page, rowsPerPage]);
+  }, [page, rowsPerPage, search]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [search]);
 
   useEffect(() => {
     void load();
@@ -130,6 +136,7 @@ export default function FeePaymentsTab() {
               <TableCell align="center" width={56}>
                 No
               </TableCell>
+              <TableCell>Receipt</TableCell>
               <TableCell>Date</TableCell>
               <TableCell>Student</TableCell>
               <TableCell>Invoice</TableCell>
@@ -144,7 +151,7 @@ export default function FeePaymentsTab() {
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8}>
+                <TableCell colSpan={9}>
                   <EmptyTableRow message="No fee payments recorded yet." />
                 </TableCell>
               </TableRow>
@@ -156,6 +163,7 @@ export default function FeePaymentsTab() {
                     <TableCell align="center" sx={{ color: "text.secondary", fontWeight: 600, fontFamily: fontBody }}>
                       {rowNo}
                     </TableCell>
+                    <TableCell sx={{ fontFamily: fontBody, fontWeight: 700 }}>{r.receipt_number || "—"}</TableCell>
                     <TableCell sx={{ fontFamily: fontBody }}>{formatDateTime(r.paid_at)}</TableCell>
                     <TableCell sx={{ fontWeight: 600, fontFamily: fontBody }}>{studentName(r)}</TableCell>
                     <TableCell sx={{ fontFamily: fontBody }}>{r.fee_invoice?.invoice_number || "—"}</TableCell>

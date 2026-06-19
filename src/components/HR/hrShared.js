@@ -56,12 +56,12 @@ export const PARENTS_TAB_INDEX = 3;
 
 export const ADMISSION_STATUS = {
   pending: { label: "Pending", color: "#6B7280", bg: "#F3F4F6" },
-  under_review: { label: "Under review", color: "#2563EB", bg: "#DBEAFE" },
-  documents_verified: { label: "Documents verified", color: "#7C3AED", bg: "#EDE9FE" },
   interview_scheduled: { label: "Interview scheduled", color: "#D97706", bg: "#FEF3C7" },
   accepted: { label: "Accepted", color: "#16a34a", bg: "#DCFCE7" },
   rejected: { label: "Rejected", color: "#DC2626", bg: "#FEE2E2" },
-  waitlisted: { label: "Waitlisted", color: "#9333EA", bg: "#F3E8FF" },
+  under_review: { label: "Pending", color: "#6B7280", bg: "#F3F4F6" },
+  documents_verified: { label: "Pending", color: "#6B7280", bg: "#F3F4F6" },
+  waitlisted: { label: "Pending", color: "#6B7280", bg: "#F3F4F6" },
 };
 
 export const ATTENDANCE_STATUS = {

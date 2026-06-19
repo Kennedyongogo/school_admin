@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
+  Alert,
   Box,
   CircularProgress,
   MenuItem,
@@ -10,6 +11,7 @@ import {
   TableHead,
   TablePagination,
   TableRow,
+  TextField,
   Typography,
 } from "@mui/material";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
@@ -17,7 +19,7 @@ import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import AssignmentIndOutlinedIcon from "@mui/icons-material/AssignmentIndOutlined";
 import Swal from "sweetalert2";
-import { authHeaders, ADMISSION_STATUS } from "./hrShared";
+import { authHeaders, ADMISSION_STATUS, fmtDateTime, inputSx } from "./hrShared";
 import {
   TabPanelShell,
   DataTableShell,
@@ -39,13 +41,36 @@ import {
 
 const DEFAULT_STATUS_OPTIONS = [
   { value: "pending", label: "Pending" },
-  { value: "under_review", label: "Under review" },
-  { value: "documents_verified", label: "Documents verified" },
   { value: "interview_scheduled", label: "Interview scheduled" },
   { value: "accepted", label: "Accepted" },
   { value: "rejected", label: "Rejected" },
-  { value: "waitlisted", label: "Waitlisted" },
 ];
+
+function normalizeStatus(value) {
+  const raw = String(value || "pending").trim();
+  if (["under_review", "documents_verified", "waitlisted"].includes(raw)) return "pending";
+  return raw;
+}
+
+function toDatetimeLocalValue(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function notificationHint(result) {
+  if (!result) return null;
+  if (result.sent) return "An email notification was sent to the applicant.";
+  if (result.reason === "no_applicant_email") {
+    return "No applicant email on file — notification was not sent.";
+  }
+  if (result.reason === "smtp_not_configured" || result.reason === "delivery_hook_pending") {
+    return "Email notification is prepared but not sent yet (SMTP/nodemailer setup pending).";
+  }
+  return null;
+}
 
 function documentHref(path) {
   if (!path || typeof path !== "string") return null;
@@ -91,6 +116,9 @@ export default function HRAdmissionsTab() {
   const [viewRow, setViewRow] = useState(null);
   const [editRow, setEditRow] = useState(null);
   const [editStatus, setEditStatus] = useState("pending");
+  const [editInterviewDate, setEditInterviewDate] = useState("");
+  const [editAcceptanceNotes, setEditAcceptanceNotes] = useState("");
+  const [editRejectionReason, setEditRejectionReason] = useState("");
   const [updatingId, setUpdatingId] = useState(null);
 
   const load = useCallback(async () => {
@@ -143,32 +171,82 @@ export default function HRAdmissionsTab() {
   }, [load]);
 
   const statusLabel = (value) =>
-    statusOptions.find((s) => s.value === value)?.label ||
-    ADMISSION_STATUS[value]?.label ||
+    statusOptions.find((s) => s.value === normalizeStatus(value))?.label ||
+    ADMISSION_STATUS[normalizeStatus(value)]?.label ||
     String(value || "pending")
       .replace(/_/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase());
 
   const openEditStatus = (row) => {
     setEditRow(row);
-    setEditStatus(row.status || "pending");
+    setEditStatus(normalizeStatus(row.status));
+    setEditInterviewDate(toDatetimeLocalValue(row.interview_date));
+    setEditAcceptanceNotes(row.acceptance_notes || "");
+    setEditRejectionReason(row.rejection_reason || "");
   };
 
   const closeEditStatus = () => {
     if (updatingId) return;
     setEditRow(null);
+    setEditInterviewDate("");
+    setEditAcceptanceNotes("");
+    setEditRejectionReason("");
+  };
+
+  const buildUpdatePayload = () => {
+    const nextStatus = normalizeStatus(editStatus);
+    const payload = { status: nextStatus };
+
+    if (nextStatus === "interview_scheduled") {
+      payload.interview_date = editInterviewDate ? new Date(editInterviewDate).toISOString() : null;
+    }
+    if (nextStatus === "accepted") {
+      payload.acceptance_notes = editAcceptanceNotes.trim();
+    }
+    if (nextStatus === "rejected") {
+      payload.rejection_reason = editRejectionReason.trim();
+    }
+
+    return payload;
+  };
+
+  const validateBeforeSave = (payload) => {
+    if (payload.status === "interview_scheduled" && !payload.interview_date) {
+      return "Select an interview date and time. This will be used to email the applicant.";
+    }
+    if (payload.status === "accepted" && !String(payload.acceptance_notes || "").trim()) {
+      return "Add acceptance notes (e.g. joining date and what the parent should do next).";
+    }
+    if (payload.status === "rejected" && !String(payload.rejection_reason || "").trim()) {
+      return "Add a rejection reason. This will be sent to the applicant by email.";
+    }
+    return null;
   };
 
   const handleSaveStatus = async () => {
     if (!editRow?.id) return;
-    const nextStatus = String(editStatus || "").trim();
-    const currentStatus = String(editRow.status || "pending").trim();
+    const payload = buildUpdatePayload();
+    const validationError = validateBeforeSave(payload);
+    if (validationError) {
+      await hrSwal({ icon: "warning", title: "Missing information", text: validationError });
+      return;
+    }
 
-    if (currentStatus === nextStatus) {
+    const currentStatus = normalizeStatus(editRow.status);
+    const unchanged =
+      currentStatus === payload.status &&
+      (payload.status !== "interview_scheduled" ||
+        toDatetimeLocalValue(editRow.interview_date) === editInterviewDate) &&
+      (payload.status !== "accepted" ||
+        String(editRow.acceptance_notes || "").trim() === String(payload.acceptance_notes || "").trim()) &&
+      (payload.status !== "rejected" ||
+        String(editRow.rejection_reason || "").trim() === String(payload.rejection_reason || "").trim());
+
+    if (unchanged) {
       await hrSwal({
         icon: "info",
         title: "No change",
-        text: `Status is already "${statusLabel(nextStatus)}".`,
+        text: `Status is already "${statusLabel(payload.status)}".`,
       });
       return;
     }
@@ -187,32 +265,38 @@ export default function HRAdmissionsTab() {
       const res = await fetch(`/api/admission-applications/${rowId}`, {
         method: "PUT",
         headers: authHeaders(token),
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify(payload),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) {
-        throw new Error(json.message || "Could not update status.");
+        throw new Error(json.message || "Could not update application.");
       }
 
-      const updatedStatus = json.data?.status || nextStatus;
-      setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, status: updatedStatus } : r)));
+      const updated = json.data || {};
+      setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, ...updated } : r)));
       if (viewRow?.id === rowId) {
-        setViewRow((prev) => (prev ? { ...prev, status: updatedStatus } : prev));
+        setViewRow((prev) => (prev ? { ...prev, ...updated } : prev));
       }
 
+      const notifyText = notificationHint(json.notification);
       await hrSwal({
         icon: "success",
-        title: "Status updated",
-        text: savedRef
-          ? `Application ${savedRef} is now ${statusLabel(updatedStatus)}.`
-          : `Status is now ${statusLabel(updatedStatus)}.`,
+        title: "Application updated",
+        text: [
+          savedRef
+            ? `Application ${savedRef} is now ${statusLabel(updated.status || payload.status)}.`
+            : `Status is now ${statusLabel(updated.status || payload.status)}.`,
+          notifyText,
+        ]
+          .filter(Boolean)
+          .join(" "),
       });
-      setEditRow(null);
+      closeEditStatus();
     } catch (e) {
       await hrSwal({
         icon: "error",
         title: "Update failed",
-        text: e.message || "Could not update status.",
+        text: e.message || "Could not update application.",
       });
     } finally {
       setUpdatingId(null);
@@ -291,7 +375,7 @@ export default function HRAdmissionsTab() {
                     <TableCell>{row.curriculum || "—"}</TableCell>
                     <TableCell>{[row.curriculum_class, row.curriculum_level].filter(Boolean).join(" · ") || "—"}</TableCell>
                     <TableCell>
-                      <HRAdmissionChip status={row.status} />
+                      <HRAdmissionChip status={normalizeStatus(row.status)} />
                     </TableCell>
                     <TableCell align="right">
                       <HRActionButton title="View application" onClick={() => setViewRow(row)}>
@@ -344,8 +428,26 @@ export default function HRAdmissionsTab() {
         {viewRow ? (
           <Stack spacing={2.5}>
             <Box>
-              <HRAdmissionChip status={viewRow.status} />
+              <HRAdmissionChip status={normalizeStatus(viewRow.status)} />
             </Box>
+
+            {normalizeStatus(viewRow.status) === "interview_scheduled" && viewRow.interview_date ? (
+              <FormSection title="Interview">
+                <DetailField label="Scheduled for" value={fmtDateTime(viewRow.interview_date)} />
+              </FormSection>
+            ) : null}
+
+            {normalizeStatus(viewRow.status) === "accepted" && viewRow.acceptance_notes ? (
+              <FormSection title="Acceptance details">
+                <DetailField label="Notes for applicant" value={viewRow.acceptance_notes} />
+              </FormSection>
+            ) : null}
+
+            {normalizeStatus(viewRow.status) === "rejected" && viewRow.rejection_reason ? (
+              <FormSection title="Rejection">
+                <DetailField label="Reason sent to applicant" value={viewRow.rejection_reason} />
+              </FormSection>
+            ) : null}
 
             <FormSection title="Programme">
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
@@ -422,34 +524,102 @@ export default function HRAdmissionsTab() {
       <PremiumDialog
         open={!!editRow}
         onClose={closeEditStatus}
-        title="Update status"
+        title="Update application"
         subtitle={editRow ? `${editRow.student_name || "Applicant"}${editRow.application_number ? ` · ${editRow.application_number}` : ""}` : undefined}
         icon={<EditOutlinedIcon sx={{ color: "#fff" }} />}
-        maxWidth="xs"
+        maxWidth="sm"
         footer={
           <Stack direction="row" spacing={1} justifyContent="flex-end" width="100%">
             <DialogGhostButton onClick={closeEditStatus} disabled={!!updatingId}>
               Cancel
             </DialogGhostButton>
             <DialogPrimaryButton loading={!!updatingId} onClick={() => void handleSaveStatus()} disabled={!editRow}>
-              Save
+              Save & notify
             </DialogPrimaryButton>
           </Stack>
         }
       >
         {editRow ? (
-          <HRFilterSelect
-            label="Status"
-            value={editStatus}
-            disabled={!!updatingId}
-            onChange={(e) => setEditStatus(e.target.value)}
-          >
-            {statusOptions.map((s) => (
-              <MenuItem key={s.value} value={s.value}>
-                {s.label}
-              </MenuItem>
-            ))}
-          </HRFilterSelect>
+          <Stack spacing={2}>
+            <HRFilterSelect
+              label="Status"
+              value={editStatus}
+              disabled={!!updatingId}
+              onChange={(e) => setEditStatus(e.target.value)}
+            >
+              {statusOptions.map((s) => (
+                <MenuItem key={s.value} value={s.value}>
+                  {s.label}
+                </MenuItem>
+              ))}
+            </HRFilterSelect>
+
+            {normalizeStatus(editStatus) === "interview_scheduled" ? (
+              <>
+                <Alert severity="info" sx={{ borderRadius: "12px" }}>
+                  Select the interview date and time. When email is configured, the applicant at{" "}
+                  <strong>{editRow.applicant_email || "—"}</strong> will be notified automatically.
+                </Alert>
+                <TextField
+                  fullWidth
+                  required
+                  label="Interview date & time"
+                  type="datetime-local"
+                  value={editInterviewDate}
+                  disabled={!!updatingId}
+                  onChange={(e) => setEditInterviewDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  sx={inputSx}
+                />
+              </>
+            ) : null}
+
+            {normalizeStatus(editStatus) === "accepted" ? (
+              <>
+                <Alert severity="success" sx={{ borderRadius: "12px" }}>
+                  These notes will be emailed to the applicant (e.g. reporting date, uniform, fees, orientation).
+                </Alert>
+                <TextField
+                  fullWidth
+                  required
+                  multiline
+                  minRows={4}
+                  label="Acceptance notes"
+                  placeholder="Example: Please report on Monday 12 January at 8:00 AM with original birth certificate..."
+                  value={editAcceptanceNotes}
+                  disabled={!!updatingId}
+                  onChange={(e) => setEditAcceptanceNotes(e.target.value)}
+                  sx={inputSx}
+                />
+              </>
+            ) : null}
+
+            {normalizeStatus(editStatus) === "rejected" ? (
+              <>
+                <Alert severity="warning" sx={{ borderRadius: "12px" }}>
+                  This reason will be sent to the applicant by email when notification is enabled.
+                </Alert>
+                <TextField
+                  fullWidth
+                  required
+                  multiline
+                  minRows={3}
+                  label="Rejection reason"
+                  placeholder="Brief, respectful reason for the decision..."
+                  value={editRejectionReason}
+                  disabled={!!updatingId}
+                  onChange={(e) => setEditRejectionReason(e.target.value)}
+                  sx={inputSx}
+                />
+              </>
+            ) : null}
+
+            {normalizeStatus(editStatus) === "pending" ? (
+              <Alert severity="info" sx={{ borderRadius: "12px" }}>
+                Application remains in the queue. No email is sent for pending status.
+              </Alert>
+            ) : null}
+          </Stack>
         ) : null}
       </PremiumDialog>
     </Stack>
