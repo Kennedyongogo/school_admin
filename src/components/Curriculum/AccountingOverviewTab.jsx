@@ -210,10 +210,11 @@ function ChartCard({ icon, title, subtitle, children, delay = 0, accentColor = p
         }}
       >
         <Stack
-          direction={{ xs: "column", lg: "row" }}
+          direction={{ xs: "column", sm: "row" }}
           spacing={1.25}
+          alignItems={{ xs: "stretch", sm: "flex-start" }}
           justifyContent="space-between"
-          alignItems={{ xs: "stretch", lg: "flex-start" }}
+          sx={{ minWidth: 0 }}
         >
           <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
             <Box
@@ -231,7 +232,7 @@ function ChartCard({ icon, title, subtitle, children, delay = 0, accentColor = p
             >
               {icon}
             </Box>
-            <Box>
+            <Box sx={{ minWidth: 0 }}>
               <Typography sx={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: "1.15rem", color: textPrimary, letterSpacing: "-0.02em" }}>
                 {title}
               </Typography>
@@ -378,14 +379,15 @@ function SectionHeading({ title, subtitle }) {
   );
 }
 
-function FilterSelect({ label, value, onChange, options, selectId, minWidth = 160 }) {
+function FilterSelect({ label, value, onChange, options, selectId }) {
   const labelId = `${selectId}-label`;
   return (
     <FormControl
       size="small"
       sx={{
         ...inputSx,
-        minWidth: { xs: "100%", sm: minWidth },
+        minWidth: 0,
+        width: "100%",
         bgcolor: "#fff",
         borderRadius: "12px",
         "& .MuiOutlinedInput-root": {
@@ -704,7 +706,8 @@ export default function AccountingOverviewTab() {
         display: "grid",
         gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" },
         gap: 1,
-        width: { xs: "100%", lg: 680 },
+        width: { xs: "100%", sm: "auto" },
+        minWidth: { sm: 280, lg: 520 },
       }}
     >
       <FilterSelect
@@ -747,7 +750,8 @@ export default function AccountingOverviewTab() {
         display: "grid",
         gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" },
         gap: 1,
-        width: { xs: "100%", lg: 680 },
+        width: { xs: "100%", sm: "auto" },
+        minWidth: { sm: 280, lg: 520 },
       }}
     >
       <FilterSelect
@@ -785,13 +789,7 @@ export default function AccountingOverviewTab() {
   );
 
   return (
-    <Box
-      sx={{
-        borderRadius: "22px",
-        background: `linear-gradient(180deg, ${warmCream} 0%, #FFFFFF 55%, rgba(254,226,226,0.2) 100%)`,
-        p: { xs: 1.5, sm: 2 },
-      }}
-    >
+    <>
       {error ? (
         <Alert severity="error" sx={{ mb: 2, borderRadius: "14px" }}>
           {error}
@@ -799,12 +797,12 @@ export default function AccountingOverviewTab() {
       ) : null}
 
       {loading && !stats ? (
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 8, gap: 2 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 10, gap: 2 }}>
           <CircularProgress sx={{ color: primaryRed }} />
           <Typography sx={{ fontFamily: fontBody, color: textSecondary }}>Loading accounting dashboard…</Typography>
         </Box>
       ) : (
-        <Stack spacing={3}>
+        <Stack spacing={3} sx={{ width: "100%" }}>
           <Box
             component={motion.div}
             initial={{ opacity: 0, y: 16 }}
@@ -812,7 +810,7 @@ export default function AccountingOverviewTab() {
             transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
             sx={{
               borderRadius: "24px",
-              p: { xs: 2.25, sm: 3 },
+              p: { xs: 2.5, sm: 3.5 },
               background: `linear-gradient(135deg, ${primaryRed} 0%, ${primaryDark} 55%, #7F1D1D 100%)`,
               color: "#fff",
               position: "relative",
@@ -820,12 +818,40 @@ export default function AccountingOverviewTab() {
               boxShadow: "0 20px 60px -12px rgba(220,38,38,0.45)",
             }}
           >
-            <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={2} sx={{ position: "relative", zIndex: 1 }}>
+            <Box
+              sx={{
+                position: "absolute",
+                top: -40,
+                right: -20,
+                width: 200,
+                height: 200,
+                borderRadius: "50%",
+                bgcolor: "rgba(255,255,255,0.08)",
+              }}
+            />
+            <Box
+              sx={{
+                position: "absolute",
+                bottom: -60,
+                left: "30%",
+                width: 280,
+                height: 280,
+                borderRadius: "50%",
+                bgcolor: "rgba(255,255,255,0.05)",
+              }}
+            />
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              justifyContent="space-between"
+              alignItems={{ xs: "flex-start", sm: "center" }}
+              spacing={2}
+              sx={{ position: "relative", zIndex: 1 }}
+            >
               <Box>
-                <Typography sx={{ fontFamily: fontDisplay, fontSize: { xs: "1.5rem", sm: "1.85rem" }, fontWeight: 700, letterSpacing: "-0.03em" }}>
+                <Typography sx={{ fontFamily: fontDisplay, fontSize: { xs: "1.65rem", sm: "2rem" }, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.15 }}>
                   Accounting overview
                 </Typography>
-                <Typography sx={{ fontFamily: fontBody, fontSize: "0.92rem", opacity: 0.9, mt: 0.75, maxWidth: 520 }}>
+                <Typography sx={{ fontFamily: fontBody, fontSize: "0.95rem", opacity: 0.88, mt: 0.75, maxWidth: 520 }}>
                   Fee billing, collections, and outstanding balances at a glance.
                 </Typography>
                 {!loading && stats ? (
@@ -1034,6 +1060,6 @@ export default function AccountingOverviewTab() {
           </Box>
         </Stack>
       )}
-    </Box>
+    </>
   );
 }

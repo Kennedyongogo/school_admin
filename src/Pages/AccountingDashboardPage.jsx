@@ -46,7 +46,9 @@ export default function AccountingDashboardPage() {
       sx={(theme) => ({
         ...fullMainBleedSx(theme),
         ...elimuViewportSx,
-        bgcolor: warmCream,
+        minWidth: 0,
+        boxSizing: "border-box",
+        background: `linear-gradient(180deg, ${warmCream} 0%, #FFFFFF 40%, rgba(254,226,226,0.25) 100%)`,
         px: { xs: 1.5, sm: 2, md: 3 },
         py: { xs: 2, sm: 2.5 },
         gap: 2,
@@ -54,12 +56,14 @@ export default function AccountingDashboardPage() {
         flexDirection: "column",
       })}
     >
-      <AccountingHero
-        title="Accounting"
-        subtitle="Fee structures, invoices, and M-Pesa payments — billing for your school in one place."
-        icon={<AccountBalanceIcon sx={{ fontSize: 28, color: "#fff" }} />}
-        actions={heroActions}
-      />
+      {tab !== 0 ? (
+        <AccountingHero
+          title="Accounting"
+          subtitle="Fee structures, invoices, and M-Pesa payments — billing for your school in one place."
+          icon={<AccountBalanceIcon sx={{ fontSize: 28, color: "#fff" }} />}
+          actions={heroActions}
+        />
+      ) : null}
 
       <AccountingTabsRow
         activeTab={tab}
@@ -84,7 +88,7 @@ export default function AccountingDashboardPage() {
         }
       />
 
-      <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column" }}>
         {tab === 0 ? <AccountingOverviewTab /> : null}
         {tab === 1 ? <CurriculumFeeStructuresTab /> : null}
         {tab === 2 ? (

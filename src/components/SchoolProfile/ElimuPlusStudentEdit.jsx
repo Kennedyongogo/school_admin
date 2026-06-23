@@ -17,7 +17,6 @@ import {
   FormControlLabel,
   Checkbox,
   Avatar,
-  Grid,
 } from "@mui/material";
 import { ArrowBack as ArrowBackIcon, Edit as EditIcon } from "@mui/icons-material";
 import Swal from "sweetalert2";
@@ -239,18 +238,26 @@ export default function ElimuPlusStudentEdit() {
 
   return (
     <Box component="form" onSubmit={handleSubmit} sx={{ ...pageShellSx, minHeight: "100%" }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-        <Tooltip title="Back to Elimu Plus">
-          <IconButton onClick={goBack} aria-label="Back" sx={{ bgcolor: "#fff", border: "1px solid rgba(220,38,38,0.12)", "&:hover": { bgcolor: "#FEE2E2" } }}>
-            <ArrowBackIcon sx={{ color: primaryDark }} />
-          </IconButton>
-        </Tooltip>
-      </Stack>
-
       <ElimuPlusHero
         title="Edit student profile"
         subtitle="Update full student details."
         icon={<EditIcon sx={{ fontSize: 26, color: "#fff" }} />}
+        actions={
+          <Tooltip title="Back to Elimu Plus">
+            <IconButton
+              onClick={goBack}
+              aria-label="Back to Elimu Plus"
+              sx={{
+                bgcolor: "rgba(255,255,255,0.15)",
+                border: "1px solid rgba(255,255,255,0.28)",
+                color: "#fff",
+                "&:hover": { bgcolor: "rgba(255,255,255,0.28)" },
+              }}
+            >
+              <ArrowBackIcon />
+            </IconButton>
+          </Tooltip>
+        }
       />
 
       {error ? (
@@ -259,13 +266,23 @@ export default function ElimuPlusStudentEdit() {
         </Alert>
       ) : null}
 
-      <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
-        <Grid item xs={12} md={6}>
-          <FormSection title="Student profile photo">
-            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-              <Avatar src={photoSrc || undefined} sx={{ width: 72, height: 72, bgcolor: `${primaryRed}22`, color: primaryDark, fontWeight: 700 }}>
-                {!photoSrc ? "?" : null}
-              </Avatar>
+      <Stack spacing={2.5} sx={{ mt: 0.5, width: "100%" }}>
+        <FormSection title="Student profile photo">
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ xs: "flex-start", sm: "center" }} flexWrap="wrap">
+            <Avatar
+              src={photoSrc || undefined}
+              sx={{
+                width: 88,
+                height: 88,
+                bgcolor: `${primaryRed}22`,
+                color: primaryDark,
+                fontWeight: 700,
+                border: `3px solid ${primaryRed}22`,
+              }}
+            >
+              {!photoSrc ? "?" : null}
+            </Avatar>
+            <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
               <Button variant="outlined" component="label" sx={{ borderColor: primaryRed, color: primaryDark, fontWeight: 700, borderRadius: "12px", textTransform: "none" }}>
                 Choose photo
                 <input type="file" accept="image/*" hidden onChange={(e) => setProfilePhoto(e.target.files?.[0] || null)} />
@@ -284,24 +301,21 @@ export default function ElimuPlusStudentEdit() {
                 </Button>
               ) : null}
             </Stack>
-          </FormSection>
-        </Grid>
+          </Stack>
+        </FormSection>
 
-        <Grid item xs={12} md={6}>
-          <FormSection title="Account (user)">
-            <Stack spacing={2}>
-              <TextField label="Full name" required fullWidth value={form.user_full_name} onChange={(e) => setForm((prev) => ({ ...prev, user_full_name: e.target.value }))} sx={inputSx} />
-              <TextField label="Email" fullWidth type="email" value={form.user_email} onChange={(e) => setForm((prev) => ({ ...prev, user_email: e.target.value }))} sx={inputSx} />
-              <TextField label="Username" fullWidth value={form.user_username} onChange={(e) => setForm((prev) => ({ ...prev, user_username: e.target.value }))} sx={inputSx} />
-              <TextField label="Phone" fullWidth value={form.user_phone} onChange={(e) => setForm((prev) => ({ ...prev, user_phone: e.target.value }))} sx={inputSx} />
-              <TextField label="Address" fullWidth multiline minRows={2} value={form.user_address} onChange={(e) => setForm((prev) => ({ ...prev, user_address: e.target.value }))} sx={inputSx} />
-              <TextField label="Profile image URL" fullWidth value={form.user_profile_image} onChange={(e) => setForm((prev) => ({ ...prev, user_profile_image: e.target.value }))} sx={inputSx} />
-            </Stack>
-          </FormSection>
-        </Grid>
+        <FormSection title="Account (user)">
+          <Stack spacing={2} sx={{ width: "100%" }}>
+            <TextField label="Full name" required fullWidth value={form.user_full_name} onChange={(e) => setForm((prev) => ({ ...prev, user_full_name: e.target.value }))} sx={inputSx} />
+            <TextField label="Email" fullWidth type="email" value={form.user_email} onChange={(e) => setForm((prev) => ({ ...prev, user_email: e.target.value }))} sx={inputSx} />
+            <TextField label="Username" fullWidth value={form.user_username} onChange={(e) => setForm((prev) => ({ ...prev, user_username: e.target.value }))} sx={inputSx} />
+            <TextField label="Phone" fullWidth value={form.user_phone} onChange={(e) => setForm((prev) => ({ ...prev, user_phone: e.target.value }))} sx={inputSx} />
+            <TextField label="Address" fullWidth multiline minRows={2} value={form.user_address} onChange={(e) => setForm((prev) => ({ ...prev, user_address: e.target.value }))} sx={inputSx} />
+            <TextField label="Profile image URL" fullWidth value={form.user_profile_image} onChange={(e) => setForm((prev) => ({ ...prev, user_profile_image: e.target.value }))} sx={inputSx} />
+          </Stack>
+        </FormSection>
 
-        <Grid item xs={12}>
-          <FormSection title="Student record">
+        <FormSection title="Student record">
             <Stack spacing={2}>
               <TextField label="Admission number" required fullWidth value={form.admission_number} onChange={(e) => setForm((prev) => ({ ...prev, admission_number: e.target.value }))} sx={inputSx} />
               <TextField label="Date of birth" type="date" required fullWidth InputLabelProps={{ shrink: true }} value={form.date_of_birth} onChange={(e) => setForm((prev) => ({ ...prev, date_of_birth: e.target.value }))} sx={inputSx} />
@@ -391,8 +405,7 @@ export default function ElimuPlusStudentEdit() {
               />
             </Stack>
           </FormSection>
-        </Grid>
-      </Grid>
+      </Stack>
 
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="flex-end" sx={{ mt: 3 }}>
         <Button type="button" variant="text" onClick={goBack} sx={ghostBtnSx}>
