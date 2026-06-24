@@ -1,6 +1,7 @@
 import dayjs from "dayjs";
 
 export const EXAM_SCHEDULE_TIMEZONE = "Africa/Nairobi";
+export const LESSON_SCHEDULE_TIMEZONE = EXAM_SCHEDULE_TIMEZONE;
 
 export function localScheduleDateString(date = new Date()) {
   const y = date.getFullYear();

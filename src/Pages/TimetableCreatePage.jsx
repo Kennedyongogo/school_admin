@@ -20,6 +20,7 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { TimePicker } from "@mui/x-date-pickers/TimePicker";
 import { format, isValid, parseISO } from "date-fns";
 import { showTeacherOverlapSweetAlert } from "../utils/timetableOverlapAlert";
+import { LESSON_SCHEDULE_TIMEZONE } from "../components/Exams/examScheduleTime";
 import {
   authHeaders,
   fullMainBleedSx,
@@ -262,6 +263,7 @@ export default function TimetableCreatePage() {
         ends_at,
         teacher_attended: false,
         delivery_mode: deliveryMode === "online" ? "online" : "physical",
+        timezone: LESSON_SCHEDULE_TIMEZONE,
         ...(deliveryMode === "online" ? { media_mode: mediaMode || "optional" } : {}),
       };
       const lRes = await fetch(`/api/curricula/${curriculumId}/classes/${classId}/timetables/${tid}/lessons`, {

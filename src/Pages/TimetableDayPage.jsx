@@ -49,6 +49,7 @@ import dayjs from "dayjs";
 import { format, isValid, parseISO } from "date-fns";
 import { showTeacherOverlapSweetAlert } from "../utils/timetableOverlapAlert";
 import OnlineLessonLiveDialog from "../components/OnlineHub/OnlineLessonLiveDialog";
+import { LESSON_SCHEDULE_TIMEZONE } from "../components/Exams/examScheduleTime";
 import TimetableDayMeetingsPanel from "../components/Timetable/TimetableDayMeetingsPanel";
 import {
   authHeaders,
@@ -368,6 +369,7 @@ export default function TimetableDayPage() {
         ends_at,
         room: editForm.room?.trim() || null,
         delivery_mode: editForm.delivery_mode === "online" ? "online" : "physical",
+        timezone: LESSON_SCHEDULE_TIMEZONE,
         ...(editForm.delivery_mode === "online" ? { media_mode: editForm.media_mode || "optional" } : {}),
       };
       const res = await fetch(
