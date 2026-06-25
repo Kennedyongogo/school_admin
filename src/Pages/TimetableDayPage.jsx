@@ -38,6 +38,7 @@ import ClassOutlinedIcon from "@mui/icons-material/ClassOutlined";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import MeetingRoomOutlinedIcon from "@mui/icons-material/MeetingRoomOutlined";
 import VideocamOutlinedIcon from "@mui/icons-material/VideocamOutlined";
+import HowToRegOutlinedIcon from "@mui/icons-material/HowToRegOutlined";
 import MicRoundedIcon from "@mui/icons-material/MicRounded";
 import DrawRoundedIcon from "@mui/icons-material/DrawRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
@@ -48,9 +49,9 @@ import { TimePicker } from "@mui/x-date-pickers/TimePicker";
 import dayjs from "dayjs";
 import { format, isValid, parseISO } from "date-fns";
 import { showTeacherOverlapSweetAlert } from "../utils/timetableOverlapAlert";
-import OnlineLessonLiveDialog from "../components/OnlineHub/OnlineLessonLiveDialog";
 import { LESSON_SCHEDULE_TIMEZONE } from "../components/Exams/examScheduleTime";
 import TimetableDayMeetingsPanel from "../components/Timetable/TimetableDayMeetingsPanel";
+import LiveClassAttendanceRegisterDialog from "../components/VideoConference/LiveClassAttendanceRegisterDialog";
 import {
   authHeaders,
   fullMainBleedSx,
@@ -162,6 +163,21 @@ function lessonRouteIds(row) {
   };
 }
 
+function lessonRegisterMeta(row, isoDateFallback) {
+  const cc = row.timetable?.curriculum_class;
+  const term = row.timetable?.curriculum_class_level;
+  return {
+    lessonId: row.id,
+    curriculumClassId: cc?.id ?? null,
+    curriculumClassLabel: cc ? `${cc.name || ""}${cc.code ? ` (${cc.code})` : ""}`.trim() : "",
+    curriculumClassLevelId: term?.id ?? null,
+    curriculumClassLevelLabel: term?.name || "",
+    subjectName: row.curriculum_subject?.name || "Lesson",
+    lessonDate: row.lesson_date || isoDateFallback || "",
+    hostName: teacherLabel(row.teacher),
+  };
+}
+
 function DetailTile(props) {
   return <TimetableDetailTile {...props} />;
 }
@@ -180,6 +196,7 @@ export default function TimetableDayPage() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalLessons, setTotalLessons] = useState(0);
   const [viewLesson, setViewLesson] = useState(null);
+  const [registerLesson, setRegisterLesson] = useState(null);
   const [deleteLesson, setDeleteLesson] = useState(null);
   const [editLesson, setEditLesson] = useState(null);
   const [editSubjects, setEditSubjects] = useState([]);
@@ -187,13 +204,6 @@ export default function TimetableDayPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editDialogError, setEditDialogError] = useState(null);
   const [deleteDoing, setDeleteDoing] = useState(false);
-  const [onlineLiveDlg, setOnlineLiveDlg] = useState({
-    open: false,
-    lessonId: null,
-    subtitle: "",
-    curriculumClassId: null,
-    curriculumClassLabel: "",
-  });
 
   const [editForm, setEditForm] = useState({
     lesson_date: "",
@@ -512,6 +522,8 @@ export default function TimetableDayPage() {
   };
 
   const vr = viewRows(viewLesson);
+  const registerMeta = registerLesson ? lessonRegisterMeta(registerLesson, isoDate) : null;
+  const authToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
@@ -627,19 +639,30 @@ export default function TimetableDayPage() {
                                 title="Meeting links"
                                 onClick={() => {
                                   const ccRow = row.timetable?.curriculum_class;
+                                  const termRow = row.timetable?.curriculum_class_level;
                                   const ccLabel = ccRow
                                     ? `${ccRow.name || ""}${ccRow.code ? ` (${ccRow.code})` : ""}`.trim()
                                     : "";
-                                  setOnlineLiveDlg({
-                                    open: true,
-                                    lessonId: row.id,
-                                    subtitle: `${row.curriculum_subject?.name || "Lesson"} · ${row.lesson_date || isoDate || ""}`,
-                                    curriculumClassId: ccRow?.id ?? null,
-                                    curriculumClassLabel: ccLabel,
+                                  navigate(`/timetable/day/${isoDate}/lessons/${row.id}/live`, {
+                                    state: {
+                                      subtitle: `${row.curriculum_subject?.name || "Lesson"} · ${row.lesson_date || isoDate || ""}`,
+                                      curriculumClassId: ccRow?.id ?? null,
+                                      curriculumClassLabel: ccLabel,
+                                      curriculumClassLevelId: termRow?.id ?? null,
+                                      curriculumClassLevelLabel: termRow?.name || "",
+                                    },
                                   });
                                 }}
                               >
                                 <VideocamOutlinedIcon fontSize="small" />
+                              </TimetableActionButton>
+                            ) : null}
+                            {onlineLesson ? (
+                              <TimetableActionButton
+                                title="Attendance register"
+                                onClick={() => setRegisterLesson(row)}
+                              >
+                                <HowToRegOutlinedIcon fontSize="small" />
                               </TimetableActionButton>
                             ) : null}
                             <TimetableActionButton
@@ -996,25 +1019,19 @@ export default function TimetableDayPage() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <LiveClassAttendanceRegisterDialog
+          open={!!registerLesson}
+          onClose={() => setRegisterLesson(null)}
+          token={authToken}
+          lessonId={registerMeta?.lessonId}
+          curriculumClassId={registerMeta?.curriculumClassId}
+          curriculumClassLabel={registerMeta?.curriculumClassLabel}
+          subjectName={registerMeta?.subjectName}
+          lessonDate={registerMeta?.lessonDate}
+          hostName={registerMeta?.hostName}
+        />
       </Box>
-      <OnlineLessonLiveDialog
-        open={onlineLiveDlg.open}
-        onClose={() =>
-          setOnlineLiveDlg({
-            open: false,
-            lessonId: null,
-            subtitle: "",
-            curriculumClassId: null,
-            curriculumClassLabel: "",
-          })
-        }
-        lessonId={onlineLiveDlg.lessonId}
-        subtitle={onlineLiveDlg.subtitle}
-        curriculumClassId={onlineLiveDlg.curriculumClassId}
-        curriculumClassLabel={onlineLiveDlg.curriculumClassLabel}
-        lessonDateIso={isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate) ? isoDate : ""}
-        onLinksReady={loadLessons}
-      />
     </LocalizationProvider>
   );
 }

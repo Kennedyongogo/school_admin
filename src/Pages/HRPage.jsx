@@ -53,7 +53,7 @@ import {
   HRGhostButton,
   HRPrimaryButton,
   HRScopeToggle,
-  HRSectionHeader,
+  HRSubTabs,
   HRAttendanceChip,
   HRInfoBanner,
   tableHeadRowSx,
@@ -72,6 +72,7 @@ export default function HRPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [tab, setTab] = useState(() => (typeof location.state?.tab === "number" ? location.state.tab : 0));
+  const [attendanceTab, setAttendanceTab] = useState("teachers");
   const [scope, setScope] = useState("lessons");
   const [date, setDate] = useState("");
   const [curriculumId, setCurriculumId] = useState("");
@@ -187,6 +188,7 @@ export default function HRPage() {
       if (curriculumId) params.set("curriculum_id", curriculumId);
       if (classId) params.set("curriculum_class_id", classId);
       if (debouncedSearch) params.set("search", debouncedSearch);
+      params.set("audience", attendanceTab);
       const query = params.toString() ? `?${params.toString()}` : "";
       const res = await fetch(`/api/reports/hr-attendance-overview${query}`, {
         headers: {
@@ -207,7 +209,7 @@ export default function HRPage() {
     } finally {
       setLoading(false);
     }
-  }, [date, scope, curriculumId, classId, debouncedSearch]);
+  }, [date, scope, curriculumId, classId, debouncedSearch, attendanceTab]);
 
   useEffect(() => {
     if (tab === 1) void load();
@@ -226,22 +228,34 @@ export default function HRPage() {
 
   const exportAttendanceCsv = () => {
     const isExams = scope === "exams";
-    const combinedHeader = [
-      "Record Type",
-      "Date",
-      "Curriculum",
-      "Class",
-      isExams ? "Exam" : "Subject",
-      "Teacher",
-      "Student",
-      "Admission",
-      "Start",
-      "End",
-      "Join Time",
-      "Leave Time",
-      "Duration Minutes",
-      "Attendance",
-    ];
+    const isTeachers = attendanceTab === "teachers";
+    const combinedHeader = isTeachers
+      ? [
+          "Record Type",
+          "Date",
+          "Curriculum",
+          "Class",
+          isExams ? "Exam" : "Subject",
+          "Teacher",
+          "Start",
+          "End",
+          "Attendance",
+        ]
+      : [
+          "Record Type",
+          "Date",
+          "Curriculum",
+          "Class",
+          isExams ? "Exam" : "Subject",
+          "Student",
+          "Admission",
+          "Start",
+          "End",
+          "Join Time",
+          "Leave Time",
+          "Duration Minutes",
+          "Attendance",
+        ];
 
     const teacherRows = teachers.map((r) => [
       "Teacher",
@@ -250,13 +264,8 @@ export default function HRPage() {
       r.curriculum_class?.name || "",
       isExams ? r.exam?.title || "" : r.subject?.name || "",
       r.teacher?.user?.full_name || r.teacher?.user?.username || "Unassigned",
-      "",
-      "",
       fmtTime(r.starts_at),
       fmtTime(r.ends_at),
-      "",
-      "",
-      "",
       r.teacher_attended ? "Attended" : "Pending",
     ]);
 
@@ -273,7 +282,6 @@ export default function HRPage() {
         ? r.exam_schedule?.curriculum_class?.name || r.exam?.curriculum_class?.name || ""
         : r.lesson?.timetable?.curriculum_class?.name || "",
       isExams ? r.exam_schedule?.title || r.exam?.title || "" : r.lesson?.curriculum_subject?.name || "",
-      "",
       r.student?.user?.full_name || r.student?.user?.username || "",
       r.student?.admission_number || "",
       fmtTime(isExams ? r.exam_schedule?.start_time || r.join_time : r.lesson?.starts_at),
@@ -284,15 +292,15 @@ export default function HRPage() {
       r.status || "Pending",
     ]);
 
-    const combinedRows = [...teacherRows, ...studentRows];
-    if (combinedRows.length === 0) {
-      window.alert("No rows to export for the current filters.");
+    const exportRows = isTeachers ? teacherRows : studentRows;
+    if (exportRows.length === 0) {
+      window.alert(`No ${isTeachers ? "teacher" : "student"} rows to export for the current filters.`);
       return;
     }
 
     const lines = [
       combinedHeader.map(escapeCsv).join(","),
-      ...combinedRows.map((row) => row.map(escapeCsv).join(",")),
+      ...exportRows.map((row) => row.map(escapeCsv).join(",")),
     ];
     const csv = lines.join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -301,6 +309,7 @@ export default function HRPage() {
     a.href = url;
     const nameParts = [
       "hr-attendance",
+      attendanceTab,
       scope,
       date || "all-dates",
       curriculumId ? "curriculum" : null,
@@ -422,14 +431,6 @@ export default function HRPage() {
 
     return (
       <HRPanelCard noPadding sx={isLessons ? lessonsAttendanceContainSx : undefined}>
-        <HRSectionHeader
-          title={isTeachers ? "Teachers" : "Students"}
-          subtitle={
-            isTeachers
-              ? `${stats.teacherAttended} of ${stats.teacherTotal} marked attended`
-              : `${stats.studentAttended} of ${stats.studentTotal} marked attended`
-          }
-        />
         {isLessons ? (
           <TableContainer sx={lessonsTableContainerSx}>{tableContent}</TableContainer>
         ) : (
@@ -492,7 +493,7 @@ export default function HRPage() {
                     Clear filters
                   </HRGhostButton>
                   <HRPrimaryButton startIcon={<DownloadOutlinedIcon />} onClick={exportAttendanceCsv}>
-                    Export filtered CSV
+                    Export {attendanceTab === "teachers" ? "teachers" : "students"} CSV
                   </HRPrimaryButton>
                 </>
               }
@@ -537,7 +538,11 @@ export default function HRPage() {
               </HRFilterSelect>
               <HRFilterTextField
                 label="Search name"
-                placeholder="Teacher or student name, admission no."
+                placeholder={
+                  attendanceTab === "teachers"
+                    ? "Teacher name or username"
+                    : "Student name or admission no."
+                }
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -550,21 +555,34 @@ export default function HRPage() {
               />
             </HRFilterBar>
 
-            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-              <HRStatCard
-                icon={<BadgeOutlinedIcon />}
-                label={`Teacher attendance · ${scope === "exams" ? "Exams" : "Lessons"}`}
-                value={`${stats.teacherAttended}/${stats.teacherTotal}`}
-                sublabel={stats.teacherTotal ? `${Math.round((stats.teacherAttended / stats.teacherTotal) * 100)}% present` : "No records"}
-              />
-              <HRStatCard
-                icon={<SchoolOutlinedIcon />}
-                label={`Student attendance · ${scope === "exams" ? "Exams" : "Lessons"}`}
-                value={`${stats.studentAttended}/${stats.studentTotal}`}
-                sublabel={stats.studentTotal ? `${Math.round((stats.studentAttended / stats.studentTotal) * 100)}% present` : "No records"}
-                accent="#2563EB"
-              />
-            </Stack>
+            <HRSubTabs
+              activeTab={attendanceTab}
+              onChange={setAttendanceTab}
+              tabs={[
+                { value: "teachers", label: "Teachers" },
+                { value: "students", label: "Students" },
+              ]}
+            />
+
+            <HRStatCard
+              icon={attendanceTab === "teachers" ? <BadgeOutlinedIcon /> : <SchoolOutlinedIcon />}
+              label={`${attendanceTab === "teachers" ? "Teacher" : "Student"} attendance · ${scope === "exams" ? "Exams" : "Lessons"}`}
+              value={
+                attendanceTab === "teachers"
+                  ? `${stats.teacherAttended}/${stats.teacherTotal}`
+                  : `${stats.studentAttended}/${stats.studentTotal}`
+              }
+              sublabel={
+                attendanceTab === "teachers"
+                  ? stats.teacherTotal
+                    ? `${Math.round((stats.teacherAttended / stats.teacherTotal) * 100)}% present`
+                    : "No records"
+                  : stats.studentTotal
+                    ? `${Math.round((stats.studentAttended / stats.studentTotal) * 100)}% present`
+                    : "No records"
+              }
+              accent={attendanceTab === "teachers" ? undefined : "#2563EB"}
+            />
 
             {scope === "exams" ? (
               <HRInfoBanner>
@@ -574,10 +592,7 @@ export default function HRPage() {
             ) : null}
 
             <TabPanelShell loading={loading} error={error} onDismissError={() => setError("")}>
-              <Stack spacing={2}>
-                {renderAttendanceTable("teachers")}
-                {renderAttendanceTable("students")}
-              </Stack>
+              {renderAttendanceTable(attendanceTab)}
             </TabPanelShell>
           </Stack>
         ) : null}

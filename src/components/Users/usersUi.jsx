@@ -234,25 +234,51 @@ export function PremiumDialog({ open, onClose, title, subtitle, icon, children, 
   );
 }
 
-export function DetailField({ icon, label, value }) {
+export function DetailField({ icon, label, value, compact = false }) {
   return (
     <Box
       sx={{
         display: "flex",
-        gap: 1.5,
+        gap: compact ? 1 : 1.5,
         alignItems: "flex-start",
-        p: 1.75,
-        borderRadius: "14px",
+        p: compact ? 1 : 1.75,
+        borderRadius: compact ? "12px" : "14px",
         bgcolor: warmCream,
         border: "1px solid rgba(220,38,38,0.08)",
+        height: compact ? "100%" : undefined,
+        minHeight: 0,
       }}
     >
-      <Box sx={{ color: primaryRed, mt: 0.15 }}>{icon}</Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontFamily: fontBody, fontSize: "0.68rem", fontWeight: 700, color: textMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+      <Box sx={{ color: primaryRed, mt: compact ? 0.1 : 0.15, "& svg": { fontSize: compact ? "1rem" : undefined } }}>{icon}</Box>
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Typography
+          sx={{
+            fontFamily: fontBody,
+            fontSize: compact ? "0.62rem" : "0.68rem",
+            fontWeight: 700,
+            color: textMuted,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            lineHeight: 1.2,
+          }}
+        >
           {label}
         </Typography>
-        <Typography sx={{ fontFamily: fontBody, fontWeight: 600, color: textPrimary, mt: 0.25, wordBreak: "break-word" }}>
+        <Typography
+          sx={{
+            fontFamily: fontBody,
+            fontWeight: 600,
+            fontSize: compact ? "0.82rem" : undefined,
+            color: textPrimary,
+            mt: 0.2,
+            wordBreak: "break-word",
+            lineHeight: 1.35,
+            display: compact ? "-webkit-box" : "block",
+            WebkitLineClamp: compact ? 2 : undefined,
+            WebkitBoxOrient: compact ? "vertical" : undefined,
+            overflow: compact ? "hidden" : undefined,
+          }}
+        >
           {value || "—"}
         </Typography>
       </Box>
@@ -313,6 +339,7 @@ export function HeroActionButton({ children, variant = "outlined", ...props }) {
         borderRadius: "12px",
         px: 2.5,
         py: 1,
+        whiteSpace: "nowrap",
         ...(isContained
           ? {
               bgcolor: "rgba(255,255,255,0.95)",

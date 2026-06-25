@@ -7,7 +7,6 @@ import {
   Button,
   CircularProgress,
   Alert,
-  Grid,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -36,7 +35,8 @@ import ElimuPlusReviewsTab from "./ElimuPlusReviewsTab";
 import {
   authHeaders,
   ELIMU_TABS,
-  elimuViewportSx,
+  elimuViewportFillSx,
+  fullMainBleedSx,
   resolveAssetUrl,
   normalizeExternalUrl,
   pageShellSx,
@@ -186,15 +186,15 @@ export default function ElimuPlusSchoolProfile() {
 
   return (
     <Box
-      sx={{
+      sx={(theme) => ({
         ...pageShellSx,
-        ...elimuViewportSx,
-        mx: { xs: -1.5, sm: -2, md: -3 },
-        mt: { xs: -1, sm: -1.5 },
+        ...fullMainBleedSx(theme),
+        ...elimuViewportFillSx,
+        minWidth: 0,
         px: { xs: 1.5, sm: 2, md: 3 },
-        py: { xs: 2, sm: 2.5 },
-        gap: 2,
-      }}
+        py: { xs: 1.5, sm: 2 },
+        gap: { xs: 1.25, sm: 1.5, md: 2 },
+      })}
     >
       <ElimuPlusHero
         title="Elimu Plus"
@@ -252,19 +252,23 @@ export default function ElimuPlusSchoolProfile() {
               flex: 1,
               minHeight: 0,
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", lg: "minmax(280px, 340px) 1fr" },
-              gridTemplateRows: { xs: "auto 1fr", lg: "1fr" },
-              gap: 2,
-              height: { lg: "calc(100dvh - 220px)" },
-              maxHeight: { lg: "calc(100dvh - 220px)" },
+              gridTemplateColumns: {
+                xs: "minmax(88px, 30%) 1fr",
+                sm: "minmax(120px, 28%) 1fr",
+                lg: "minmax(280px, 340px) 1fr",
+              },
+              gridTemplateRows: "1fr",
+              gap: { xs: 1, sm: 1.5, md: 2 },
+              overflow: "hidden",
             }}
           >
             <Box
               sx={{
                 position: "relative",
-                borderRadius: "24px",
+                borderRadius: { xs: "16px", sm: "20px", lg: "24px" },
                 overflow: "hidden",
-                minHeight: { xs: 240, lg: "100%" },
+                minHeight: 0,
+                height: "100%",
                 border: "1px solid rgba(220,38,38,0.1)",
                 boxShadow: "0 20px 60px -20px rgba(28,25,23,0.2)",
                 background: `linear-gradient(165deg, ${primaryDark} 0%, ${primaryRed} 55%, #FB923C 100%)`,
@@ -285,13 +289,39 @@ export default function ElimuPlusSchoolProfile() {
                   pointerEvents: "none",
                 }}
               />
-              <Box sx={{ position: "absolute", left: 0, right: 0, bottom: 0, p: 2.5, zIndex: 1 }}>
+              <Box sx={{ position: "absolute", left: 0, right: 0, bottom: 0, p: { xs: 1, sm: 1.5, lg: 2.5 }, zIndex: 1 }}>
                 <ChipLikeBadge label="Elimu Plus" />
-                <Typography sx={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: { xs: "1.4rem", sm: "1.65rem" }, color: "#fff", mt: 1, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+                <Typography
+                  sx={{
+                    fontFamily: fontDisplay,
+                    fontWeight: 700,
+                    fontSize: { xs: "0.82rem", sm: "1.05rem", lg: "1.65rem" },
+                    color: "#fff",
+                    mt: 0.75,
+                    letterSpacing: "-0.02em",
+                    lineHeight: 1.15,
+                    display: "-webkit-box",
+                    WebkitLineClamp: { xs: 3, lg: 4 },
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
                   {profile.name}
                 </Typography>
                 {profile.tagline ? (
-                  <Typography sx={{ fontFamily: fontBody, color: "rgba(255,255,255,0.88)", fontSize: "0.9rem", mt: 0.5, fontStyle: "italic" }}>
+                  <Typography
+                    sx={{
+                      fontFamily: fontBody,
+                      color: "rgba(255,255,255,0.88)",
+                      fontSize: { xs: "0.68rem", sm: "0.78rem", lg: "0.9rem" },
+                      mt: 0.35,
+                      fontStyle: "italic",
+                      display: { xs: "none", sm: "-webkit-box" },
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
                     {profile.tagline}
                   </Typography>
                 ) : null}
@@ -300,73 +330,96 @@ export default function ElimuPlusSchoolProfile() {
 
             <Box
               sx={{
-                borderRadius: "24px",
+                borderRadius: { xs: "16px", sm: "20px", lg: "24px" },
                 border: "1px solid rgba(220,38,38,0.08)",
                 bgcolor: "#fff",
                 boxShadow: "0 16px 48px -16px rgba(28,25,23,0.1)",
                 display: "flex",
                 flexDirection: "column",
                 minHeight: 0,
+                height: "100%",
                 overflow: "hidden",
               }}
             >
-              <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2, borderBottom: "1px solid rgba(220,38,38,0.06)", bgcolor: warmCream, flexShrink: 0 }}>
-                <Typography sx={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: "1.1rem", color: textPrimary }}>
+              <Box
+                sx={{
+                  px: { xs: 1.25, sm: 1.75, md: 2.5 },
+                  py: { xs: 1, sm: 1.25, md: 1.5 },
+                  borderBottom: "1px solid rgba(220,38,38,0.06)",
+                  bgcolor: warmCream,
+                  flexShrink: 0,
+                }}
+              >
+                <Typography sx={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: { xs: "0.95rem", sm: "1.05rem" }, color: textPrimary }}>
                   School details
                 </Typography>
                 {profile.description ? (
-                  <Typography sx={{ fontFamily: fontBody, fontSize: "0.88rem", color: textSecondary, mt: 0.75, lineHeight: 1.55 }}>
+                  <Typography
+                    sx={{
+                      fontFamily: fontBody,
+                      fontSize: { xs: "0.75rem", sm: "0.82rem" },
+                      color: textSecondary,
+                      mt: 0.35,
+                      lineHeight: 1.45,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
                     {profile.description}
                   </Typography>
                 ) : null}
               </Box>
 
-              <Box sx={{ flex: 1, minHeight: 0, overflow: "auto", p: { xs: 2, sm: 2.5 } }}>
-                <Grid container spacing={1.5}>
-                  <Grid item xs={12} sm={6}>
-                    <DetailField icon={<EmailIcon fontSize="small" />} label="Email" value={profile.email} />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <DetailField icon={<PhoneIcon fontSize="small" />} label="Phone" value={profile.phone} />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <DetailField icon={<PhoneIcon fontSize="small" />} label="Alternate phone" value={profile.alternate_phone} />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <DetailField icon={<LanguageIcon fontSize="small" />} label="Website" value={profile.website} />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <DetailField icon={<LocationIcon fontSize="small" />} label="Address" value={addressLine} />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <DetailField icon={<CalendarIcon fontSize="small" />} label="Founded" value={profile.founded_year != null ? String(profile.founded_year) : ""} />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <Box
-                      sx={{
-                        p: 1.75,
-                        borderRadius: "14px",
-                        bgcolor: warmCream,
-                        border: "1px solid rgba(220,38,38,0.08)",
-                      }}
-                    >
-                      <Typography sx={{ fontFamily: fontBody, fontSize: "0.68rem", fontWeight: 700, color: textMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                        Social links
-                      </Typography>
-                      {socialLinks.length === 0 ? (
-                        <Typography sx={{ fontFamily: fontBody, fontWeight: 600, color: textPrimary, mt: 0.75 }}>
-                          —
-                        </Typography>
-                      ) : (
-                        <Stack direction="row" flexWrap="wrap" gap={0.75} sx={{ mt: 1 }}>
-                          {socialLinks.map((s) => (
-                            <SocialLinkChip key={s.key} icon={s.icon} label={s.label} href={normalizeExternalUrl(s.value)} />
-                          ))}
-                        </Stack>
-                      )}
-                    </Box>
-                  </Grid>
-                </Grid>
+              <Box
+                sx={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflow: "hidden",
+                  p: { xs: 1, sm: 1.25, md: 1.5 },
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gridAutoRows: "minmax(0, 1fr)",
+                  alignContent: "stretch",
+                  gap: { xs: 0.75, sm: 1 },
+                }}
+              >
+                <DetailField compact icon={<EmailIcon fontSize="small" />} label="Email" value={profile.email} />
+                <DetailField compact icon={<PhoneIcon fontSize="small" />} label="Phone" value={profile.phone} />
+                <DetailField compact icon={<PhoneIcon fontSize="small" />} label="Alternate phone" value={profile.alternate_phone} />
+                <DetailField compact icon={<LanguageIcon fontSize="small" />} label="Website" value={profile.website} />
+                <Box sx={{ gridColumn: "1 / -1", minHeight: 0 }}>
+                  <DetailField compact icon={<LocationIcon fontSize="small" />} label="Address" value={addressLine} />
+                </Box>
+                <DetailField compact icon={<CalendarIcon fontSize="small" />} label="Founded" value={profile.founded_year != null ? String(profile.founded_year) : ""} />
+                <Box
+                  sx={{
+                    p: 1,
+                    borderRadius: "12px",
+                    bgcolor: warmCream,
+                    border: "1px solid rgba(220,38,38,0.08)",
+                    minHeight: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Typography sx={{ fontFamily: fontBody, fontSize: "0.62rem", fontWeight: 700, color: textMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    Social links
+                  </Typography>
+                  {socialLinks.length === 0 ? (
+                    <Typography sx={{ fontFamily: fontBody, fontWeight: 600, fontSize: "0.82rem", color: textPrimary, mt: 0.25 }}>
+                      —
+                    </Typography>
+                  ) : (
+                    <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 0.5 }}>
+                      {socialLinks.map((s) => (
+                        <SocialLinkChip key={s.key} icon={s.icon} label={s.label} href={normalizeExternalUrl(s.value)} />
+                      ))}
+                    </Stack>
+                  )}
+                </Box>
               </Box>
             </Box>
           </Box>

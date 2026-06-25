@@ -3,9 +3,7 @@ import {
   Alert,
   Box,
   Button,
-  Chip,
   CircularProgress,
-  Typography,
   useMediaQuery,
   useTheme,
 } from "@mui/material";
@@ -15,6 +13,7 @@ import LiveKitVideoRoom from "./LiveKitVideoRoom";
 import "@livekit/components-styles";
 import { useSocket } from "../../hooks/useSocket";
 import LiveClassHostLayout from "./LiveClassHostLayout";
+import LiveClassPageChrome from "./LiveClassPageChrome";
 import LiveKitMediaControls from "./LiveKitMediaControls";
 import Controls from "./Controls";
 import { resolveLiveKitJoinMediaForRole } from "../../utils/liveKitJoinMedia";
@@ -67,6 +66,7 @@ export default function LiveKitConference({
   showLobbyPanel = true,
   /** From timetable: optional = no auto cam/mic; audio/video = try to enable on join (failures are non-blocking). */
   mediaMode = "optional",
+  sessionMeta = {},
 }) {
   const isTeacher = role === "teacher";
   const joinMedia = resolveLiveKitJoinMediaForRole(mediaMode, { isHost: isTeacher });
@@ -261,44 +261,37 @@ export default function LiveKitConference({
   const rateLimited = Date.now() < rateLimitUntil;
   const showConnectionError = Boolean(connectionError && attemptsExhausted);
 
-  const header = useMemo(
-    () => (
-      <Box
-        sx={{
-          px: 2,
-          py: 1,
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-          borderBottom: 1,
-          borderColor: "divider",
-          bgcolor: "background.paper",
-        }}
-      >
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, flex: 1 }}>
-          Live class
-        </Typography>
-        {isTeacher ? <Chip size="small" label="Host" color="primary" sx={{ display: { xs: "none", sm: "flex" } }} /> : null}
-      </Box>
-    ),
-    [isTeacher]
+  const chromeMeta = useMemo(
+    () => ({
+      ...sessionMeta,
+      hostName: sessionMeta.hostName || userName,
+    }),
+    [sessionMeta, userName]
+  );
+
+  const wrapChrome = (content, extraSx = {}) => (
+    <LiveClassPageChrome
+      isTeacher={isTeacher}
+      token={token}
+      liveClassId={liveClassId}
+      sessionMeta={chromeMeta}
+      sx={{ bgcolor: "#0b1220", ...extraSx }}
+    >
+      {content}
+    </LiveClassPageChrome>
   );
 
   if (loading) {
-    return (
-      <Box sx={{ display: "flex", flexDirection: "column", height: "100%", bgcolor: "#0b1220" }}>
-        {header}
-        <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <CircularProgress />
-        </Box>
+    return wrapChrome(
+      <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <CircularProgress />
       </Box>
     );
   }
 
   if (fatalError || !lkToken || !serverUrl) {
-    return (
-      <Box sx={{ display: "flex", flexDirection: "column", height: "100%", bgcolor: "#0b1220" }}>
-        {header}
+    return wrapChrome(
+      <>
         <Alert severity="error" sx={{ m: 2 }}>
           {fatalError || "LiveKit is not available for this session."}
         </Alert>
@@ -314,27 +307,24 @@ export default function LiveKitConference({
             }}
           />
         </Box>
-      </Box>
+      </>
     );
   }
 
-  return (
+  return wrapChrome(
     <Box
       className="live-class-lk-shell"
       sx={{
+        flex: 1,
+        minHeight: 0,
         display: "flex",
         flexDirection: "column",
-        height: "100%",
-        minHeight: 0,
         width: "100%",
         maxWidth: "100%",
         overflow: "hidden",
-        bgcolor: "#0b1220",
         "& .lk-toast": { display: "none !important" },
       }}
     >
-      {header}
-
       <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         {showConnectionError ? (
           <Alert
@@ -378,7 +368,7 @@ export default function LiveKitConference({
               userName={userName}
               videoSlot={
                 <Box sx={{ flex: 1, height: "100%", minHeight: 0, minWidth: 0, position: "relative", ...examLiveVideoSlotSx }}>
-                  <LiveKitVideoRoom />
+                  <LiveKitVideoRoom isTeacher={isTeacher} studentClassView />
                 </Box>
               }
             />
@@ -386,6 +376,7 @@ export default function LiveKitConference({
           <LiveKitMediaControls onLeave={finishLeave} room={room} />
         </LiveKitRoom>
       </Box>
-    </Box>
+    </Box>,
+    { "& .lk-toast": { display: "none !important" } }
   );
 }

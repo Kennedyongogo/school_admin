@@ -55,6 +55,7 @@ export default function ExamSubmissionsPage() {
   const [expandedById, setExpandedById] = useState({});
   const [markInputs, setMarkInputs] = useState({});
   const [answerMarks, setAnswerMarks] = useState({});
+  const [answerComments, setAnswerComments] = useState({});
   const [markSavingId, setMarkSavingId] = useState("");
   const [gradingId, setGradingId] = useState("");
   const [cleanupRunning, setCleanupRunning] = useState(false);
@@ -105,6 +106,7 @@ export default function ExamSubmissionsPage() {
       });
       const nextInputs = {};
       const nextAnswerMarks = {};
+      const nextAnswerComments = {};
       const pdfExam = isPdfFormExamRow(exam);
       submissions.forEach((s) => {
         if (pdfExam) {
@@ -119,10 +121,12 @@ export default function ExamSubmissionsPage() {
         }
         (s.answers || []).forEach((a) => {
           nextAnswerMarks[a.id] = a.marks_obtained != null ? String(a.marks_obtained) : "";
+          nextAnswerComments[a.id] = a.marker_comment != null ? String(a.marker_comment) : "";
         });
       });
       setMarkInputs(nextInputs);
       setAnswerMarks(nextAnswerMarks);
+      setAnswerComments(nextAnswerComments);
       setExpandedById({});
     } catch (e) {
       setError(e.message || "Could not load submissions.");
@@ -185,18 +189,32 @@ export default function ExamSubmissionsPage() {
     }
     setMarkSavingId(submissionId);
     try {
-      const promises = submission.answers.map(a => {
-        const marks = Number(answerMarks[a.id]);
-        if (!Number.isFinite(marks) || marks < 0) return null;
-        return fetch(`/api/exams/${examId}/submissions/${submissionId}/answers/${a.id}/mark`, {
-          method: "PUT",
-          headers: authHeaders(token),
-          body: JSON.stringify({ marks_obtained: marks }),
-        });
-      }).filter(Boolean);
+      const promises = submission.answers
+        .map((a) => {
+          const marksRaw = answerMarks[a.id];
+          const marks = marksRaw === "" || marksRaw == null ? null : Number(marksRaw);
+          const comment = answerComments[a.id] != null ? String(answerComments[a.id]) : "";
+          const hasMarks = marks != null && Number.isFinite(marks) && marks >= 0;
+          const hasComment = comment.trim() !== "";
+          if (!hasMarks && !hasComment) return null;
+          if (hasMarks && (!Number.isFinite(marks) || marks < 0)) return null;
+          const body = {};
+          if (hasMarks) body.marks_obtained = marks;
+          body.marker_comment = comment.trim();
+          return fetch(`/api/exams/${examId}/submissions/${submissionId}/answers/${a.id}/mark`, {
+            method: "PUT",
+            headers: authHeaders(token),
+            body: JSON.stringify(body),
+          });
+        })
+        .filter(Boolean);
+      if (!promises.length) {
+        await Swal.fire({ icon: "info", title: "Nothing to save", text: "Enter marks and/or comments for at least one question." });
+        return;
+      }
       await Promise.all(promises);
       await load();
-      await Swal.fire({ icon: "success", title: "Marks saved", timer: 900, showConfirmButton: false });
+      await Swal.fire({ icon: "success", title: "Saved", text: "Marks and comments were saved.", timer: 900, showConfirmButton: false });
     } catch (e) {
       await Swal.fire({ icon: "error", title: "Marking failed", text: e.message || "Could not save marks." });
     } finally {
@@ -497,8 +515,12 @@ export default function ExamSubmissionsPage() {
                               exam={fullExam}
                               answers={s.answers}
                               answerMarks={answerMarks}
+                              answerComments={answerComments}
                               onAnswerMarksChange={(answerId, value) =>
                                 setAnswerMarks((prev) => ({ ...prev, [answerId]: value }))
+                              }
+                              onAnswerCommentsChange={(answerId, value) =>
+                                setAnswerComments((prev) => ({ ...prev, [answerId]: value }))
                               }
                             />
                           ) : Array.isArray(s.answers) && s.answers.length ? (

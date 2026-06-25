@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Box, Chip, CircularProgress, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { Alert, Box, CircularProgress, useMediaQuery, useTheme } from "@mui/material";
 import { useSocket } from "../../hooks/useSocket";
 import { useWebRTC } from "../../hooks/useWebRTC";
 import VideoGrid from "./VideoGrid";
 import Controls from "./Controls";
 import LiveClassHostLayout from "./LiveClassHostLayout";
+import LiveClassPageChrome from "./LiveClassPageChrome";
 
 const EMPTY_ICE = Object.freeze([]);
 
@@ -17,6 +18,7 @@ export default function VideoConference({
   iceServers,
   onLeave,
   showLobbyPanel = true,
+  sessionMeta = {},
 }) {
   const localVideoRef = useRef(null);
   const [micOn, setMicOn] = useState(true);
@@ -204,25 +206,16 @@ export default function VideoConference({
   const isTeacher = role === "teacher";
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, width: "100%", maxWidth: "100%", overflow: "hidden", bgcolor: "#0b1220" }}>
-      <Box
-        sx={{
-          px: 2,
-          py: 1,
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-          borderBottom: 1,
-          borderColor: "divider",
-          bgcolor: "background.paper",
-        }}
-      >
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, flex: 1 }}>
-          Live class
-        </Typography>
-        {role === "teacher" ? <Chip size="small" label="Host" color="primary" sx={{ display: { xs: "none", sm: "flex" } }} /> : null}
-      </Box>
-
+    <LiveClassPageChrome
+      isTeacher={isTeacher}
+      token={token}
+      liveClassId={liveClassId}
+      sessionMeta={{
+        ...sessionMeta,
+        hostName: sessionMeta.hostName || userName,
+      }}
+      sx={{ bgcolor: "#0b1220" }}
+    >
       {mediaError ? (
         <Alert severity="warning" sx={{ m: 2 }}>
           {mediaError}
@@ -260,6 +253,6 @@ export default function VideoConference({
       />
 
       <Controls micOn={micOn} camOn={camOn && hasVideoTrack} onToggleMic={toggleMic} onToggleCam={toggleCam} onLeave={handleLeave} />
-    </Box>
+    </LiveClassPageChrome>
   );
 }

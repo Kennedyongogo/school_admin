@@ -105,7 +105,9 @@ export default function ExamSubmissionPaperView({
   exam,
   answers = [],
   answerMarks = {},
+  answerComments = {},
   onAnswerMarksChange = null,
+  onAnswerCommentsChange = null,
 }) {
   const [filePreview, setFilePreview] = useState(null);
   const pages = useMemo(() => buildPreviewPages(exam), [exam]);
@@ -151,10 +153,34 @@ export default function ExamSubmissionPaperView({
                     key={`submission-q-${q.id || idx}`}
                     sx={{ border: "1px solid #f3f4f6", borderRadius: 1.5, p: 1.25 }}
                   >
-                    <Typography sx={{ fontWeight: 700, mb: 0.75 }}>
-                      {q.order_number || idx + 1}. {q.question_text || "Question"} ({Number(q.marks) || 0} marks)
-                      {q.required ? " (Required)" : ""}
-                    </Typography>
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      alignItems={{ xs: "flex-start", sm: "center" }}
+                      justifyContent="space-between"
+                      spacing={{ xs: 1, sm: 2 }}
+                      sx={{ mb: 0.75 }}
+                    >
+                      <Typography sx={{ fontWeight: 700, flex: 1, minWidth: 0, lineHeight: 1.4 }}>
+                        {q.order_number || idx + 1}. {q.question_text || "Question"} ({Number(q.marks) || 0} marks)
+                        {q.required ? " (Required)" : ""}
+                      </Typography>
+                      {onAnswerMarksChange && answerRow?.id ? (
+                        <Stack direction="row" alignItems="center" spacing={1} sx={{ flexShrink: 0 }}>
+                          <TextField
+                            size="small"
+                            label="Marks obtained"
+                            type="number"
+                            value={answerMarks[answerRow.id] ?? ""}
+                            onChange={(e) => onAnswerMarksChange(answerRow.id, e.target.value)}
+                            sx={{ width: { xs: 120, sm: 140 } }}
+                            inputProps={{ min: 0, step: 0.01 }}
+                          />
+                          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+                            / {Number(q.marks) || 0}
+                          </Typography>
+                        </Stack>
+                      ) : null}
+                    </Stack>
 
                     {qType === "short_text" ? (
                       <TextField
@@ -295,21 +321,19 @@ export default function ExamSubmissionPaperView({
                       </Stack>
                     ) : null}
 
-                    {onAnswerMarksChange && answerRow?.id ? (
-                      <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1 }}>
-                        <TextField
-                          size="small"
-                          label="Marks obtained"
-                          type="number"
-                          value={answerMarks[answerRow.id] ?? ""}
-                          onChange={(e) => onAnswerMarksChange(answerRow.id, e.target.value)}
-                          sx={{ width: 140 }}
-                          inputProps={{ min: 0, step: 0.01 }}
-                        />
-                        <Typography variant="caption" color="text.secondary">
-                          / {Number(q.marks) || 0}
-                        </Typography>
-                      </Stack>
+                    {onAnswerCommentsChange && answerRow?.id ? (
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Teacher comment (optional)"
+                        placeholder="Feedback for the student on this question"
+                        value={answerComments[answerRow.id] ?? ""}
+                        onChange={(e) => onAnswerCommentsChange(answerRow.id, e.target.value)}
+                        multiline
+                        minRows={1}
+                        maxRows={4}
+                        sx={{ mt: 1 }}
+                      />
                     ) : null}
                   </Box>
                 );

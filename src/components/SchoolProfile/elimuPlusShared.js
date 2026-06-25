@@ -67,12 +67,32 @@ export async function fetchAllPages(path, token) {
   return out;
 }
 
+/** Bleed Elimu Plus content into the admin main padding (matches HR / Accounting). */
+export const fullMainBleedSx = (theme) => ({
+  width: `calc(100% + ${theme.spacing(6)})`,
+  maxWidth: "none",
+  marginLeft: theme.spacing(-3),
+  marginRight: theme.spacing(-3),
+  marginTop: theme.spacing(-2.5),
+  marginBottom: "1px",
+  boxSizing: "border-box",
+});
+
 /** Full-height Elimu Plus shell inside the admin layout (below app bar). */
 export const elimuViewportSx = {
   minHeight: "calc(100dvh - 64px)",
   display: "flex",
   flexDirection: "column",
   boxSizing: "border-box",
+};
+
+/** Lock page to viewport — tab panels scroll internally instead of the page. */
+export const elimuViewportFillSx = {
+  ...elimuViewportSx,
+  height: "calc(100dvh - 64px)",
+  maxHeight: "calc(100dvh - 64px)",
+  minHeight: 0,
+  overflow: "hidden",
 };
 
 export const tableContainerSx = {

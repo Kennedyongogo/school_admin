@@ -82,7 +82,7 @@ export function ElimuPlusHero({ title, subtitle, icon, actions }) {
           </Box>
         </Stack>
         {actions ? (
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ xs: "stretch", sm: "center" }}>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="nowrap" useFlexGap sx={{ flexShrink: 0 }}>
             {actions}
           </Stack>
         ) : null}
@@ -137,10 +137,12 @@ export function ElimuPlusTabs({ activeTab, onChange, tabs }) {
 
 export function DataTableShell({ children, pagination }) {
   return (
-    <TableContainer sx={tableContainerSx}>
-      {children}
-      {pagination}
-    </TableContainer>
+    <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <TableContainer sx={{ ...tableContainerSx, flex: 1, minHeight: 0, overflow: "auto" }}>
+        {children}
+      </TableContainer>
+      {pagination ? <Box sx={{ flexShrink: 0 }}>{pagination}</Box> : null}
+    </Box>
   );
 }
 

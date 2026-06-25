@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Alert, Box, CircularProgress, Typography } from "@mui/material";
 import VideoConference from "../components/VideoConference/VideoConference";
 import LiveKitConference from "../components/VideoConference/LiveKitConference";
+import TeamsLiveClassConference from "../components/VideoConference/TeamsLiveClassConference";
 
 const authHeaders = (token) => ({
   Accept: "application/json",
@@ -71,14 +72,39 @@ export default function LiveClassRoomPage() {
     return <Alert severity="error">{error}</Alert>;
   }
 
-  if (!room?.meeting_id) {
+  if (!room?.meeting_id && room?.video_mode !== "external") {
     return <Alert severity="warning">This session has no video room configured.</Alert>;
   }
+
+  const isTeams = room.video_mode === "external" && room.platform === "teams";
+  const isLiveKit = room.video_mode === "livekit" || room.platform === "livekit";
+  const teamsUrl = room.host_url || room.join_url || "";
+
+  const sessionMeta = {
+    lessonId: room.lesson_id,
+    curriculumClassId: room.curriculum_class_id,
+    curriculumClassLabel: room.curriculum_class_label,
+    subjectName: room.subject_name,
+    lessonDate: room.lesson_date,
+    hostName: room.host_name || userName,
+  };
 
   return (
     <Box sx={{ mx: -3, mt: -3, mb: -3, height: "calc(100vh - 72px)", minHeight: 480, maxWidth: "100vw", overflow: "hidden" }}>
       <Box sx={{ height: "100%", width: "100%", maxWidth: "100%", borderRadius: 0, overflow: "hidden", border: 1, borderColor: "divider" }}>
-        {room.video_mode === "livekit" || room.platform === "livekit" ? (
+        {isTeams ? (
+          <TeamsLiveClassConference
+            token={token}
+            liveClassId={liveClassId}
+            userName={userName}
+            role={room.role || "teacher"}
+            meetUrl={teamsUrl}
+            subjectName={room.subject_name || "Online class"}
+            onLeave={() => navigate(-1)}
+            showLobbyPanel
+            sessionMeta={sessionMeta}
+          />
+        ) : isLiveKit ? (
           <LiveKitConference
             token={token}
             liveClassId={liveClassId}
@@ -86,6 +112,7 @@ export default function LiveClassRoomPage() {
             role={room.role || "teacher"}
             mediaMode={room.media_mode || (room.role === "teacher" ? "video" : "optional")}
             onLeave={() => navigate(-1)}
+            sessionMeta={sessionMeta}
           />
         ) : (
           <VideoConference
@@ -96,6 +123,7 @@ export default function LiveClassRoomPage() {
             role={room.role || "teacher"}
             iceServers={room.ice_servers}
             onLeave={() => navigate(-1)}
+            sessionMeta={sessionMeta}
           />
         )}
       </Box>

@@ -20,6 +20,7 @@ import {
   Delete as DeleteIcon,
   School as SchoolIcon,
   CalendarMonth as CalendarMonthIcon,
+  ViewColumnRounded as ViewColumnRoundedIcon,
   Subject as SubjectIcon,
   Visibility as ViewIcon,
   Edit as EditIcon,
@@ -304,10 +305,28 @@ export default function CurriculumTable() {
       );
     }
     if (pageTab === 2) {
+      const activityParams = new URLSearchParams();
+      if (classesCurriculumId) activityParams.set("curriculumId", classesCurriculumId);
+      const activityQs = activityParams.toString();
       return (
-        <HeroActionButton variant="contained" startIcon={<CalendarMonthIcon />} onClick={() => termsTabRef.current?.openCreateDialog?.()}>
-          Add term
-        </HeroActionButton>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="nowrap" useFlexGap sx={{ width: { xs: "100%", sm: "auto" } }}>
+          <HeroActionButton
+            variant="outlined"
+            startIcon={<ViewColumnRoundedIcon />}
+            onClick={() => navigate(activityQs ? `/curriculum/terms/activity?${activityQs}` : "/curriculum/terms/activity")}
+            sx={{ whiteSpace: "nowrap", flexShrink: 0 }}
+          >
+            Monitor term activity
+          </HeroActionButton>
+          <HeroActionButton
+            variant="contained"
+            startIcon={<CalendarMonthIcon />}
+            onClick={() => termsTabRef.current?.openCreateDialog?.()}
+            sx={{ whiteSpace: "nowrap", flexShrink: 0 }}
+          >
+            Add term
+          </HeroActionButton>
+        </Stack>
       );
     }
     if (pageTab === 3) {

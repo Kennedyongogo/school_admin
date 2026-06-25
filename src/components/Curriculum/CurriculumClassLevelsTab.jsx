@@ -38,6 +38,19 @@ import {
   EmptyTableRow,
 } from "./curriculumUi";
 
+function formatTermDate(value) {
+  if (!value) return "—";
+  const s = String(value).slice(0, 10);
+  const d = new Date(`${s}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function toDateInputValue(value) {
+  if (!value) return "";
+  return String(value).slice(0, 10);
+}
+
 async function fetchClassesForCurriculum(token, curriculumId) {
   const out = [];
   let page = 1;
@@ -76,6 +89,7 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
 
   const [filterCurriculumId, setFilterCurriculumId] = useState(curriculumId || "");
   const [filterClassId, setFilterClassId] = useState(classId || "");
+  const [termSearch, setTermSearch] = useState("");
   const [classOptions, setClassOptions] = useState([]);
   const [classesLoading, setClassesLoading] = useState(false);
 
@@ -104,16 +118,24 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
     name: "",
     level_order: "0",
     description: "",
+    start_date: "",
+    end_date: "",
   });
 
   const [viewRow, setViewRow] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editRow, setEditRow] = useState(null);
+  const [editCurriculumId, setEditCurriculumId] = useState("");
+  const [editClassId, setEditClassId] = useState("");
+  const [editClassOptions, setEditClassOptions] = useState([]);
+  const [editClassesLoading, setEditClassesLoading] = useState(false);
   const [editForm, setEditForm] = useState({
     name: "",
     level_order: "0",
     description: "",
+    start_date: "",
+    end_date: "",
   });
 
   useEffect(() => {
@@ -198,6 +220,35 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
     };
   }, [dialogCurriculumId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!editCurriculumId) {
+        setEditClassOptions([]);
+        return;
+      }
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      setEditClassesLoading(true);
+      try {
+        const list = await fetchClassesForCurriculum(token, editCurriculumId);
+        if (!cancelled) {
+          setEditClassOptions(list);
+          if (editClassId && list.length > 0 && !list.some((c) => String(c.id) === String(editClassId))) {
+            setEditClassId("");
+          }
+        }
+      } catch {
+        if (!cancelled) setEditClassOptions([]);
+      } finally {
+        if (!cancelled) setEditClassesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editCurriculumId]);
+
   const fetchLevels = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -216,6 +267,7 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
       });
       if (filterCurriculumId) params.set("curriculum_id", filterCurriculumId);
       if (filterClassId) params.set("curriculum_class_id", filterClassId);
+      if (termSearch.trim()) params.set("q", termSearch.trim());
       const res = await fetch(`/api/curricula/all-class-levels?${params}`, {
         headers: authJsonHeaders(token),
       });
@@ -232,7 +284,7 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
     } finally {
       setLoadingLevels(false);
     }
-  }, [page, rowsPerPage, filterCurriculumId, filterClassId]);
+  }, [page, rowsPerPage, filterCurriculumId, filterClassId, termSearch]);
 
   useEffect(() => {
     fetchLevels();
@@ -245,6 +297,8 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
       name: "",
       level_order: "0",
       description: "",
+      start_date: "",
+      end_date: "",
     });
     setDialogOpen(true);
   }, [curriculumId, classId]);
@@ -287,6 +341,10 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
     }
     const lo = parseInt(form.level_order, 10);
     const level_order = Number.isNaN(lo) ? 0 : lo;
+    if (form.start_date && form.end_date && form.start_date > form.end_date) {
+      Swal.fire({ icon: "warning", title: "Invalid dates", text: "Start date cannot be after end date." });
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`/api/curricula/${dialogCurriculumId}/classes/${dialogClassId}/levels`, {
@@ -296,6 +354,8 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
           name,
           level_order,
           description: form.description.trim() || undefined,
+          start_date: form.start_date || null,
+          end_date: form.end_date || null,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -314,13 +374,18 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
 
   const openEdit = (row) => {
     const cc = classMeta(row);
-    const cid = cc?.curriculum_id;
+    const cur = curriculumMeta(row);
+    const cid = cur?.id;
     if (!cid || !cc?.id) return;
     setEditRow(row);
+    setEditCurriculumId(String(cid));
+    setEditClassId(String(cc.id));
     setEditForm({
       name: row.name || "",
       level_order: String(row.level_order ?? 0),
       description: row.description || "",
+      start_date: toDateInputValue(row.start_date),
+      end_date: toDateInputValue(row.end_date),
     });
     setEditOpen(true);
   };
@@ -331,6 +396,10 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
     const curriculum_id = cc?.curriculum_id;
     const class_id = cc?.id;
     if (!token || !editRow?.id || !curriculum_id || !class_id) return;
+    if (!editCurriculumId || !editClassId) {
+      Swal.fire({ icon: "warning", title: "Required", text: "Curriculum and class are required." });
+      return;
+    }
     const name = editForm.name.trim();
     if (!name) {
       Swal.fire({ icon: "warning", title: "Required", text: "Term name is required." });
@@ -338,6 +407,10 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
     }
     const lo = parseInt(editForm.level_order, 10);
     const level_order = Number.isNaN(lo) ? 0 : lo;
+    if (editForm.start_date && editForm.end_date && editForm.start_date > editForm.end_date) {
+      Swal.fire({ icon: "warning", title: "Invalid dates", text: "Start date cannot be after end date." });
+      return;
+    }
     setEditSaving(true);
     try {
       const res = await fetch(`/api/curricula/${curriculum_id}/classes/${class_id}/levels/${editRow.id}`, {
@@ -347,6 +420,9 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
           name,
           level_order,
           description: editForm.description.trim() || null,
+          start_date: editForm.start_date || null,
+          end_date: editForm.end_date || null,
+          curriculum_class_id: editClassId,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -395,7 +471,7 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
     }
   };
 
-  const tableColSpan = 4;
+  const tableColSpan = 7;
   const actionsWidth = 132;
 
   const handleFilterCurriculumChange = (id) => {
@@ -420,17 +496,31 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
       )}
 
       <Stack spacing={2}>
-        <Box sx={{ width: "100%", textAlign: "right" }}>
+        <Stack
+          direction={{ xs: "column", lg: "row" }}
+          spacing={1.5}
+          justifyContent="space-between"
+          alignItems={{ xs: "stretch", lg: "center" }}
+          flexWrap="wrap"
+          useFlexGap
+        >
+          <TextField
+            size="small"
+            label="Search terms"
+            placeholder="Term name…"
+            value={termSearch}
+            onChange={(e) => {
+              setTermSearch(e.target.value);
+              setPage(0);
+            }}
+            sx={{ width: { xs: "100%", sm: 240 }, ...inputSx }}
+          />
+
           <Stack
             direction={{ xs: "column", sm: "row" }}
             spacing={1.5}
-            sx={{
-              display: "inline-flex",
-              alignItems: { xs: "flex-end", sm: "center" },
-              textAlign: "left",
-              verticalAlign: "top",
-              maxWidth: "100%",
-            }}
+            alignItems={{ xs: "stretch", sm: "center" }}
+            sx={{ flexShrink: 0 }}
           >
             <FormControl size="small" sx={{ width: { xs: "min(100%, 320px)", sm: 280 }, ...inputSx }} disabled={curriculaLoading}>
               <InputLabel id="terms-filter-curriculum-label">Filter by curriculum</InputLabel>
@@ -472,7 +562,7 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
               </Select>
             </FormControl>
           </Stack>
-        </Box>
+        </Stack>
 
         <TabPanelShell loading={loadingLevels} error={levelsError} onDismissError={() => setLevelsError(null)}>
           {!loadingLevels && (
@@ -499,7 +589,10 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
                   <TableRow sx={tableHeadRowSx}>
                     <TableCell width={56}>No.</TableCell>
                     <TableCell>Curriculum</TableCell>
+                    <TableCell>Class</TableCell>
                     <TableCell>Term</TableCell>
+                    <TableCell>Start date</TableCell>
+                    <TableCell>End date</TableCell>
                     <TableCell align="right" sx={{ width: actionsWidth, minWidth: actionsWidth, whiteSpace: "nowrap" }}>
                       Actions
                     </TableCell>
@@ -517,7 +610,14 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
                       <TableRow key={r.id} hover sx={{ "&:last-child td": { borderBottom: 0 } }}>
                         <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>{page * rowsPerPage + idx + 1}</TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>{curriculumMeta(r)?.name || "—"}</TableCell>
+                        <TableCell>
+                          {classMeta(r)?.name
+                            ? `${classMeta(r).name}${classMeta(r)?.code ? ` (${classMeta(r).code})` : ""}`
+                            : "—"}
+                        </TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>{r.name}</TableCell>
+                        <TableCell>{formatTermDate(r.start_date)}</TableCell>
+                        <TableCell>{formatTermDate(r.end_date)}</TableCell>
                         <TableCell
                           align="right"
                           sx={{
@@ -614,6 +714,26 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
             </Select>
           </FormControl>
           <TextField label="Term name" fullWidth required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} helperText='e.g. "Term 1", "Phase A"' sx={inputSx} />
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <TextField
+              label="Start date"
+              type="date"
+              fullWidth
+              value={form.start_date}
+              onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))}
+              InputLabelProps={{ shrink: true }}
+              sx={inputSx}
+            />
+            <TextField
+              label="End date"
+              type="date"
+              fullWidth
+              value={form.end_date}
+              onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))}
+              InputLabelProps={{ shrink: true }}
+              sx={inputSx}
+            />
+          </Stack>
           <TextField label="Display order" fullWidth value={form.level_order} onChange={(e) => setForm((f) => ({ ...f, level_order: e.target.value }))} helperText="Lower numbers appear first in lists." sx={inputSx} />
           <TextField label="Description" fullWidth multiline minRows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} sx={inputSx} />
         </Stack>
@@ -648,6 +768,8 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
               }
             />
             <DetailField label="Term name" value={viewRow.name} />
+            <DetailField label="Start date" value={formatTermDate(viewRow.start_date)} />
+            <DetailField label="End date" value={formatTermDate(viewRow.end_date)} />
             <DetailField label="Display order" value={viewRow.level_order ?? "—"} />
             <DetailField label="Description" value={truncateText(viewRow.description, 600)} />
           </Stack>
@@ -672,19 +794,68 @@ const CurriculumClassLevelsTab = forwardRef(function CurriculumClassLevelsTab(
         }
       >
         <Stack spacing={2}>
-          <TextField label="Curriculum" fullWidth value={curriculumMeta(editRow)?.name || ""} disabled sx={inputSx} />
-          <TextField
-            label="Class"
-            fullWidth
-            value={
-              editRow
-                ? `${classMeta(editRow)?.name || ""}${classMeta(editRow)?.code ? ` (${classMeta(editRow)?.code})` : ""}`
-                : ""
-            }
-            disabled
-            sx={inputSx}
-          />
+          <FormControl fullWidth required sx={inputSx} disabled={curriculaLoading}>
+            <InputLabel id="edit-term-curriculum-label">Curriculum</InputLabel>
+            <Select
+              labelId="edit-term-curriculum-label"
+              label="Curriculum"
+              value={editCurriculumId}
+              onChange={(e) => {
+                setEditCurriculumId(e.target.value);
+                setEditClassId("");
+              }}
+            >
+              <MenuItem value="">
+                <em>Select curriculum</em>
+              </MenuItem>
+              {curriculaOptions.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                  {c.type ? ` — ${c.type}` : ""}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth required sx={inputSx} disabled={!editCurriculumId || editClassesLoading}>
+            <InputLabel id="edit-term-class-label">Class</InputLabel>
+            <Select
+              labelId="edit-term-class-label"
+              label="Class"
+              value={editClassId}
+              onChange={(e) => setEditClassId(e.target.value)}
+            >
+              <MenuItem value="">
+                <em>Select class</em>
+              </MenuItem>
+              {editClassOptions.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                  {c.code ? ` (${c.code})` : ""}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <TextField label="Term name" fullWidth required value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} sx={inputSx} />
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <TextField
+              label="Start date"
+              type="date"
+              fullWidth
+              value={editForm.start_date}
+              onChange={(e) => setEditForm((f) => ({ ...f, start_date: e.target.value }))}
+              InputLabelProps={{ shrink: true }}
+              sx={inputSx}
+            />
+            <TextField
+              label="End date"
+              type="date"
+              fullWidth
+              value={editForm.end_date}
+              onChange={(e) => setEditForm((f) => ({ ...f, end_date: e.target.value }))}
+              InputLabelProps={{ shrink: true }}
+              sx={inputSx}
+            />
+          </Stack>
           <TextField label="Display order" fullWidth value={editForm.level_order} onChange={(e) => setEditForm((f) => ({ ...f, level_order: e.target.value }))} sx={inputSx} />
           <TextField label="Description" fullWidth multiline minRows={2} value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} sx={inputSx} />
         </Stack>

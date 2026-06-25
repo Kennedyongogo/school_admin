@@ -21,11 +21,13 @@ import UsersTable from "./Users/UsersTable";
 import UsersCreate from "./Users/UsersCreate";
 import CurriculumTable from "./Curriculum/CurriculumTable";
 import CurriculumCreate from "./Curriculum/CurriculumCreate";
+import TermActivityMonitorPage from "../Pages/TermActivityMonitorPage";
 import CurriculumFeeStructureCreate from "./Curriculum/CurriculumFeeStructureCreate";
 import ElimuPlusSchoolProfile from "./SchoolProfile/ElimuPlusSchoolProfile";
 import ElimuPlusSchoolProfileForm from "./SchoolProfile/ElimuPlusSchoolProfileForm";
 import ElimuPlusStudentCreate from "./SchoolProfile/ElimuPlusStudentCreate";
 import ElimuPlusStudentEdit from "./SchoolProfile/ElimuPlusStudentEdit";
+import ElimuPlusStudentDetail from "./SchoolProfile/ElimuPlusStudentDetail";
 import ElimuPlusTeacherCreate from "./SchoolProfile/ElimuPlusTeacherCreate";
 import ElimuPlusSchoolAdminCreate from "./SchoolProfile/ElimuPlusSchoolAdminCreate";
 import ElimuPlusSchoolAdminDetail from "./SchoolProfile/ElimuPlusSchoolAdminDetail";
@@ -51,6 +53,7 @@ import Submissions from "./Submissions/Submissions";
 import Marketplace from "../Pages/Marketplace";
 import Timetable from "../Pages/Timetable";
 import TimetableDayPage from "../Pages/TimetableDayPage";
+import OnlineLessonLivePage from "../Pages/OnlineLessonLivePage";
 import TimetableCreatePage from "../Pages/TimetableCreatePage";
 import TimetableManagePage from "../Pages/TimetableManagePage";
 import LiveClassRoomPage from "../Pages/LiveClassRoomPage";
@@ -163,12 +166,15 @@ function PageRoutes() {
             <Route path="elimu-plus/school-admins/:id" element={<ElimuPlusSchoolAdminDetail />} />
             <Route path="elimu-plus/students/create" element={<ElimuPlusStudentCreate />} />
             <Route path="elimu-plus/students/:studentId/edit" element={<ElimuPlusStudentEdit />} />
+            <Route path="elimu-plus/students/:studentId" element={<ElimuPlusStudentDetail />} />
             <Route path="elimu-plus" element={<ElimuPlusSchoolProfile />} />
             <Route path="users/create" element={<UsersCreate />} />
             <Route path="users" element={<UsersTable />} />
             <Route path="curriculum/create" element={<CurriculumCreate />} />
+            <Route path="curriculum/terms/activity" element={<TermActivityMonitorPage />} />
             <Route path="curriculum" element={<CurriculumTable />} />
             <Route path="timetable/create" element={<TimetableCreatePage />} />
+            <Route path="timetable/day/:isoDate/lessons/:lessonId/live" element={<OnlineLessonLivePage />} />
             <Route path="timetable/day/:isoDate" element={<TimetableDayPage />} />
             <Route
               path="timetable/curricula/:curriculumId/classes/:classId/timetables/:timetableId"

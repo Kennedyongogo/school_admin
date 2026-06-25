@@ -3,9 +3,11 @@ import { Box, Tab, Tabs } from "@mui/material";
 import VideocamRoundedIcon from "@mui/icons-material/VideocamRounded";
 import ForumRoundedIcon from "@mui/icons-material/ForumRounded";
 import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
+import GestureRoundedIcon from "@mui/icons-material/GestureRounded";
 import LiveClassLobbyPanel from "./LiveClassLobbyPanel";
 import LiveClassSidebar from "./LiveClassSidebar";
 import LiveClassSidePanels from "./LiveClassSidePanels";
+import LiveClassWhiteboard from "./LiveClassWhiteboard";
 import { useLiveClassHostAlerts } from "../../hooks/useLiveClassHostAlerts";
 import {
   eventLiveScrollRootSx,
@@ -42,6 +44,15 @@ export default function LiveClassHostLayout({
     return (
       <Box sx={eventLiveScrollRootSx}>
         <Box sx={eventLiveVideoViewportSx}>{videoSlot}</Box>
+        <Box sx={{ ...eventLiveRosterSectionSx, minHeight: 360, p: 1 }}>
+          <LiveClassWhiteboard
+            liveClassId={liveClassId}
+            token={token}
+            socket={socket}
+            canDraw={isTeacher}
+            canClear={isTeacher}
+          />
+        </Box>
         <Box sx={eventLiveRosterSectionSx}>
           <LiveClassLobbyPanel liveClassId={liveClassId} token={token} socket={socket} embedded meetingStyle />
         </Box>
@@ -77,6 +88,7 @@ export default function LiveClassHostLayout({
             <Tab icon={<GroupsRoundedIcon fontSize="small" />} iconPosition="start" label="Roster" value="roster" sx={{ minHeight: 40, fontSize: "0.75rem" }} />
           ) : null}
           <Tab icon={<ForumRoundedIcon fontSize="small" />} iconPosition="start" label="Chat" value="chat" sx={{ minHeight: 40, fontSize: "0.75rem" }} />
+          <Tab icon={<GestureRoundedIcon fontSize="small" />} iconPosition="start" label="Board" value="board" sx={{ minHeight: 40, fontSize: "0.75rem" }} />
         </Tabs>
       ) : null}
       <Box
@@ -109,6 +121,17 @@ export default function LiveClassHostLayout({
               socket={socket}
               isTeacher={isTeacher}
               userName={userName}
+            />
+          </Box>
+        ) : null}
+        {isNarrow && mobilePanel === "board" ? (
+          <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden", p: 0.5 }}>
+            <LiveClassWhiteboard
+              liveClassId={liveClassId}
+              token={token}
+              socket={socket}
+              canDraw={isTeacher}
+              canClear={isTeacher}
             />
           </Box>
         ) : null}

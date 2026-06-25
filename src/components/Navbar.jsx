@@ -29,7 +29,7 @@ import { Box, Typography } from "@mui/material";
 import Header from "./Header/Header";
 
 const drawerWidth = 280;
-const drawerCollapsedWidth = 80;
+const drawerCollapsedWidth = 100;
 
 const navRed = "#DC2626";
 const navRedDark = "#B91C1C";
@@ -111,9 +111,9 @@ const Drawer = styled(MuiDrawer, {
 })(({ theme, open }) => ({
   width: drawerWidth,
   flexShrink: 0,
-  whiteSpace: "nowrap",
   boxSizing: "border-box",
   ...(open && {
+    whiteSpace: "nowrap",
     ...openedMixin(theme),
     "& .MuiDrawer-paper": {
       ...openedMixin(theme),
@@ -121,6 +121,7 @@ const Drawer = styled(MuiDrawer, {
     },
   }),
   ...(!open && {
+    whiteSpace: "normal",
     ...closedMixin(theme),
     "& .MuiDrawer-paper": {
       ...closedMixin(theme),
@@ -196,15 +197,17 @@ function NavItem({ item, open, selected, onNavigate }) {
         flexDirection: open ? "row" : "column",
         alignItems: "center",
         justifyContent: open ? "flex-start" : "center",
-        gap: open ? 0.75 : 0.35,
-        px: open ? 1.5 : 0.5,
-        py: open ? 0.85 : 0.75,
-        mx: open ? 1.5 : 0.5,
+        gap: open ? 0.75 : 0.4,
+        px: open ? 1.5 : 0.25,
+        py: open ? 0.85 : 0.65,
+        mx: open ? 1.5 : 0.25,
         mb: 0.5,
         borderRadius: "12px",
-        minHeight: open ? 46 : 68,
+        minHeight: open ? 46 : "auto",
         whiteSpace: open ? "nowrap" : "normal",
         textAlign: "center",
+        width: open ? "auto" : "100%",
+        boxSizing: "border-box",
         transition: "all 0.2s ease",
         bgcolor: selected ? navRedActiveBg : "transparent",
         "&:hover": {
@@ -252,17 +255,15 @@ function NavItem({ item, open, selected, onNavigate }) {
             component="span"
             sx={{
               fontFamily: fontBody,
-              fontSize: "0.625rem",
+              fontSize: "0.65rem",
               fontWeight: selected ? 700 : 500,
               color: selected ? navRed : textMuted,
-              lineHeight: 1.15,
-              letterSpacing: "-0.01em",
-              maxWidth: "100%",
-              px: 0.25,
-              overflow: "hidden",
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
+              lineHeight: 1.25,
+              letterSpacing: 0,
+              width: "100%",
+              px: 0.15,
+              wordBreak: "break-word",
+              overflowWrap: "break-word",
             }}
           >
             {item.text}
@@ -511,14 +512,16 @@ const Navbar = (props) => {
               flexDirection: open ? "row" : "column",
               alignItems: "center",
               justifyContent: open ? "flex-start" : "center",
-              gap: open ? 0.75 : 0.35,
-              px: open ? 1.5 : 0.5,
-              py: open ? 1 : 0.75,
-              mx: open ? 1.5 : 0.5,
+              gap: open ? 0.75 : 0.4,
+              px: open ? 1.5 : 0.25,
+              py: open ? 1 : 0.65,
+              mx: open ? 1.5 : 0.25,
               borderRadius: "12px",
-              minHeight: open ? 46 : 68,
+              minHeight: open ? 46 : "auto",
               whiteSpace: open ? "nowrap" : "normal",
               textAlign: "center",
+              width: open ? "auto" : "100%",
+              boxSizing: "border-box",
               "&:hover": {
                 bgcolor: alpha(navRed, 0.08),
                 "& .logout-icon": {
@@ -583,10 +586,13 @@ const Navbar = (props) => {
                   component="span"
                   sx={{
                     fontFamily: fontBody,
-                    fontSize: "0.625rem",
+                    fontSize: "0.65rem",
                     fontWeight: 600,
                     color: textMuted,
-                    lineHeight: 1.15,
+                    lineHeight: 1.25,
+                    width: "100%",
+                    wordBreak: "break-word",
+                    overflowWrap: "break-word",
                   }}
                 >
                   Sign out

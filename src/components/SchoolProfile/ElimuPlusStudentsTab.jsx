@@ -44,7 +44,6 @@ import {
 } from "./elimuPlusShared";
 import {
   PremiumDialog,
-  DetailField,
   TabPanelShell,
   DataTableShell,
   tableHeadRowSx,
@@ -109,7 +108,6 @@ export default function ElimuPlusStudentsTab({ active }) {
   const [totalCount, setTotalCount] = useState(0);
   const [profilePhotoFile, setProfilePhotoFile] = useState(null);
   const [profilePhotoPreview, setProfilePhotoPreview] = useState(null);
-  const [viewRow, setViewRow] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
   const fetchCurriculumMeta = useCallback(async () => {
@@ -168,6 +166,10 @@ export default function ElimuPlusStudentsTab({ active }) {
     setProfilePhotoPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [profilePhotoFile]);
+
+  const openView = (row) => {
+    navigate(`/elimu-plus/students/${row.id}`, { state: { studentRow: row } });
+  };
 
   const openEdit = (row) => {
     navigate(`/elimu-plus/students/${row.id}/edit`, {
@@ -325,8 +327,6 @@ export default function ElimuPlusStudentsTab({ active }) {
 
   if (!active) return null;
 
-  const viewForm = viewRow ? rowToForm(viewRow) : null;
-
   return (
     <TabPanelShell loading={loading} error={error} onDismissError={() => setError(null)}>
       {!loading && (
@@ -356,7 +356,7 @@ export default function ElimuPlusStudentsTab({ active }) {
                 </TableCell>
                 <TableCell width={56}>Photo</TableCell>
                 <TableCell>Student</TableCell>
-                <TableCell>Admission #</TableCell>
+                <TableCell>Term</TableCell>
                 <TableCell>Curriculum</TableCell>
                 <TableCell>Class</TableCell>
                 <TableCell align="right" width={132}>
@@ -387,12 +387,12 @@ export default function ElimuPlusStudentsTab({ active }) {
                         </Avatar>
                       </TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>{name}</TableCell>
-                      <TableCell>{r.admission_number ?? "—"}</TableCell>
+                      <TableCell>{r.curriculum_class_level?.name ?? "—"}</TableCell>
                       <TableCell>{r.curriculum?.name || "—"}</TableCell>
                       <TableCell>{formatClassDisplay(r.curriculum_class)}</TableCell>
                       <TableCell align="right">
                         <Tooltip title="View">
-                          <IconButton size="small" aria-label="View student" onClick={() => setViewRow(r)} sx={actionIconSx}>
+                          <IconButton size="small" aria-label="View student" onClick={() => openView(r)} sx={actionIconSx}>
                             <ViewIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
@@ -423,81 +423,6 @@ export default function ElimuPlusStudentsTab({ active }) {
           </Table>
         </DataTableShell>
       )}
-
-      <PremiumDialog
-        open={!!viewRow}
-        onClose={() => setViewRow(null)}
-        title={viewRow?.user?.full_name || viewRow?.user?.username || "Student"}
-        subtitle="Student profile overview"
-        icon={<SchoolIcon />}
-        maxWidth="md"
-        footer={
-          <>
-            <DialogGhostButton onClick={() => setViewRow(null)}>Close</DialogGhostButton>
-            {viewRow ? (
-              <DialogPrimaryButton
-                startIcon={<EditIcon />}
-                onClick={() => {
-                  const row = viewRow;
-                  setViewRow(null);
-                  openEdit(row);
-                }}
-              >
-                Edit
-              </DialogPrimaryButton>
-            ) : null}
-          </>
-        }
-      >
-        {viewRow && viewForm ? (
-          <Stack spacing={2}>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <Avatar
-                src={resolveAssetUrl(viewRow.profile_picture) || undefined}
-                sx={{ width: 64, height: 64, bgcolor: `${primaryRed}22`, color: primaryDark, fontWeight: 700 }}
-              >
-                {!resolveAssetUrl(viewRow.profile_picture) ? (viewRow.user?.full_name || "?").charAt(0).toUpperCase() : null}
-              </Avatar>
-              <Box>
-                <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                  {viewRow.user?.full_name || viewRow.user?.username || "—"}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {viewRow.user?.email || "—"}
-                </Typography>
-              </Box>
-            </Stack>
-            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: primaryDark }}>
-              Account (user)
-            </Typography>
-            <Stack spacing={1}>
-              <DetailField label="Full name" value={viewForm.user_full_name} />
-              <DetailField label="Email" value={viewForm.user_email} />
-              <DetailField label="Username" value={viewForm.user_username} />
-              <DetailField label="Phone" value={viewForm.user_phone} />
-              <DetailField label="Address" value={viewForm.user_address} />
-            </Stack>
-            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: primaryDark }}>
-              Student record
-            </Typography>
-            <Stack spacing={1}>
-              <DetailField label="Admission number" value={viewForm.admission_number} />
-              <DetailField label="Date of birth" value={viewForm.date_of_birth} />
-              <DetailField label="Gender" value={viewForm.gender} />
-              <DetailField label="Curriculum" value={viewRow.curriculum?.name} />
-              <DetailField label="Class" value={formatClassDisplay(viewRow.curriculum_class)} />
-              <DetailField label="Enrollment date" value={viewForm.enrollment_date} />
-              <DetailField label="Graduation year" value={viewForm.graduation_year} />
-              <DetailField label="Blood group" value={viewForm.blood_group} />
-              <DetailField label="Medical conditions" value={viewForm.medical_conditions} />
-              <DetailField label="Emergency contact name" value={viewForm.emergency_contact_name} />
-              <DetailField label="Emergency contact phone" value={viewForm.emergency_contact_phone} />
-              <DetailField label="Homeroom teacher" value={viewForm.class_teacher_label} />
-              <DetailField label="Alumni" value={viewForm.is_alumni ? "Yes" : "No"} />
-            </Stack>
-          </Stack>
-        ) : null}
-      </PremiumDialog>
 
       <PremiumDialog
         open={dialogOpen}

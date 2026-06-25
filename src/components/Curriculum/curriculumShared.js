@@ -14,6 +14,7 @@ export {
   pageShellSx,
   authJsonHeaders,
   elimuViewportSx,
+  elimuViewportFillSx,
   tableContainerSx,
   tableHeadRowSx,
   tablePaginationSx,
