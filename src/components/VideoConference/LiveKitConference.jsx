@@ -77,6 +77,7 @@ export default function LiveKitConference({
     connectOptions,
     prepareAndEnableConnect,
     disableConnect,
+    invalidatePrepare,
     onConnectionSuccess,
     onConnectionFailure,
     forceReconnect,
@@ -131,8 +132,6 @@ export default function LiveKitConference({
     };
   }, [token, liveClassId]);
 
-  const prepareRetryTimerRef = useRef(null);
-
   const applyConnectionFailure = useCallback(
     (msg) => {
       const failureKind = onConnectionFailure(msg);
@@ -144,6 +143,10 @@ export default function LiveKitConference({
     [onConnectionFailure]
   );
 
+  const prepareRetryTimerRef = useRef(null);
+  const roomRef = useRef(room);
+  roomRef.current = room;
+
   useEffect(() => {
     if (!lkToken || !serverUrl || !room) return undefined;
     let active = true;
@@ -154,7 +157,7 @@ export default function LiveKitConference({
       if (!active || !result) return;
       if (result.cancelled) {
         prepareRetryTimerRef.current = window.setTimeout(() => {
-          if (active) runPrepare();
+          if (active) void runPrepare();
         }, 200);
         return;
       }
@@ -163,7 +166,7 @@ export default function LiveKitConference({
       }
     };
 
-    runPrepare();
+    void runPrepare();
 
     return () => {
       active = false;
@@ -171,17 +174,23 @@ export default function LiveKitConference({
         clearTimeout(prepareRetryTimerRef.current);
         prepareRetryTimerRef.current = null;
       }
-      disableConnect();
+      invalidatePrepare();
     };
-  }, [
-    lkToken,
-    serverUrl,
-    room,
-    connectAttempt,
-    prepareAndEnableConnect,
-    disableConnect,
-    applyConnectionFailure,
-  ]);
+  }, [lkToken, serverUrl, room, connectAttempt, prepareAndEnableConnect, invalidatePrepare, applyConnectionFailure]);
+
+  useEffect(() => {
+    return () => {
+      invalidatePrepare();
+      disableConnect();
+      try {
+        if (roomRef.current && roomRef.current.state !== ConnectionState.Disconnected) {
+          roomRef.current.disconnect(true);
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    };
+  }, [disableConnect, invalidatePrepare]);
 
   useEffect(() => {
     if (!socket || !liveClassId) return undefined;

@@ -37,8 +37,12 @@ import {
   fmtDateTime,
   escapeCsv,
   lessonsAttendanceContainSx,
-  lessonsTableContainerSx,
-  lessonsTableSx,
+  hrAttendanceTableSx,
+  hrAttendanceTableContainerSx,
+  hrAttendanceHeadCellSxFor,
+  hrAttendanceCellSx,
+  hrAttendanceTableMinWidth,
+  hrAttendanceHeadRowSx,
 } from "../components/HR/hrShared";
 import {
   HRHero,
@@ -67,6 +71,93 @@ const TAB_ICONS = [
   <GroupsOutlinedIcon sx={{ fontSize: 18 }} />,
   <PaymentsOutlinedIcon sx={{ fontSize: 18 }} />,
 ];
+
+function buildAttendanceColumns({ kind, scope }) {
+  const isTeachers = kind === "teachers";
+  const isExams = scope === "exams";
+  const idx = { id: "no", label: "#", widthPx: 48, align: "center" };
+  const attendance = {
+    id: "attendance",
+    label: "Attendance",
+    widthPx: 124,
+    align: "center",
+    headWrap: true,
+  };
+
+  if (isTeachers) {
+    return [
+      idx,
+      { id: "curriculum", label: "Curriculum", widthPx: 128 },
+      { id: "class", label: "Class", widthPx: 108 },
+      { id: "topic", label: isExams ? "Exam" : "Subject", widthPx: 148 },
+      { id: "teacher", label: "Teacher", widthPx: 152 },
+      { id: "time", label: "Time", widthPx: 168, nowrap: true },
+      attendance,
+    ];
+  }
+
+  if (isExams) {
+    return [
+      idx,
+      { id: "student", label: "Student", widthPx: 168 },
+      { id: "topic", label: "Exam", widthPx: 168 },
+      { id: "class", label: "Class", widthPx: 120 },
+      { id: "joined", label: "Joined", widthPx: 148, nowrap: true },
+      attendance,
+    ];
+  }
+
+  return [
+    idx,
+    { id: "student", label: "Student", widthPx: 152 },
+    { id: "topic", label: "Subject", widthPx: 128 },
+    { id: "class", label: "Class", widthPx: 108 },
+    { id: "joined", label: "Joined", widthPx: 136, nowrap: true },
+    { id: "left", label: "Left", widthPx: 136, nowrap: true },
+    { id: "minutes", label: "Mins", widthPx: 64, align: "center" },
+    attendance,
+  ];
+}
+
+function renderAttendanceRowCells({ col, row, idx, scope }) {
+  const isExams = scope === "exams";
+  switch (col.id) {
+    case "no":
+      return idx + 1;
+    case "curriculum":
+      return row.curriculum?.name || "—";
+    case "class":
+      if (row.curriculum_class?.name) return row.curriculum_class.name;
+      if (isExams) return row.exam_schedule?.curriculum_class?.name || row.lesson?.timetable?.curriculum_class?.name || "—";
+      return row.lesson?.timetable?.curriculum_class?.name || "—";
+    case "topic":
+      if (isExams) return row.exam?.title || row.exam_schedule?.exam?.title || row.exam_schedule?.title || "—";
+      return row.subject?.name || row.lesson?.curriculum_subject?.name || "—";
+    case "teacher":
+      return row.teacher?.user?.full_name || row.teacher?.user?.username || "Unassigned";
+    case "time":
+      return formatLessonSlot(row.lesson_date || row.starts_at, row.starts_at, row.ends_at);
+    case "student":
+      return row.student?.user?.full_name || row.student?.user?.username || "—";
+    case "joined":
+      return fmtDateTime(row.join_time);
+    case "left":
+      return row.leave_time ? fmtDateTime(row.leave_time) : row.join_time ? "In class" : "—";
+    case "minutes":
+      if (row.duration_minutes != null) return row.duration_minutes;
+      if (row.join_time && !row.leave_time) {
+        return `${Math.max(0, Math.round((Date.now() - new Date(row.join_time)) / 60000))} (ongoing)`;
+      }
+      return "—";
+    case "attendance":
+      if (row.teacher_attended != null) {
+        return <HRAttendanceChip attended={row.teacher_attended} />;
+      }
+      return <HRAttendanceChip attended={row.status === "Attended"} label={row.status || "Pending"} />;
+    default:
+      return "—";
+  }
+}
 
 export default function HRPage() {
   const location = useLocation();
@@ -248,7 +339,6 @@ export default function HRPage() {
           "Class",
           isExams ? "Exam" : "Subject",
           "Student",
-          "Admission",
           "Start",
           "End",
           "Join Time",
@@ -283,7 +373,6 @@ export default function HRPage() {
         : r.lesson?.timetable?.curriculum_class?.name || "",
       isExams ? r.exam_schedule?.title || r.exam?.title || "" : r.lesson?.curriculum_subject?.name || "",
       r.student?.user?.full_name || r.student?.user?.username || "",
-      r.student?.admission_number || "",
       fmtTime(isExams ? r.exam_schedule?.start_time || r.join_time : r.lesson?.starts_at),
       fmtTime(isExams ? r.exam_schedule?.end_time || r.leave_time : r.lesson?.ends_at),
       r.join_time ? new Date(r.join_time).toLocaleString() : "",
@@ -334,29 +423,31 @@ export default function HRPage() {
   const renderAttendanceTable = (kind) => {
     const isTeachers = kind === "teachers";
     const rows = isTeachers ? teachers : students;
-    const isLessons = scope === "lessons";
-    const isExams = scope === "exams";
-
-    const teacherLessonCols = ["No.", "Curriculum", "Class", "Subject", "Teacher", "Time", "Attendance"];
-    const teacherExamCols = ["No.", "Curriculum", "Class", "Exam", "Teacher", "Time", "Attendance"];
-    const studentLessonCols = ["No.", "Student", "Admission", "Subject", "Class", "Joined", "Left", "Minutes", "Attendance"];
-    const studentExamCols = ["No.", "Student", "Admission", "Exam", "Class", "Joined", "Attendance"];
-
-    const cols = isTeachers
-      ? isLessons
-        ? teacherLessonCols
-        : teacherExamCols
-      : isLessons
-        ? studentLessonCols
-        : studentExamCols;
+    const columns = buildAttendanceColumns({ kind, scope });
+    const tableMinWidth = hrAttendanceTableMinWidth(columns);
 
     const tableContent = (
-      <Table size="small" sx={isLessons ? lessonsTableSx : undefined}>
+      <Table size="small" sx={{ ...hrAttendanceTableSx, minWidth: tableMinWidth }}>
+        <colgroup>
+          {columns.map((col) => (
+            <col key={col.id} style={{ width: col.widthPx }} />
+          ))}
+        </colgroup>
         <TableHead>
-          <TableRow sx={tableHeadRowSx}>
-            {cols.map((label) => (
-              <TableCell key={label} align={label === "Attendance" ? "center" : "left"}>
-                {label}
+          <TableRow sx={hrAttendanceHeadRowSx(tableHeadRowSx)}>
+            {columns.map((col) => (
+              <TableCell
+                key={col.id}
+                align={col.align || "left"}
+                sx={{
+                  ...hrAttendanceHeadCellSxFor(col),
+                  width: col.widthPx,
+                  minWidth: col.widthPx,
+                  maxWidth: col.widthPx,
+                  textAlign: col.align || "left",
+                }}
+              >
+                {col.label}
               </TableCell>
             ))}
           </TableRow>
@@ -364,64 +455,37 @@ export default function HRPage() {
         <TableBody>
           {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={cols.length} sx={{ border: 0, p: 0 }}>
-                <EmptyTableRow colSpan={cols.length} message={`No ${isTeachers ? "teacher" : "student"} records for this filter.`} />
+              <TableCell colSpan={columns.length} sx={{ border: 0, p: 0 }}>
+                <EmptyTableRow
+                  colSpan={columns.length}
+                  message={`No ${isTeachers ? "teacher" : "student"} records for this filter.`}
+                />
               </TableCell>
             </TableRow>
-          ) : isTeachers ? (
-            rows.map((r, idx) => (
-              <TableRow key={r.lesson_id || r.exam_id || idx} hover>
-                <TableCell>{idx + 1}</TableCell>
-                <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>{r.curriculum?.name || "—"}</TableCell>
-                <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>{r.curriculum_class?.name || "—"}</TableCell>
-                <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {isExams ? r.exam?.title || "—" : r.subject?.name || "—"}
-                </TableCell>
-                <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis", fontWeight: 600 }}>
-                  {r.teacher?.user?.full_name || r.teacher?.user?.username || "Unassigned"}
-                </TableCell>
-                <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {formatLessonSlot(r.lesson_date || r.starts_at, r.starts_at, r.ends_at)}
-                </TableCell>
-                <TableCell align="center">
-                  <HRAttendanceChip attended={r.teacher_attended} />
-                </TableCell>
-              </TableRow>
-            ))
           ) : (
-            rows.map((r, idx) => (
-              <TableRow key={r.attendance_id || idx} hover>
-                <TableCell>{idx + 1}</TableCell>
-                <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis", fontWeight: 600 }}>
-                  {r.student?.user?.full_name || r.student?.user?.username || "—"}
-                </TableCell>
-                <TableCell>{r.student?.admission_number || "—"}</TableCell>
-                <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {isExams ? r.exam_schedule?.exam?.title || "—" : r.lesson?.curriculum_subject?.name || "—"}
-                </TableCell>
-                <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {isExams ? r.exam_schedule?.curriculum_class?.name || "—" : r.lesson?.timetable?.curriculum_class?.name || "—"}
-                </TableCell>
-                <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {fmtDateTime(r.join_time)}
-                </TableCell>
-                {isLessons ? (
-                  <>
-                    <TableCell sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {r.leave_time ? fmtDateTime(r.leave_time) : r.join_time ? "In class" : "—"}
+            rows.map((row, idx) => (
+              <TableRow key={row.lesson_id || row.exam_id || row.attendance_id || idx} hover>
+                {columns.map((col) => {
+                  const isChip = col.id === "attendance";
+                  const isName = col.id === "teacher" || col.id === "student";
+                  return (
+                    <TableCell
+                      key={col.id}
+                      align={col.align || "left"}
+                      sx={hrAttendanceCellSx(col, {
+                        fontWeight: isName ? 600 : undefined,
+                      })}
+                    >
+                      {isChip ? (
+                        <Box sx={{ display: "flex", justifyContent: "center", width: "100%" }}>
+                          {renderAttendanceRowCells({ col, row, idx, scope })}
+                        </Box>
+                      ) : (
+                        renderAttendanceRowCells({ col, row, idx, scope })
+                      )}
                     </TableCell>
-                    <TableCell>
-                      {r.duration_minutes != null
-                        ? r.duration_minutes
-                        : r.join_time && !r.leave_time
-                          ? `${Math.max(0, Math.round((Date.now() - new Date(r.join_time)) / 60000))} (ongoing)`
-                          : "—"}
-                    </TableCell>
-                  </>
-                ) : null}
-                <TableCell align="center">
-                  <HRAttendanceChip attended={r.status === "Attended"} label={r.status || "Pending"} />
-                </TableCell>
+                  );
+                })}
               </TableRow>
             ))
           )}
@@ -430,12 +494,8 @@ export default function HRPage() {
     );
 
     return (
-      <HRPanelCard noPadding sx={isLessons ? lessonsAttendanceContainSx : undefined}>
-        {isLessons ? (
-          <TableContainer sx={lessonsTableContainerSx}>{tableContent}</TableContainer>
-        ) : (
-          tableContent
-        )}
+      <HRPanelCard noPadding sx={lessonsAttendanceContainSx}>
+        <TableContainer sx={hrAttendanceTableContainerSx}>{tableContent}</TableContainer>
       </HRPanelCard>
     );
   };

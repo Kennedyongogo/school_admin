@@ -113,6 +113,96 @@ export const lessonsTableSx = {
   tableLayout: "fixed",
 };
 
+/** HR attendance tables — fixed layout with explicit column widths. */
+export const hrAttendanceTableSx = {
+  width: "100%",
+  tableLayout: "fixed",
+};
+
+export const hrAttendanceTableContainerSx = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  overflowX: "auto",
+  WebkitOverflowScrolling: "touch",
+};
+
+export const hrAttendanceHeadCellSx = {
+  overflow: "visible",
+  textOverflow: "clip",
+  verticalAlign: "middle",
+  lineHeight: 1.2,
+  px: { xs: 1, sm: 1.25 },
+  py: 1.35,
+  fontSize: "0.72rem",
+  letterSpacing: "0.06em",
+};
+
+export const hrAttendanceHeadCellWrapSx = {
+  ...hrAttendanceHeadCellSx,
+  whiteSpace: "normal",
+  wordBreak: "break-word",
+  hyphens: "auto",
+  lineHeight: 1.15,
+  py: 1.15,
+};
+
+export const hrAttendanceHeadCellCompactSx = {
+  ...hrAttendanceHeadCellSx,
+  whiteSpace: "nowrap",
+  px: 0.75,
+};
+
+export const hrAttendanceBodyCellSx = {
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  verticalAlign: "middle",
+  lineHeight: 1.45,
+  fontSize: "0.875rem",
+  px: { xs: 1, sm: 1.25 },
+  py: 1.25,
+};
+
+export function hrAttendanceTableMinWidth(columns) {
+  return columns.reduce((sum, col) => sum + (col.widthPx || 100), 0);
+}
+
+export function hrAttendanceCellSx(col, extra = {}) {
+  const align = col.align || "left";
+  return {
+    ...hrAttendanceBodyCellSx,
+    width: col.widthPx,
+    minWidth: col.widthPx,
+    maxWidth: col.widthPx,
+    textAlign: align,
+    ...(col.nowrap ? { whiteSpace: "nowrap" } : {}),
+    ...(col.id === "attendance"
+      ? { px: 0.75, overflow: "visible", textOverflow: "clip" }
+      : {}),
+    ...(col.id === "no" ? { px: 0.75, whiteSpace: "nowrap" } : {}),
+    ...extra,
+  };
+}
+
+export function hrAttendanceHeadCellSxFor(col) {
+  if (col.id === "no" || col.id === "minutes") return hrAttendanceHeadCellCompactSx;
+  if (col.headWrap) return hrAttendanceHeadCellWrapSx;
+  return { ...hrAttendanceHeadCellSx, whiteSpace: "nowrap" };
+}
+
+/** Header row for attendance tables — no uppercase (avoids clipped labels). */
+export function hrAttendanceHeadRowSx(baseHeadRowSx) {
+  return {
+    ...baseHeadRowSx,
+    "& .MuiTableCell-head": {
+      ...(baseHeadRowSx?.["& .MuiTableCell-head"] || {}),
+      textTransform: "none",
+      letterSpacing: "0.02em",
+      fontSize: "0.75rem",
+    },
+  };
+}
+
 import Swal from "sweetalert2";
 
 export const swalAboveDialog = {

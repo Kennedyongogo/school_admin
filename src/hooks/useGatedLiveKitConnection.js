@@ -181,6 +181,7 @@ export function useGatedLiveKitConnection() {
     connectOptions,
     prepareAndEnableConnect,
     disableConnect,
+    invalidatePrepare,
     onConnectionSuccess,
     onConnectionFailure,
     retryConnect,
