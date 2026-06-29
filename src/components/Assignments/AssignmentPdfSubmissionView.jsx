@@ -13,20 +13,16 @@ import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import Swal from "sweetalert2";
-import { fetchExamPdfTemplateBlob } from "./examPdfAdminUtils";
-import { getCachedExamPdfBlobUrl, peekCachedExamPdfBlobUrl } from "../../utils/pdfExamBlobCache";
-import StablePdfIframe from "./StablePdfIframe";
-import { MarkingScoreField } from "./examUi";
-import { primaryDark } from "./examShared";
+import StablePdfIframe from "../Exams/StablePdfIframe";
+import { MarkingScoreField } from "../Exams/examUi";
+import { primaryDark } from "../Exams/examShared";
 import {
   renderManualPdfAnswerRows,
   renderManualPdfWorkingPapers,
   isImageWorkingPaper,
   isPdfWorkingPaper,
   workingPaperHasMarkedReturn,
-} from "./pdfManualAnswers";
-
-const PDF_VIEW_HEIGHT = 480;
+} from "../Exams/pdfManualAnswers";
 
 const mediaUrl = (path) => {
   if (!path) return "";
@@ -34,10 +30,9 @@ const mediaUrl = (path) => {
   return path.startsWith("/") ? path : `/${path}`;
 };
 
-export default function ExamPdfSubmissionView({
-  exam,
+export default function AssignmentPdfSubmissionView({
+  assignmentId = null,
   submission,
-  examId = null,
   entryMarks = {},
   entryComments = {},
   paperComments = {},
@@ -46,18 +41,15 @@ export default function ExamPdfSubmissionView({
   onPaperCommentsChange = null,
   onPdfAnswersJsonChange = null,
 }) {
-  const [pdfUrl, setPdfUrl] = useState(() => (exam?.id ? peekCachedExamPdfBlobUrl(exam.id) : ""));
-  const [pdfLoading, setPdfLoading] = useState(() => !peekCachedExamPdfBlobUrl(exam?.id));
-  const [pdfError, setPdfError] = useState("");
   const [pdfAnswersJson, setPdfAnswersJson] = useState(submission?.pdf_answers_json ?? null);
   const [uploadingPaperId, setUploadingPaperId] = useState("");
   const [savingCommentPaperId, setSavingCommentPaperId] = useState("");
   const [removingMarkedPaperId, setRemovingMarkedPaperId] = useState("");
   const fileInputRefs = useRef({});
 
-  const resolvedExamId = examId || exam?.id || null;
+  const resolvedAssignmentId = assignmentId || null;
   const submissionId = submission?.id || null;
-  const canMarkPapers = Boolean(resolvedExamId && submissionId && onPdfAnswersJsonChange);
+  const canMarkPapers = Boolean(resolvedAssignmentId && submissionId && onPdfAnswersJsonChange);
 
   useEffect(() => {
     setPdfAnswersJson(submission?.pdf_answers_json ?? null);
@@ -79,43 +71,6 @@ export default function ExamPdfSubmissionView({
     [pdfAnswersJson]
   );
 
-  const completedUrl = mediaUrl(submission?.pdf_completed_file_path);
-
-  useEffect(() => {
-    if (!exam?.id || !exam?.pdf_template_path) return undefined;
-    let cancelled = false;
-    const examId = exam.id;
-    const token = localStorage.getItem("token");
-
-    const cached = peekCachedExamPdfBlobUrl(examId);
-    if (cached) {
-      setPdfUrl(cached);
-      setPdfLoading(false);
-      setPdfError("");
-    } else {
-      setPdfLoading(true);
-    }
-
-    getCachedExamPdfBlobUrl(examId, () => fetchExamPdfTemplateBlob(examId, token))
-      .then((url) => {
-        if (!cancelled) {
-          setPdfUrl(url);
-          setPdfLoading(false);
-          setPdfError("");
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setPdfError(e.message || "Could not load exam PDF.");
-          setPdfLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [exam?.id, exam?.pdf_template_path]);
-
   const uploadMarkedReturn = async (fileId, file) => {
     if (!canMarkPapers || !file) return;
     const token = localStorage.getItem("token");
@@ -123,13 +78,13 @@ export default function ExamPdfSubmissionView({
     setUploadingPaperId(fileId);
     try {
       const formData = new FormData();
-      formData.append("exam_pdf_marked_return", file);
+      formData.append("assignment_pdf_marked_return", file);
       const comment = paperComments[fileId];
       if (comment != null && String(comment).trim() !== "") {
         formData.append("marker_comment", String(comment).trim());
       }
       const res = await fetch(
-        `/api/exams/${resolvedExamId}/submissions/${submissionId}/pdf-working-papers/${encodeURIComponent(fileId)}/marked-return`,
+        `/api/assignments/${resolvedAssignmentId}/submissions/${submissionId}/pdf-working-papers/${encodeURIComponent(fileId)}/marked-return`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
@@ -171,7 +126,7 @@ export default function ExamPdfSubmissionView({
     setRemovingMarkedPaperId(fileId);
     try {
       const res = await fetch(
-        `/api/exams/${resolvedExamId}/submissions/${submissionId}/pdf-working-papers/${encodeURIComponent(fileId)}/marked-return`,
+        `/api/assignments/${resolvedAssignmentId}/submissions/${submissionId}/pdf-working-papers/${encodeURIComponent(fileId)}/marked-return`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
@@ -202,7 +157,7 @@ export default function ExamPdfSubmissionView({
     try {
       const comment = paperComments[fileId] != null ? String(paperComments[fileId]) : "";
       const res = await fetch(
-        `/api/exams/${resolvedExamId}/submissions/${submissionId}/pdf-working-papers/${encodeURIComponent(fileId)}/marking`,
+        `/api/assignments/${resolvedAssignmentId}/submissions/${submissionId}/pdf-working-papers/${encodeURIComponent(fileId)}/marking`,
         {
           method: "PUT",
           headers: {
@@ -229,7 +184,7 @@ export default function ExamPdfSubmissionView({
     }
   };
 
-  if (!answerRows.length && !workingPapers.length && !completedUrl) {
+  if (!answerRows.length && !workingPapers.length) {
     return (
       <Typography variant="body2" color="text.secondary">
         No PDF answers captured for this submission.
@@ -239,44 +194,7 @@ export default function ExamPdfSubmissionView({
 
   return (
     <Stack spacing={2}>
-      <Stack direction={{ xs: "column", lg: "row" }} spacing={2} alignItems="stretch">
-        {exam?.pdf_template_path ? (
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography sx={{ fontWeight: 700, mb: 1 }}>Exam paper</Typography>
-            <Box
-              sx={{
-                width: "100%",
-                height: PDF_VIEW_HEIGHT,
-                border: "1px solid #e5e7eb",
-                borderRadius: 1,
-                bgcolor: "#f9fafb",
-                overflow: "hidden",
-                position: "relative",
-              }}
-            >
-              {pdfLoading && !pdfUrl ? (
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    height: "100%",
-                  }}
-                >
-                  <CircularProgress size={28} />
-                </Box>
-              ) : null}
-              {pdfUrl ? <StablePdfIframe src={pdfUrl} title="Exam PDF" height={PDF_VIEW_HEIGHT} /> : null}
-              {pdfError && !pdfUrl ? (
-                <Box sx={{ p: 2 }}>
-                  <Alert severity="warning">{pdfError}</Alert>
-                </Box>
-              ) : null}
-            </Box>
-          </Box>
-        ) : null}
-
-        <Stack spacing={1.25} sx={{ flex: 1, minWidth: 0 }}>
+      <Stack spacing={1.25} sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontWeight: 700 }}>Student answers</Typography>
           {onEntryMarksChange ? (
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
@@ -337,7 +255,6 @@ export default function ExamPdfSubmissionView({
               No typed answers recorded.
             </Typography>
           )}
-        </Stack>
       </Stack>
 
       {workingPapers.length ? (
@@ -562,29 +479,6 @@ export default function ExamPdfSubmissionView({
               );
             })}
           </Stack>
-        </Box>
-      ) : null}
-
-      {completedUrl ? (
-        <Box>
-          <Typography sx={{ fontWeight: 700, mb: 1 }}>Submitted answer sheet</Typography>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-            <Button variant="outlined" size="small" component="a" href={completedUrl} target="_blank" rel="noopener noreferrer">
-              Open / download PDF
-            </Button>
-          </Stack>
-          <Box
-            sx={{
-              width: "100%",
-              height: 420,
-              border: "1px solid #e5e7eb",
-              borderRadius: 1,
-              bgcolor: "#f9fafb",
-              overflow: "hidden",
-            }}
-          >
-            <StablePdfIframe src={completedUrl} title="Completed PDF" height={420} />
-          </Box>
         </Box>
       ) : null}
     </Stack>

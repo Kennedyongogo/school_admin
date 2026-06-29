@@ -17,14 +17,31 @@ export function formatLegacyPdfAnswerValue(value) {
 
 export function normalizeWorkingPapers(raw) {
   if (!Array.isArray(raw)) return [];
-  return raw.map((file, index) => ({
-    id: String(file?.id || `paper-${index + 1}`),
-    url: String(file?.url || "").trim(),
-    name: String(file?.name || "").trim(),
-    mime: String(file?.mime || "").trim(),
-    size: Number.isFinite(Number(file?.size)) ? Number(file.size) : null,
-    uploaded_at: file?.uploaded_at || null,
-  }));
+  return raw.map((file, index) => {
+    const paper = {
+      id: String(file?.id || `paper-${index + 1}`),
+      url: String(file?.url || "").trim(),
+      name: String(file?.name || "").trim(),
+      mime: String(file?.mime || "").trim(),
+      size: Number.isFinite(Number(file?.size)) ? Number(file.size) : null,
+      uploaded_at: file?.uploaded_at || null,
+    };
+    const marked = file?.marked_return;
+    if (marked && typeof marked === "object" && String(marked.url || "").trim()) {
+      paper.marked_return = {
+        url: String(marked.url || "").trim(),
+        name: String(marked.name || "").trim(),
+        mime: String(marked.mime || "").trim(),
+        size: Number.isFinite(Number(marked.size)) ? Number(marked.size) : null,
+        marked_at: marked.marked_at || null,
+        marked_by_user_id: marked.marked_by_user_id != null ? String(marked.marked_by_user_id) : null,
+      };
+    }
+    if (file?.marker_comment != null) {
+      paper.marker_comment = String(file.marker_comment);
+    }
+    return paper;
+  });
 }
 
 export function parseManualPdfAnswers(raw) {
@@ -39,6 +56,11 @@ export function parseManualPdfAnswers(raw) {
         id: String(entry?.id || `entry-${index + 1}`),
         question: String(entry?.question ?? ""),
         answer: String(entry?.answer ?? ""),
+        marks_obtained:
+          entry?.marks_obtained != null && entry.marks_obtained !== ""
+            ? Number(entry.marks_obtained)
+            : null,
+        marker_comment: entry?.marker_comment != null ? String(entry.marker_comment) : null,
       })),
       working_papers,
     };
@@ -69,4 +91,17 @@ export function renderManualPdfWorkingPapers(raw) {
 
 export function isImageWorkingPaper(file) {
   return String(file?.mime || "").startsWith("image/");
+}
+
+export function isPdfWorkingPaper(file) {
+  const mime = String(file?.mime || "").toLowerCase();
+  return mime === "application/pdf" || String(file?.name || "").toLowerCase().endsWith(".pdf");
+}
+
+export function workingPaperHasMarkedReturn(file) {
+  return Boolean(file?.marked_return?.url);
+}
+
+export function submissionHasManualPdfEntries(submission) {
+  return renderManualPdfAnswerRows(submission?.pdf_answers_json).length > 0;
 }

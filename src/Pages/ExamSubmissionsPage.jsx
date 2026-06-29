@@ -4,25 +4,27 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
   IconButton,
   Stack,
   TablePagination,
-  TextField,
   Typography,
 } from "@mui/material";
 import { ArrowBack as ArrowBackIcon, ExpandLess as ExpandLessIcon, ExpandMore as ExpandMoreIcon } from "@mui/icons-material";
 import Swal from "sweetalert2";
 import ExamSubmissionPaperView from "../components/Exams/ExamSubmissionPaperView";
 import ExamPdfSubmissionView from "../components/Exams/ExamPdfSubmissionView";
-import { isPdfFormExamRow } from "../components/Exams/examPdfAdminUtils";
+import { isPdfFormExamRow, clearCachedExamPdfBlobUrl } from "../components/Exams/examPdfAdminUtils";
+import {
+  renderManualPdfAnswerRows,
+  renderManualPdfWorkingPapers,
+  submissionHasManualPdfEntries,
+} from "../components/Exams/pdfManualAnswers";
 import {
   ExamHero,
   ExamPanelCard,
   ExamPrimaryButton,
-  ExamGhostButton,
+  MarkingScoreField,
   TabPanelShell,
 } from "../components/Exams/examUi";
 import {
@@ -56,9 +58,11 @@ export default function ExamSubmissionsPage() {
   const [markInputs, setMarkInputs] = useState({});
   const [answerMarks, setAnswerMarks] = useState({});
   const [answerComments, setAnswerComments] = useState({});
+  const [pdfEntryMarks, setPdfEntryMarks] = useState({});
+  const [pdfEntryComments, setPdfEntryComments] = useState({});
+  const [pdfPaperComments, setPdfPaperComments] = useState({});
   const [markSavingId, setMarkSavingId] = useState("");
   const [gradingId, setGradingId] = useState("");
-  const [cleanupRunning, setCleanupRunning] = useState(false);
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(20);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, limit: 20 });
@@ -73,10 +77,27 @@ export default function ExamSubmissionsPage() {
     [examInfo, fullExam]
   );
 
-  const load = useCallback(async () => {
+  const patchSubmissionPdfAnswers = useCallback((submissionId, pdfAnswersJson) => {
+    if (!submissionId || !pdfAnswersJson) return;
+    setRows((prev) =>
+      prev.map((row) => (row.id === submissionId ? { ...row, pdf_answers_json: pdfAnswersJson } : row))
+    );
+    renderManualPdfWorkingPapers(pdfAnswersJson).forEach((paper) => {
+      if (!paper.id) return;
+      if (paper.marker_comment != null) {
+        setPdfPaperComments((prev) => ({ ...prev, [paper.id]: String(paper.marker_comment) }));
+      }
+    });
+  }, []);
+
+  const patchSubmissionRow = useCallback((submissionId, updater) => {
+    setRows((prev) => prev.map((row) => (row.id === submissionId ? updater(row) : row)));
+  }, []);
+
+  const load = useCallback(async ({ silent = false } = {}) => {
     const token = localStorage.getItem("token");
     if (!token || !examId) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError("");
     try {
       const [res, examRes] = await Promise.all([
@@ -107,8 +128,21 @@ export default function ExamSubmissionsPage() {
       const nextInputs = {};
       const nextAnswerMarks = {};
       const nextAnswerComments = {};
+      const nextPdfEntryMarks = {};
+      const nextPdfEntryComments = {};
+      const nextPdfPaperComments = {};
       const pdfExam = isPdfFormExamRow(exam);
       submissions.forEach((s) => {
+        const manualPdfEntries = submissionHasManualPdfEntries(s);
+        if (pdfExam && manualPdfEntries) {
+          const pdfRows = renderManualPdfAnswerRows(s.pdf_answers_json);
+          pdfRows.forEach((entry) => {
+            nextPdfEntryMarks[entry.id] =
+              entry.marks_obtained != null ? String(entry.marks_obtained) : "";
+            nextPdfEntryComments[entry.id] =
+              entry.marker_comment != null ? String(entry.marker_comment) : "";
+          });
+        }
         if (pdfExam) {
           nextInputs[s.id] =
             s?.marking?.total_score != null
@@ -119,6 +153,14 @@ export default function ExamSubmissionsPage() {
         } else {
           nextInputs[s.id] = s?.marking?.total_score != null ? String(s.marking.total_score) : "";
         }
+        if (pdfExam) {
+          renderManualPdfWorkingPapers(s.pdf_answers_json).forEach((paper) => {
+            if (paper.id) {
+              nextPdfPaperComments[paper.id] =
+                paper.marker_comment != null ? String(paper.marker_comment) : "";
+            }
+          });
+        }
         (s.answers || []).forEach((a) => {
           nextAnswerMarks[a.id] = a.marks_obtained != null ? String(a.marks_obtained) : "";
           nextAnswerComments[a.id] = a.marker_comment != null ? String(a.marker_comment) : "";
@@ -127,12 +169,14 @@ export default function ExamSubmissionsPage() {
       setMarkInputs(nextInputs);
       setAnswerMarks(nextAnswerMarks);
       setAnswerComments(nextAnswerComments);
-      setExpandedById({});
+      setPdfEntryMarks(nextPdfEntryMarks);
+      setPdfEntryComments(nextPdfEntryComments);
+      setPdfPaperComments(nextPdfPaperComments);
     } catch (e) {
       setError(e.message || "Could not load submissions.");
-      setRows([]);
+      if (!silent) setRows([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [examId, page, rowsPerPage]);
 
@@ -143,6 +187,12 @@ export default function ExamSubmissionsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    return () => {
+      if (examId) clearCachedExamPdfBlobUrl(examId);
+    };
+  }, [examId]);
 
   const saveSubmissionMark = async (submissionId) => {
     const token = localStorage.getItem("token");
@@ -162,8 +212,21 @@ export default function ExamSubmissionsPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.message || "Could not save mark.");
-      await load();
-      await Swal.fire({ icon: "success", title: "Mark saved", timer: 900, showConfirmButton: false });
+      const savedScore = data.data?.total_score != null ? Number(data.data.total_score) : score;
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === submissionId
+            ? {
+                ...row,
+                marking: {
+                  ...(row.marking || {}),
+                  total_score: savedScore,
+                },
+              }
+            : row
+        )
+      );
+      setMarkInputs((prev) => ({ ...prev, [submissionId]: String(savedScore) }));
     } catch (e) {
       await Swal.fire({ icon: "error", title: "Marking failed", text: e.message || "Could not save mark." });
     } finally {
@@ -187,13 +250,110 @@ export default function ExamSubmissionsPage() {
       });
       if (!confirm.isConfirmed) return;
     }
+    const promises = submission.answers
+      .map((a) => {
+        const marksRaw = answerMarks[a.id];
+        const marks = marksRaw === "" || marksRaw == null ? null : Number(marksRaw);
+        const comment = answerComments[a.id] != null ? String(answerComments[a.id]) : "";
+        const hasMarks = marks != null && Number.isFinite(marks) && marks >= 0;
+        const hasComment = comment.trim() !== "";
+        if (!hasMarks && !hasComment) return null;
+        if (hasMarks && (!Number.isFinite(marks) || marks < 0)) return null;
+        const body = {};
+        if (hasMarks) body.marks_obtained = marks;
+        body.marker_comment = comment.trim();
+        return fetch(`/api/exams/${examId}/submissions/${submissionId}/answers/${a.id}/mark`, {
+          method: "PUT",
+          headers: authHeaders(token),
+          body: JSON.stringify(body),
+        });
+      })
+      .filter(Boolean);
+    if (!promises.length) {
+      await Swal.fire({ icon: "info", title: "Nothing to save", text: "Enter marks and/or comments for at least one question." });
+      return;
+    }
     setMarkSavingId(submissionId);
     try {
-      const promises = submission.answers
-        .map((a) => {
+      const responses = await Promise.all(promises);
+      for (const res of responses) {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || "Could not save marks.");
+        }
+      }
+
+      patchSubmissionRow(submissionId, (row) => {
+        const updatedAnswers = (row.answers || []).map((a) => {
           const marksRaw = answerMarks[a.id];
+          const commentRaw = answerComments[a.id];
+          const hasMarks = marksRaw !== "" && marksRaw != null;
+          const hasComment = String(commentRaw || "").trim() !== "";
+          if (!hasMarks && !hasComment) return a;
+          return {
+            ...a,
+            marks_obtained: hasMarks ? Number(marksRaw) : a.marks_obtained,
+            marker_comment: hasComment ? String(commentRaw).trim() : a.marker_comment,
+          };
+        });
+        const totalObtained = updatedAnswers.reduce(
+          (sum, a) => sum + Number(a.marks_obtained || 0),
+          0
+        );
+        return {
+          ...row,
+          answers: updatedAnswers,
+          marking: {
+            ...(row.marking || {}),
+            total_score: totalObtained,
+          },
+        };
+      });
+    } catch (e) {
+      await Swal.fire({ icon: "error", title: "Marking failed", text: e.message || "Could not save marks." });
+    } finally {
+      setMarkSavingId("");
+    }
+  };
+
+  const savePdfExamMarking = async (submissionId) => {
+    const token = localStorage.getItem("token");
+    if (!token || !examId) return;
+    const submission = rows.find((s) => s.id === submissionId);
+    if (!submission) return;
+
+    const score = Number(markInputs[submissionId]);
+    if (!Number.isFinite(score) || score < 0) {
+      await Swal.fire({
+        icon: "error",
+        title: "Total required",
+        text: "Enter the overall total score for this PDF exam before saving.",
+      });
+      return;
+    }
+
+    const entries = renderManualPdfAnswerRows(submission.pdf_answers_json);
+    const alreadyMarked =
+      submission?.marking?.total_score != null ||
+      entries.some((entry) => entry.marks_obtained != null);
+    if (alreadyMarked) {
+      const confirm = await Swal.fire({
+        icon: "warning",
+        title: "Update marks?",
+        text: "This submission has already been marked. Do you want to update the marks?",
+        showCancelButton: true,
+        confirmButtonColor: accentDark,
+      });
+      if (!confirm.isConfirmed) return;
+    }
+
+    setMarkSavingId(submissionId);
+    try {
+      const questionPromises = entries
+        .map((entry) => {
+          const marksRaw = pdfEntryMarks[entry.id];
           const marks = marksRaw === "" || marksRaw == null ? null : Number(marksRaw);
-          const comment = answerComments[a.id] != null ? String(answerComments[a.id]) : "";
+          const comment = pdfEntryComments[entry.id] != null ? String(pdfEntryComments[entry.id]) : "";
           const hasMarks = marks != null && Number.isFinite(marks) && marks >= 0;
           const hasComment = comment.trim() !== "";
           if (!hasMarks && !hasComment) return null;
@@ -201,20 +361,73 @@ export default function ExamSubmissionsPage() {
           const body = {};
           if (hasMarks) body.marks_obtained = marks;
           body.marker_comment = comment.trim();
-          return fetch(`/api/exams/${examId}/submissions/${submissionId}/answers/${a.id}/mark`, {
-            method: "PUT",
-            headers: authHeaders(token),
-            body: JSON.stringify(body),
-          });
+          return fetch(
+            `/api/exams/${examId}/submissions/${submissionId}/pdf-answers/${encodeURIComponent(entry.id)}/mark`,
+            {
+              method: "PUT",
+              headers: authHeaders(token),
+              body: JSON.stringify(body),
+            }
+          );
         })
         .filter(Boolean);
-      if (!promises.length) {
-        await Swal.fire({ icon: "info", title: "Nothing to save", text: "Enter marks and/or comments for at least one question." });
-        return;
+
+      const totalPromise = fetch(`/api/exams/${examId}/submissions/${submissionId}/mark`, {
+        method: "PUT",
+        headers: authHeaders(token),
+        body: JSON.stringify({ total_score: score }),
+      });
+
+      const results = await Promise.all([totalPromise, ...questionPromises]);
+      let savedTotalScore = score;
+      for (const res of results) {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || "Could not save marks.");
+        }
+        if (data.data?.total_score != null) {
+          savedTotalScore = Number(data.data.total_score);
+        }
       }
-      await Promise.all(promises);
-      await load();
-      await Swal.fire({ icon: "success", title: "Saved", text: "Marks and comments were saved.", timer: 900, showConfirmButton: false });
+
+      setRows((prev) =>
+        prev.map((row) => {
+          if (row.id !== submissionId) return row;
+          const raw = row.pdf_answers_json;
+          let nextRow = {
+            ...row,
+            marking: {
+              ...(row.marking || {}),
+              total_score: savedTotalScore,
+            },
+          };
+          if (raw && typeof raw === "object" && Array.isArray(raw.entries)) {
+            const entries = raw.entries.map((entry) => {
+              const id = String(entry?.id || "");
+              if (!id) return entry;
+              const marksRaw = pdfEntryMarks[id];
+              const commentRaw = pdfEntryComments[id];
+              const hasMarks = marksRaw !== "" && marksRaw != null;
+              const hasComment = String(commentRaw || "").trim() !== "";
+              if (!hasMarks && !hasComment) return entry;
+              const next = { ...entry };
+              if (hasMarks) next.marks_obtained = Number(marksRaw);
+              if (hasComment) next.marker_comment = String(commentRaw).trim();
+              return next;
+            });
+            nextRow = {
+              ...nextRow,
+              pdf_answers_json: {
+                ...raw,
+                entries,
+                working_papers: Array.isArray(raw.working_papers) ? raw.working_papers : [],
+              },
+            };
+          }
+          return nextRow;
+        })
+      );
+      setMarkInputs((prev) => ({ ...prev, [submissionId]: String(savedTotalScore) }));
     } catch (e) {
       await Swal.fire({ icon: "error", title: "Marking failed", text: e.message || "Could not save marks." });
     } finally {
@@ -228,12 +441,16 @@ export default function ExamSubmissionsPage() {
     const submission = rows.find(s => s.id === submissionId);
     if (!submission) return;
     const hasMarks = isPdfFormExam
-      ? submission?.marking?.total_score != null ||
-        submission.pdf_auto_score != null ||
-        Number.isFinite(Number(markInputs[submissionId]))
+      ? submission?.marking?.total_score != null || submission.pdf_auto_score != null
       : (submission.answers || []).some((a) => a.marks_obtained !== null);
     if (!hasMarks) {
-      await Swal.fire({ icon: "warning", title: "Marks required", text: "Please save marks first before grading." });
+      await Swal.fire({
+        icon: "warning",
+        title: "Total required",
+        text: isPdfFormExam
+          ? "Enter and save the total score before grading."
+          : "Please save marks first before grading.",
+      });
       return;
     }
     setGradingId(submissionId);
@@ -244,46 +461,21 @@ export default function ExamSubmissionsPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.message || "Grading failed.");
-      await load();
-      await Swal.fire({ icon: "success", title: "Graded successfully", timer: 900, showConfirmButton: false });
+      const result = data.data || {};
+      patchSubmissionRow(submissionId, (row) => ({
+        ...row,
+        marking: {
+          ...(row.marking || {}),
+          grade: result.grade ?? row.marking?.grade ?? null,
+          grade_letter: result.grade_letter ?? row.marking?.grade_letter ?? null,
+          grade_remarks: result.grade_remarks ?? row.marking?.grade_remarks ?? null,
+          points: result.points != null ? result.points : row.marking?.points ?? null,
+        },
+      }));
     } catch (e) {
       await Swal.fire({ icon: "error", title: "Grading failed", text: e.message || "Could not grade the exam." });
     } finally {
       setGradingId("");
-    }
-  };
-
-  const runCleanupStaleDrafts = async () => {
-    const token = localStorage.getItem("token");
-    if (!token || !examId) return;
-    const confirm = await Swal.fire({
-      icon: "warning",
-      title: "Clean stale drafts?",
-      text: "This removes old draft submissions for students who already submitted this exam.",
-      showCancelButton: true,
-      confirmButtonColor: accentDark,
-    });
-    if (!confirm.isConfirmed) return;
-    setCleanupRunning(true);
-    try {
-      const res = await fetch(`/api/exams/${examId}/submissions/cleanup-stale-drafts`, {
-        method: "POST",
-        headers: authHeaders(token),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.message || "Cleanup failed.");
-      await Swal.fire({
-        icon: "success",
-        title: "Cleanup complete",
-        text: `Deleted ${data?.data?.draft_submissions_deleted || 0} stale drafts.`,
-        timer: 1200,
-        showConfirmButton: false,
-      });
-      void load();
-    } catch (e) {
-      await Swal.fire({ icon: "error", title: "Cleanup failed", text: e.message || "Could not clean stale drafts." });
-    } finally {
-      setCleanupRunning(false);
     }
   };
 
@@ -307,15 +499,6 @@ export default function ExamSubmissionsPage() {
           <IconButton onClick={() => navigate("/exam")} sx={{ color: "#fff", p: 0, "&:hover": { bgcolor: "transparent" } }}>
             <ArrowBackIcon sx={{ fontSize: 28 }} />
           </IconButton>
-        }
-        actions={
-          <ExamGhostButton
-            onClick={() => void runCleanupStaleDrafts()}
-            disabled={cleanupRunning || loading}
-            sx={{ bgcolor: "rgba(255,255,255,0.15)", color: "#fff", borderColor: "rgba(255,255,255,0.35)", "&:hover": { bgcolor: "rgba(255,255,255,0.25)" } }}
-          >
-            {cleanupRunning ? "Cleaning…" : "Clean stale drafts"}
-          </ExamGhostButton>
         }
       />
 
@@ -347,16 +530,19 @@ export default function ExamSubmissionsPage() {
                         <Stack
                           direction="row"
                           spacing={1}
-                          alignItems="center"
+                          alignItems="flex-end"
                           flexWrap="nowrap"
                           sx={{
                             flexShrink: 0,
                             width: { xs: "100%", lg: "auto" },
                             overflowX: "auto",
+                            overflowY: "visible",
+                            pt: 0.25,
                             pb: { xs: 0.25, lg: 0 },
                           }}
                         >
                           {(() => {
+                            const manualPdfEntries = submissionHasManualPdfEntries(s);
                             const alreadyMarked = isPdfFormExam
                               ? s?.marking?.total_score != null || s.pdf_auto_score != null
                               : (s.answers || []).some((a) => a.marks_obtained !== null);
@@ -379,51 +565,45 @@ export default function ExamSubmissionsPage() {
                               fontSize: "0.8125rem",
                               lineHeight: 1.2,
                             };
+                            const totalScoreValue = isPdfFormExam
+                              ? markInputs[s.id] ?? ""
+                              : (s.answers || []).reduce((sum, a) => sum + Number(answerMarks[a.id] || 0), 0);
+                            const totalScoreEditable = isPdfFormExam;
+                            const onSaveMarks = isPdfFormExam
+                              ? manualPdfEntries
+                                ? () => savePdfExamMarking(s.id)
+                                : () => saveSubmissionMark(s.id)
+                              : () => saveQuestionMarks(s.id);
                             return (
                               <>
-                                <TextField
-                                  size="small"
+                                <MarkingScoreField
                                   label="Total score"
-                                  type="number"
-                                  value={
-                                    isPdfFormExam
-                                      ? markInputs[s.id] ?? ""
-                                      : (s.answers || []).reduce((sum, a) => sum + Number(answerMarks[a.id] || 0), 0)
-                                  }
+                                  value={totalScoreValue}
                                   onChange={
-                                    isPdfFormExam
+                                    totalScoreEditable
                                       ? (e) => setMarkInputs((prev) => ({ ...prev, [s.id]: e.target.value }))
                                       : undefined
                                   }
-                                  disabled={!isPdfFormExam}
-                                  sx={{
-                                    ...toolbarControlSx,
-                                    "& .MuiInputBase-root": {
-                                      height: 40,
-                                    },
-                                    "& .MuiInputLabel-root": {
-                                      whiteSpace: "nowrap",
-                                      maxWidth: "calc(100% + 24px)",
-                                    },
-                                    "& .MuiOutlinedInput-notchedOutline legend": {
-                                      maxWidth: "100%",
-                                    },
-                                  }}
+                                  disabled={!totalScoreEditable}
+                                  width={156}
                                 />
                                 <ExamPrimaryButton
                                   size="small"
-                                  onClick={() =>
-                                    void (isPdfFormExam ? saveSubmissionMark(s.id) : saveQuestionMarks(s.id))
-                                  }
+                                  onClick={() => void onSaveMarks()}
                                   disabled={markSavingId === s.id || s.status !== "submitted"}
                                   sx={{ ...actionBtnSx, minWidth: 156 }}
+                                  startIcon={
+                                    markSavingId === s.id ? (
+                                      <CircularProgress size={16} sx={{ color: "inherit" }} />
+                                    ) : null
+                                  }
                                 >
                                   {markSavingId === s.id
                                     ? "Saving…"
                                     : isPdfFormExam
                                       ? alreadyMarked
-                                        ? "Update mark"
-                                        : "Save mark"
+                                        ? "Update marks"
+                                        : "Save marks"
                                       : alreadyMarked
                                         ? "Update marks"
                                         : "Save marks"}
@@ -439,14 +619,17 @@ export default function ExamSubmissionsPage() {
                                     color: accent,
                                     "&:hover": { bgcolor: accentLight },
                                   }}
+                                  startIcon={
+                                    gradingId === s.id ? (
+                                      <CircularProgress size={16} sx={{ color: accent }} />
+                                    ) : null
+                                  }
                                 >
-                                  {gradingId === s.id ? (
-                                    <CircularProgress size={18} sx={{ color: accent }} />
-                                  ) : hasResult ? (
-                                    "Update grade"
-                                  ) : (
-                                    "Grade exam"
-                                  )}
+                                  {gradingId === s.id
+                                    ? "Grading…"
+                                    : hasResult
+                                      ? "Update grade"
+                                      : "Grade exam"}
                                 </Button>
                               </>
                             );
@@ -472,14 +655,14 @@ export default function ExamSubmissionsPage() {
                           (sum, a) => sum + (a.marks_obtained || 0),
                           0
                         );
-                        const hasMarks = (s.answers || []).some((a) => a.marks_obtained != null);
+                        const hasOnlineMarks = (s.answers || []).some((a) => a.marks_obtained != null);
                         const total = isPdfFormExam
                           ? s.marking?.total_score != null
                             ? s.marking.total_score
                             : null
                           : s.marking?.total_score != null
                             ? s.marking.total_score
-                            : hasMarks
+                            : hasOnlineMarks
                               ? totalMarksObtained
                               : null;
                         if (total == null) return null;
@@ -502,9 +685,59 @@ export default function ExamSubmissionsPage() {
                         <Box sx={{ border: "1px solid #eee", borderRadius: 1, p: 1.25, bgcolor: "#fafafa" }}>
                           {isPdfFormExam ? (
                             fullExam ? (
-                              <ExamPdfSubmissionView exam={fullExam} submission={s} />
+                              <ExamPdfSubmissionView
+                                exam={fullExam}
+                                examId={examId}
+                                submission={s}
+                                entryMarks={submissionHasManualPdfEntries(s) ? pdfEntryMarks : undefined}
+                                entryComments={submissionHasManualPdfEntries(s) ? pdfEntryComments : undefined}
+                                paperComments={pdfPaperComments}
+                                onEntryMarksChange={
+                                  submissionHasManualPdfEntries(s)
+                                    ? (entryId, value) =>
+                                        setPdfEntryMarks((prev) => ({ ...prev, [entryId]: value }))
+                                    : null
+                                }
+                                onEntryCommentsChange={
+                                  submissionHasManualPdfEntries(s)
+                                    ? (entryId, value) =>
+                                        setPdfEntryComments((prev) => ({ ...prev, [entryId]: value }))
+                                    : null
+                                }
+                                onPaperCommentsChange={(paperId, value) =>
+                                  setPdfPaperComments((prev) => ({ ...prev, [paperId]: value }))
+                                }
+                                onPdfAnswersJsonChange={(pdfAnswersJson) =>
+                                  patchSubmissionPdfAnswers(s.id, pdfAnswersJson)
+                                }
+                              />
                             ) : s.pdf_answers_json && typeof s.pdf_answers_json === "object" ? (
-                              <ExamPdfSubmissionView exam={examInfo || { id: examId }} submission={s} />
+                              <ExamPdfSubmissionView
+                                exam={examInfo || { id: examId }}
+                                examId={examId}
+                                submission={s}
+                                entryMarks={submissionHasManualPdfEntries(s) ? pdfEntryMarks : undefined}
+                                entryComments={submissionHasManualPdfEntries(s) ? pdfEntryComments : undefined}
+                                paperComments={pdfPaperComments}
+                                onEntryMarksChange={
+                                  submissionHasManualPdfEntries(s)
+                                    ? (entryId, value) =>
+                                        setPdfEntryMarks((prev) => ({ ...prev, [entryId]: value }))
+                                    : null
+                                }
+                                onEntryCommentsChange={
+                                  submissionHasManualPdfEntries(s)
+                                    ? (entryId, value) =>
+                                        setPdfEntryComments((prev) => ({ ...prev, [entryId]: value }))
+                                    : null
+                                }
+                                onPaperCommentsChange={(paperId, value) =>
+                                  setPdfPaperComments((prev) => ({ ...prev, [paperId]: value }))
+                                }
+                                onPdfAnswersJsonChange={(pdfAnswersJson) =>
+                                  patchSubmissionPdfAnswers(s.id, pdfAnswersJson)
+                                }
+                              />
                             ) : (
                               <Alert severity="warning">
                                 Could not load exam PDF details. Refresh the page.

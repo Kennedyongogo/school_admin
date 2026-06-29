@@ -20,6 +20,7 @@ import {
   parseQuestionOptions,
   resolveSubmissionAnswerValue,
 } from "./examPaperLayout";
+import { MarkingScoreField } from "./examUi";
 
 const accent = "#DC2626";
 
@@ -155,7 +156,7 @@ export default function ExamSubmissionPaperView({
                   >
                     <Stack
                       direction={{ xs: "column", sm: "row" }}
-                      alignItems={{ xs: "flex-start", sm: "center" }}
+                      alignItems={{ xs: "flex-start", sm: "flex-end" }}
                       justifyContent="space-between"
                       spacing={{ xs: 1, sm: 2 }}
                       sx={{ mb: 0.75 }}
@@ -165,17 +166,14 @@ export default function ExamSubmissionPaperView({
                         {q.required ? " (Required)" : ""}
                       </Typography>
                       {onAnswerMarksChange && answerRow?.id ? (
-                        <Stack direction="row" alignItems="center" spacing={1} sx={{ flexShrink: 0 }}>
-                          <TextField
-                            size="small"
+                        <Stack direction="row" alignItems="flex-end" spacing={1} sx={{ flexShrink: 0 }}>
+                          <MarkingScoreField
                             label="Marks obtained"
-                            type="number"
                             value={answerMarks[answerRow.id] ?? ""}
                             onChange={(e) => onAnswerMarksChange(answerRow.id, e.target.value)}
-                            sx={{ width: { xs: 120, sm: 140 } }}
-                            inputProps={{ min: 0, step: 0.01 }}
+                            width={140}
                           />
-                          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap", pb: 1.1 }}>
                             / {Number(q.marks) || 0}
                           </Typography>
                         </Stack>

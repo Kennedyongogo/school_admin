@@ -62,6 +62,8 @@ import EventLiveRoomPage from "../Pages/EventLiveRoomPage";
 import AdminMeetingLiveRoomPage from "../Pages/AdminMeetingLiveRoomPage";
 import ExamManagementPage from "../Pages/ExamManagementPage";
 import ExamSubmissionsPage from "../Pages/ExamSubmissionsPage";
+import AssignmentManagementPage from "../Pages/AssignmentManagementPage";
+import AssignmentSubmissionsPage from "../Pages/AssignmentSubmissionsPage";
 import AccountingDashboardPage from "../Pages/AccountingDashboardPage";
 import FeeInvoiceViewPage from "../Pages/FeeInvoiceViewPage";
 import HRPage from "../Pages/HRPage";
@@ -121,6 +123,8 @@ function PageRoutes() {
             <Route path="accounting/invoices/:id" element={<FeeInvoiceViewPage />} />
             <Route path="exam" element={<ExamManagementPage />} />
             <Route path="exam/:examId/submissions" element={<ExamSubmissionsPage />} />
+            <Route path="assignments" element={<AssignmentManagementPage />} />
+            <Route path="assignments/:assignmentId/submissions" element={<AssignmentSubmissionsPage />} />
             <Route path="blogs" element={<Blogs />} />
             <Route path="blogs/create" element={<BlogCreate />} />
             <Route path="blogs/:id" element={<BlogView />} />

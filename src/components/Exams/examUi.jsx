@@ -164,6 +164,46 @@ export function FilterField({ label, ...props }) {
   return <TextField fullWidth size="small" label={label} sx={inputSx} {...props} />;
 }
 
+/** Static label above input — avoids floating-label clipping in tight toolbars. */
+export function MarkingScoreField({ label, value, onChange, disabled, width = 156, sx, inputProps, ...props }) {
+  const displayValue = value === "" || value == null ? "" : String(value);
+  return (
+    <Box sx={{ width, minWidth: width, maxWidth: width, flexShrink: 0 }}>
+      <Typography
+        component="label"
+        variant="caption"
+        sx={{
+          display: "block",
+          mb: 0.5,
+          fontWeight: 600,
+          color: "text.secondary",
+          fontSize: "0.75rem",
+          lineHeight: 1.25,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {label}
+      </Typography>
+      <TextField
+        size="small"
+        type="number"
+        fullWidth
+        value={displayValue}
+        onChange={onChange}
+        disabled={disabled}
+        inputProps={{ min: 0, step: 0.01, "aria-label": label, ...inputProps }}
+        sx={{
+          "& .MuiInputBase-root": {
+            height: 40,
+          },
+          ...sx,
+        }}
+        {...props}
+      />
+    </Box>
+  );
+}
+
 export function FilterSelect({ label, value, onChange, children, disabled }) {
   return (
     <FormControl fullWidth size="small" disabled={disabled} sx={inputSx}>

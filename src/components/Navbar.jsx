@@ -11,6 +11,7 @@ import {
   Badge,
   AccountBalance,
   Quiz,
+  AssignmentTurnedIn,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import { styled, useTheme, alpha } from "@mui/material/styles";
@@ -141,6 +142,7 @@ const MENU_SECTIONS = [
       { text: "HR", icon: <Badge />, path: "/hr" },
       { text: "Accounting", icon: <AccountBalance />, path: "/accounting" },
       { text: "Exam", icon: <Quiz />, path: "/exam" },
+      { text: "Assignments", icon: <AssignmentTurnedIn />, path: "/assignments" },
       { text: "Curriculum", icon: <MenuBook />, path: "/curriculum" },
       { text: "Timetable", icon: <Event />, path: "/timetable" },
     ],
@@ -291,6 +293,7 @@ const Navbar = (props) => {
     (path === "/hr" && location.pathname.startsWith("/hr")) ||
     (path === "/accounting" && location.pathname.startsWith("/accounting")) ||
     (path === "/exam" && location.pathname.startsWith("/exam")) ||
+    (path === "/assignments" && location.pathname.startsWith("/assignments")) ||
     (path === "/elimu-plus" && location.pathname.startsWith("/elimu-plus")) ||
     (path === "/curriculum" && location.pathname.startsWith("/curriculum")) ||
     (path === "/timetable" && location.pathname.startsWith("/timetable")) ||
