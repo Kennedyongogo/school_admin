@@ -6,6 +6,7 @@ import {
   Chip,
   CircularProgress,
   IconButton,
+  Snackbar,
   Stack,
   Typography,
 } from "@mui/material";
@@ -18,6 +19,7 @@ import PeopleIcon from "@mui/icons-material/People";
 import LayersIcon from "@mui/icons-material/Layers";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import {
   authHeaders,
   elimuViewportSx,
@@ -30,84 +32,232 @@ import { ExamHero } from "../components/Exams/examUi";
 import { ElimuPlusTabs } from "../components/SchoolProfile/elimuPlusUi";
 import { primaryRed, primaryDark } from "../components/SchoolProfile/elimuPlusShared";
 
-function StudentRoster({ students, compact, column }) {
+const DRAG_BODY_CLASS = "class-transfer-dragging";
+
+const dropZoneActiveSx = {
+  border: `2px solid ${primaryRed} !important`,
+  bgcolor: `${alpha(primaryRed, 0.08)} !important`,
+  boxShadow: `inset 0 0 0 1px ${alpha(primaryRed, 0.2)}`,
+};
+
+function cloneLevels(levels) {
+  return (levels || []).map((level) => ({
+    ...level,
+    students: [...(level.students || [])],
+  }));
+}
+
+function DraggableStudentCard({ student, column, disabled, classId, levelId, onPointerDragStart }) {
+  const handlePointerDown = (e) => {
+    if (disabled || e.button !== 0) return;
+    e.preventDefault();
+    onPointerDragStart(e, {
+      studentId: student.id,
+      student,
+      fromClassId: classId,
+      fromLevelId: levelId,
+    });
+  };
+
+  return (
+    <Box
+      data-student-id={student.id}
+      onPointerDown={handlePointerDown}
+      sx={{
+        display: "flex",
+        alignItems: column ? "flex-start" : "center",
+        flexDirection: column ? "column" : "row",
+        gap: column ? 0.5 : 1,
+        py: column ? 1 : 1.25,
+        px: column ? 0.75 : 1,
+        textAlign: column ? "center" : "left",
+        borderRadius: 2,
+        cursor: disabled ? "default" : "grab",
+        touchAction: "none",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        border: `1px solid ${alpha(primaryRed, 0.12)}`,
+        bgcolor: "#fff",
+        boxShadow: `0 2px 8px ${alpha(primaryRed, 0.06)}`,
+        transition: "border-color 0.2s, box-shadow 0.2s, opacity 0.2s",
+        "&[data-drag-active='1']": {
+          opacity: 0.55,
+          borderColor: primaryRed,
+          bgcolor: alpha(primaryRed, 0.1),
+          boxShadow: `0 12px 28px ${alpha(primaryRed, 0.22)}`,
+          transform: "scale(0.97)",
+        },
+        "&:active": { cursor: disabled ? "default" : "grabbing" },
+        "&:hover": disabled
+          ? {}
+          : {
+              borderColor: alpha(primaryRed, 0.35),
+              boxShadow: `0 8px 20px ${alpha(primaryRed, 0.12)}`,
+            },
+        "& *": {
+          pointerEvents: "none",
+          userSelect: "none",
+        },
+      }}
+    >
+        <DragIndicatorIcon
+          sx={{
+            fontSize: 16,
+            color: alpha(primaryRed, 0.45),
+            alignSelf: column ? "center" : "flex-start",
+            mt: column ? 0 : 0.35,
+            display: disabled ? "none" : "block",
+          }}
+        />
+        {!column ? (
+          <Avatar
+            src={student.profile_image || undefined}
+            sx={{
+              width: 40,
+              height: 40,
+              bgcolor: alpha(primaryRed, 0.12),
+              color: primaryRed,
+              fontWeight: 700,
+              fontSize: "0.9rem",
+            }}
+          >
+            {(student.full_name || student.admission_number || "?").charAt(0).toUpperCase()}
+          </Avatar>
+        ) : null}
+        <Box sx={{ flex: 1, minWidth: 0, width: column ? "100%" : undefined }}>
+          <Typography
+            sx={{
+              fontWeight: 700,
+              color: textPrimary,
+              lineHeight: 1.3,
+              fontSize: column ? "0.8rem" : undefined,
+            }}
+            noWrap={!column}
+          >
+            {student.full_name || student.username || student.admission_number}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: column ? "0.7rem" : undefined }}>
+            {student.admission_number}
+            {student.gender ? ` · ${student.gender}` : ""}
+          </Typography>
+        </Box>
+      </Box>
+  );
+}
+
+function StudentRoster({ students, compact, column, transferBusy, classId, levelId, onPointerDragStart }) {
   if (!students.length) {
     return (
       <Box
         sx={{
-          py: compact ? 1.5 : 3,
+          py: compact ? 2 : 3,
           px: column ? 1 : 2,
           borderRadius: 2,
           textAlign: "center",
           bgcolor: alpha(primaryRed, 0.03),
           border: `1px dashed ${alpha(primaryRed, 0.2)}`,
+          minHeight: column ? 72 : undefined,
+          pointerEvents: "none",
         }}
       >
         <PersonOutlineIcon
           sx={{ fontSize: column ? 24 : compact ? 28 : 36, color: alpha(primaryRed, 0.35), mb: 0.5 }}
         />
         <Typography variant="body2" color="text.secondary" sx={{ fontSize: column ? "0.75rem" : undefined }}>
-          No students yet.
+          Drop students here
         </Typography>
       </Box>
     );
   }
 
   return (
-    <Stack spacing={0}>
-      {students.map((student, idx) => (
-        <Box
+    <Stack spacing={0.75}>
+      {students.map((student) => (
+        <DraggableStudentCard
           key={student.id}
-          sx={{
-            display: "flex",
-            alignItems: column ? "flex-start" : "center",
-            flexDirection: column ? "column" : "row",
-            gap: column ? 0.5 : 1.5,
-            py: column ? 1 : 1.25,
-            px: column ? 0.25 : 0.5,
-            textAlign: column ? "center" : "left",
-            borderBottom: idx < students.length - 1 ? `1px solid ${alpha(primaryRed, 0.08)}` : "none",
-          }}
-        >
-          {!column ? (
-            <Avatar
-              src={student.profile_image || undefined}
-              sx={{
-                width: 40,
-                height: 40,
-                bgcolor: alpha(primaryRed, 0.12),
-                color: primaryRed,
-                fontWeight: 700,
-                fontSize: "0.9rem",
-              }}
-            >
-              {(student.full_name || student.admission_number || "?").charAt(0).toUpperCase()}
-            </Avatar>
-          ) : null}
-          <Box sx={{ flex: 1, minWidth: 0, width: column ? "100%" : undefined }}>
-            <Typography
-              sx={{
-                fontWeight: 700,
-                color: textPrimary,
-                lineHeight: 1.3,
-                fontSize: column ? "0.8rem" : undefined,
-              }}
-              noWrap={!column}
-            >
-              {student.full_name || student.username || student.admission_number}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: column ? "0.7rem" : undefined }}>
-              {student.admission_number}
-              {student.gender ? ` · ${student.gender}` : ""}
-            </Typography>
-          </Box>
-        </Box>
+          student={student}
+          column={column}
+          disabled={transferBusy}
+          classId={classId}
+          levelId={levelId}
+          onPointerDragStart={onPointerDragStart}
+        />
       ))}
     </Stack>
   );
 }
 
-function TermColumnsPanel({ levels, loadingLevels }) {
+function TermDropColumn({ level, classId, transferBusy, onPointerDragStart }) {
+  const count = level.student_count ?? level.students?.length ?? 0;
+
+  return (
+    <Box
+      sx={{
+        flex: 1,
+        minWidth: 0,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <Box
+        sx={{
+          p: 1.25,
+          borderRadius: 2,
+          border: `1px solid ${alpha(primaryRed, 0.14)}`,
+          bgcolor: alpha(primaryRed, 0.06),
+          textAlign: "center",
+        }}
+      >
+        <Typography
+          sx={{
+            fontWeight: 700,
+            fontSize: "0.78rem",
+            lineHeight: 1.25,
+            color: primaryDark,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {level.name}
+        </Typography>
+        <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
+          {count} student{count === 1 ? "" : "s"}
+        </Typography>
+      </Box>
+
+      <Box
+        data-term-drop-zone
+        data-level-id={level.id}
+        data-class-id={classId}
+        sx={{
+          mt: 0.75,
+          flex: 1,
+          minHeight: 120,
+          borderRadius: 2,
+          border: `2px dashed ${alpha(primaryRed, 0.18)}`,
+          bgcolor: "#fff",
+          px: 0.75,
+          py: 0.75,
+          transition: "border-color 0.15s, background-color 0.15s",
+          "&[data-drop-active='1']": dropZoneActiveSx,
+        }}
+      >
+        <StudentRoster
+          students={level.students || []}
+          compact
+          column
+          transferBusy={transferBusy}
+          classId={classId}
+          levelId={level.id}
+          onPointerDragStart={onPointerDragStart}
+        />
+      </Box>
+    </Box>
+  );
+}
+
+function TermColumnsPanel({ levels, loadingLevels, classId, transferBusy, onPointerDragStart }) {
   if (loadingLevels) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
@@ -134,66 +284,20 @@ function TermColumnsPanel({ levels, loadingLevels }) {
         alignItems: "stretch",
       }}
     >
-      {levels.map((level) => {
-        const count = level.student_count ?? level.students?.length ?? 0;
-        return (
-          <Box
+      {levels.map((level) => (
+          <TermDropColumn
             key={level.id}
-            sx={{
-              flex: 1,
-              minWidth: 0,
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <Box
-              sx={{
-                p: 1.25,
-                borderRadius: 2,
-                border: `1px solid ${alpha(primaryRed, 0.14)}`,
-                bgcolor: alpha(primaryRed, 0.06),
-                textAlign: "center",
-              }}
-            >
-              <Typography
-                sx={{
-                  fontWeight: 700,
-                  fontSize: "0.78rem",
-                  lineHeight: 1.25,
-                  color: primaryDark,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {level.name}
-              </Typography>
-              <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
-                {count} student{count === 1 ? "" : "s"}
-              </Typography>
-            </Box>
-
-            <Box
-              sx={{
-                mt: 0.75,
-                flex: 1,
-                borderRadius: 2,
-                border: `1px solid ${alpha(primaryRed, 0.1)}`,
-                bgcolor: "#fff",
-                px: 0.75,
-                py: 0.5,
-              }}
-            >
-              <StudentRoster students={level.students || []} compact column />
-            </Box>
-          </Box>
-        );
-      })}
+            level={level}
+            classId={classId}
+            transferBusy={transferBusy}
+            onPointerDragStart={onPointerDragStart}
+          />
+        ))}
     </Box>
   );
 }
 
-function ClassGalleryCard({ classItem, levels, loadingLevels }) {
+function ClassGalleryCard({ classItem, levels, loadingLevels, transferBusy, onPointerDragStart }) {
   return (
     <Box
       data-class-card
@@ -314,14 +418,25 @@ function ClassGalleryCard({ classItem, levels, loadingLevels }) {
             borderTop: `1px solid ${alpha(primaryRed, 0.1)}`,
           }}
         >
-          <Typography
-            variant="overline"
-            sx={{ fontWeight: 800, color: primaryDark, letterSpacing: "0.08em", fontSize: "0.68rem" }}
-          >
-            Terms in this class
-          </Typography>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+            <Typography
+              variant="overline"
+              sx={{ fontWeight: 800, color: primaryDark, letterSpacing: "0.08em", fontSize: "0.68rem" }}
+            >
+              Terms in this class
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+              Press and drag a student card to another term
+            </Typography>
+          </Stack>
 
-          <TermColumnsPanel levels={levels} loadingLevels={loadingLevels} />
+          <TermColumnsPanel
+            levels={levels}
+            loadingLevels={loadingLevels}
+            classId={classItem.id}
+            transferBusy={transferBusy}
+            onPointerDragStart={onPointerDragStart}
+          />
         </Box>
       </Box>
     </Box>
@@ -330,6 +445,9 @@ function ClassGalleryCard({ classItem, levels, loadingLevels }) {
 
 export default function ClassTransferPage() {
   const scrollRef = useRef(null);
+  const pointerDragRef = useRef(null);
+  const activeCardRef = useRef(null);
+  const dragPointerIdRef = useRef(null);
   const [loadingCurricula, setLoadingCurricula] = useState(true);
   const [loadingClasses, setLoadingClasses] = useState(false);
   const [error, setError] = useState("");
@@ -343,9 +461,221 @@ export default function ClassTransferPage() {
   const [loadingLevels, setLoadingLevels] = useState(false);
   const levelsCacheRef = useRef({});
   const levelsRequestRef = useRef(0);
+  const [transferBusy, setTransferBusy] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
 
   const selectedCurriculum = curricula[activeTab] || null;
   const currentClass = classes[classIndex] || null;
+
+  const showSnack = useCallback((message, severity = "success") => {
+    setSnackbar({ open: true, message, severity });
+  }, []);
+
+  const fetchLevelsRaw = useCallback(async (classId) => {
+    const token = localStorage.getItem("token");
+    const res = await fetch(`/api/class-transfer/classes/${encodeURIComponent(classId)}/levels`, {
+      headers: authHeaders(token),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) throw new Error(data.message || "Could not load terms.");
+    return Array.isArray(data.data?.levels) ? data.data.levels : [];
+  }, []);
+
+  const syncLevelsState = useCallback((classId) => {
+    const cached = levelsCacheRef.current[classId];
+    if (cached) {
+      setLevels(cloneLevels(cached));
+      setLevelsForClassId(classId);
+    }
+  }, []);
+
+  const bumpClassCounts = useCallback((fromClassId, toClassId) => {
+    if (fromClassId === toClassId) return;
+    setClasses((prev) =>
+      prev.map((c) => {
+        if (c.id === fromClassId) return { ...c, student_count: Math.max(0, (c.student_count ?? 0) - 1) };
+        if (c.id === toClassId) return { ...c, student_count: (c.student_count ?? 0) + 1 };
+        return c;
+      })
+    );
+  }, []);
+
+  const applyLocalMove = useCallback(
+    ({ student, fromClassId, fromLevelId, toClassId, toLevelId }) => {
+      const removeFromClass = (classId, levelId, studentId) => {
+        if (!levelsCacheRef.current[classId]) return;
+        levelsCacheRef.current[classId] = levelsCacheRef.current[classId].map((level) => {
+          if (level.id !== levelId) return level;
+          const students = (level.students || []).filter((s) => s.id !== studentId);
+          return { ...level, students, student_count: students.length };
+        });
+      };
+
+      const addToClass = (classId, levelId, stud) => {
+        if (!levelsCacheRef.current[classId]) return;
+        levelsCacheRef.current[classId] = levelsCacheRef.current[classId].map((level) => {
+          if (level.id !== levelId) return level;
+          if ((level.students || []).some((s) => s.id === stud.id)) return level;
+          const students = [...(level.students || []), stud];
+          return { ...level, students, student_count: students.length };
+        });
+      };
+
+      removeFromClass(fromClassId, fromLevelId, student.id);
+      addToClass(toClassId, toLevelId, student);
+
+      if (levelsForClassId === fromClassId || levelsForClassId === toClassId) {
+        syncLevelsState(levelsForClassId);
+      }
+      bumpClassCounts(fromClassId, toClassId);
+    },
+    [bumpClassCounts, levelsForClassId, syncLevelsState]
+  );
+
+  const clearPointerDragUi = useCallback(() => {
+    document.body.classList.remove(DRAG_BODY_CLASS);
+    document.querySelectorAll("[data-drop-active]").forEach((el) => el.removeAttribute("data-drop-active"));
+    if (activeCardRef.current) {
+      activeCardRef.current.removeAttribute("data-drag-active");
+      activeCardRef.current.style.pointerEvents = "";
+      if (activeCardRef.current.releasePointerCapture && dragPointerIdRef.current != null) {
+        try {
+          activeCardRef.current.releasePointerCapture(dragPointerIdRef.current);
+        } catch {
+          /* pointer may already be released */
+        }
+      }
+      dragPointerIdRef.current = null;
+      activeCardRef.current = null;
+    }
+    document.body.style.cursor = "";
+    pointerDragRef.current = null;
+  }, []);
+
+  const commitTransfer = useCallback(
+    async ({ studentId, targetClassId, targetLevelId, sourceSnapshot }) => {
+      const source = sourceSnapshot;
+      if (!source) return;
+
+      if (source.fromClassId === targetClassId && source.fromLevelId === targetLevelId) {
+        return;
+      }
+
+      const token = localStorage.getItem("token");
+      setTransferBusy(true);
+
+      const snapshot = {
+        fromClassId: source.fromClassId,
+        fromLevelId: source.fromLevelId,
+        toClassId: targetClassId,
+        toLevelId: targetLevelId,
+        student: source.student,
+        fromLevels: cloneLevels(levelsCacheRef.current[source.fromClassId]),
+        toLevels: source.fromClassId === targetClassId ? null : cloneLevels(levelsCacheRef.current[targetClassId]),
+        classesSnapshot: classes.map((c) => ({ ...c })),
+      };
+
+      applyLocalMove({
+        student: source.student,
+        fromClassId: source.fromClassId,
+        fromLevelId: source.fromLevelId,
+        toClassId: targetClassId,
+        toLevelId: targetLevelId,
+      });
+
+      try {
+        const res = await fetch(`/api/class-transfer/students/${encodeURIComponent(studentId)}/move`, {
+          method: "POST",
+          headers: { ...authHeaders(token), "Content-Type": "application/json" },
+          body: JSON.stringify({
+            curriculum_class_id: targetClassId,
+            curriculum_class_level_id: targetLevelId,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.message || "Could not move student.");
+
+        if (data.data?.student && levelsCacheRef.current[targetClassId]) {
+          const updated = data.data.student;
+          levelsCacheRef.current[targetClassId] = levelsCacheRef.current[targetClassId].map((level) => ({
+            ...level,
+            students: (level.students || []).map((s) => (s.id === updated.id ? { ...s, ...updated } : s)),
+          }));
+          if (levelsForClassId === targetClassId) syncLevelsState(targetClassId);
+        }
+
+        showSnack(data.message || "Student moved successfully.");
+      } catch (e) {
+        levelsCacheRef.current[snapshot.fromClassId] = snapshot.fromLevels;
+        if (snapshot.toLevels) levelsCacheRef.current[snapshot.toClassId] = snapshot.toLevels;
+        setClasses(snapshot.classesSnapshot);
+        if (levelsForClassId) syncLevelsState(levelsForClassId);
+        showSnack(e.message || "Could not move student.", "error");
+      } finally {
+        setTransferBusy(false);
+      }
+    },
+    [applyLocalMove, classes, levelsForClassId, showSnack, syncLevelsState]
+  );
+
+  const onPointerDragStart = useCallback(
+    (e, payload) => {
+      if (transferBusy || pointerDragRef.current) return;
+
+      const card = e.currentTarget;
+      activeCardRef.current = card;
+      card.setAttribute("data-drag-active", "1");
+      card.style.pointerEvents = "none";
+      if (card.setPointerCapture) card.setPointerCapture(e.pointerId);
+      dragPointerIdRef.current = e.pointerId;
+      document.body.classList.add(DRAG_BODY_CLASS);
+      document.body.style.cursor = "grabbing";
+      pointerDragRef.current = payload;
+
+      const highlightAt = (clientX, clientY) => {
+        document.querySelectorAll("[data-drop-active]").forEach((el) => el.removeAttribute("data-drop-active"));
+        const under = document.elementFromPoint(clientX, clientY);
+        const zone = under?.closest?.("[data-term-drop-zone]");
+        zone?.setAttribute("data-drop-active", "1");
+      };
+
+      const onMove = (ev) => {
+        if (ev.cancelable) ev.preventDefault();
+        highlightAt(ev.clientX, ev.clientY);
+      };
+
+      const onUp = (ev) => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+
+        const under = document.elementFromPoint(ev.clientX, ev.clientY);
+        const zone = under?.closest?.("[data-term-drop-zone]");
+        const source = pointerDragRef.current;
+        clearPointerDragUi();
+
+        if (!zone || !source) return;
+
+        const targetClassId = zone.getAttribute("data-class-id");
+        const targetLevelId = zone.getAttribute("data-level-id");
+        if (!targetClassId || !targetLevelId) return;
+
+        void commitTransfer({
+          studentId: source.studentId,
+          targetClassId,
+          targetLevelId,
+          sourceSnapshot: { ...source },
+        });
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+    },
+    [clearPointerDragUi, commitTransfer, transferBusy]
+  );
+
+  useEffect(() => () => clearPointerDragUi(), [clearPointerDragUi]);
 
   const loadCurricula = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -397,49 +727,47 @@ export default function ClassTransferPage() {
     }
   }, []);
 
-  const loadLevels = useCallback(async (classId) => {
-    const token = localStorage.getItem("token");
-    if (!token || !classId) {
-      setLevels([]);
-      setLevelsForClassId(null);
-      return;
-    }
-
-    const cached = levelsCacheRef.current[classId];
-    if (cached) {
-      setLevels(cached);
-      setLevelsForClassId(classId);
-      setLoadingLevels(false);
-      return;
-    }
-
-    const requestId = ++levelsRequestRef.current;
-    setLevels([]);
-    setLevelsForClassId(null);
-    setLoadingLevels(true);
-
-    try {
-      const res = await fetch(`/api/class-transfer/classes/${encodeURIComponent(classId)}/levels`, {
-        headers: authHeaders(token),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (requestId !== levelsRequestRef.current) return;
-      if (!res.ok || !data.success) throw new Error(data.message || "Could not load terms.");
-      const rows = Array.isArray(data.data?.levels) ? data.data.levels : [];
-      levelsCacheRef.current[classId] = rows;
-      setLevels(rows);
-      setLevelsForClassId(classId);
-    } catch (e) {
-      if (requestId !== levelsRequestRef.current) return;
-      setError(e.message || "Could not load terms.");
-      setLevels([]);
-      setLevelsForClassId(null);
-    } finally {
-      if (requestId === levelsRequestRef.current) {
-        setLoadingLevels(false);
+  const loadLevels = useCallback(
+    async (classId) => {
+      const token = localStorage.getItem("token");
+      if (!token || !classId) {
+        setLevels([]);
+        setLevelsForClassId(null);
+        return;
       }
-    }
-  }, []);
+
+      const cached = levelsCacheRef.current[classId];
+      if (cached) {
+        setLevels(cloneLevels(cached));
+        setLevelsForClassId(classId);
+        setLoadingLevels(false);
+        return;
+      }
+
+      const requestId = ++levelsRequestRef.current;
+      setLevels([]);
+      setLevelsForClassId(null);
+      setLoadingLevels(true);
+
+      try {
+        const rows = await fetchLevelsRaw(classId);
+        if (requestId !== levelsRequestRef.current) return;
+        levelsCacheRef.current[classId] = cloneLevels(rows);
+        setLevels(cloneLevels(rows));
+        setLevelsForClassId(classId);
+      } catch (e) {
+        if (requestId !== levelsRequestRef.current) return;
+        setError(e.message || "Could not load terms.");
+        setLevels([]);
+        setLevelsForClassId(null);
+      } finally {
+        if (requestId === levelsRequestRef.current) {
+          setLoadingLevels(false);
+        }
+      }
+    },
+    [fetchLevelsRaw]
+  );
 
   useEffect(() => {
     void loadCurricula();
@@ -472,7 +800,7 @@ export default function ClassTransferPage() {
     }
     const cached = levelsCacheRef.current[classId];
     if (cached) {
-      setLevels(cached);
+      setLevels(cloneLevels(cached));
       setLevelsForClassId(classId);
       setLoadingLevels(false);
     } else {
@@ -544,6 +872,11 @@ export default function ClassTransferPage() {
     if (currentClass?.id) void loadLevels(currentClass.id);
   };
 
+  const dragHandlers = {
+    transferBusy,
+    onPointerDragStart,
+  };
+
   return (
     <Box
       sx={(theme) => ({
@@ -560,7 +893,7 @@ export default function ClassTransferPage() {
     >
       <ExamHero
         title="Class transfer"
-        subtitle="Pick a curriculum, then use the arrows to move between classes. Each term column lists its students below."
+        subtitle="Pick a curriculum, browse classes with the arrows, and drag students between term columns."
         icon={<TransferWithinAStationIcon sx={{ fontSize: 28, color: "#fff" }} />}
         actions={
           <IconButton
@@ -709,88 +1042,105 @@ export default function ClassTransferPage() {
                 </>
               ) : null}
 
-            {loadingClasses ? (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 8, bgcolor: warmCream }}>
-                <CircularProgress sx={{ color: primaryRed }} />
-              </Box>
-            ) : !classes.length ? (
-              <Box
-                sx={{
-                  mx: { xs: 2, md: 4 },
-                  my: 3,
-                  textAlign: "center",
-                  py: 6,
-                  px: 3,
-                  borderRadius: "22px",
-                  bgcolor: warmCream,
-                }}
-              >
+              {loadingClasses ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 8, bgcolor: warmCream }}>
+                  <CircularProgress sx={{ color: primaryRed }} />
+                </Box>
+              ) : !classes.length ? (
                 <Box
                   sx={{
-                    borderRadius: "22px",
-                    bgcolor: "#fff",
-                    border: `1px dashed ${alpha(primaryRed, 0.25)}`,
+                    mx: { xs: 2, md: 4 },
+                    my: 3,
+                    textAlign: "center",
                     py: 6,
                     px: 3,
+                    borderRadius: "22px",
+                    bgcolor: warmCream,
                   }}
                 >
-                  <ClassIcon sx={{ fontSize: 48, color: alpha(primaryRed, 0.35), mb: 1 }} />
-                  <Typography sx={{ fontWeight: 700, color: textPrimary, mb: 0.5 }}>
-                    No classes in this curriculum
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Add class bands under Curriculum, then return here to browse them.
-                  </Typography>
+                  <Box
+                    sx={{
+                      borderRadius: "22px",
+                      bgcolor: "#fff",
+                      border: `1px dashed ${alpha(primaryRed, 0.25)}`,
+                      py: 6,
+                      px: 3,
+                    }}
+                  >
+                    <ClassIcon sx={{ fontSize: 48, color: alpha(primaryRed, 0.35), mb: 1 }} />
+                    <Typography sx={{ fontWeight: 700, color: textPrimary, mb: 0.5 }}>
+                      No classes in this curriculum
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Add class bands under Curriculum, then return here to browse them.
+                    </Typography>
+                  </Box>
                 </Box>
-              </Box>
-            ) : (
-              <Box
-                ref={scrollRef}
-                onScroll={onGalleryScroll}
-                sx={{
-                  width: "100%",
-                  display: "flex",
-                  overflowX: "auto",
-                  overflowY: "visible",
-                  scrollSnapType: "x mandatory",
-                  scrollBehavior: "smooth",
-                  scrollbarWidth: "none",
-                  "&::-webkit-scrollbar": { display: "none" },
-                }}
-              >
-                {classes.map((classItem, idx) => {
-                  const isActiveSlide = idx === classIndex;
-                  const levelsReady = levelsForClassId === classItem.id;
-                  return (
-                    <Box
-                      key={classItem.id}
-                      sx={{
-                        flex: "0 0 100%",
-                        width: "100%",
-                        scrollSnapAlign: "start",
-                        scrollSnapStop: "always",
-                        display: "flex",
-                        alignItems: "flex-start",
-                        justifyContent: "center",
-                        px: { xs: 7, md: 10 },
-                        py: { xs: 2.5, md: 3 },
-                        boxSizing: "border-box",
-                      }}
-                    >
-                      <ClassGalleryCard
-                        classItem={classItem}
-                        levels={isActiveSlide && levelsReady ? levels : []}
-                        loadingLevels={isActiveSlide && levelsForClassId !== classItem.id}
-                      />
-                    </Box>
-                  );
-                })}
-              </Box>
-            )}
+              ) : (
+                <Box
+                  ref={scrollRef}
+                  onScroll={onGalleryScroll}
+                  sx={{
+                    width: "100%",
+                    display: "flex",
+                    overflowX: "auto",
+                    overflowY: "visible",
+                    scrollSnapType: "x mandatory",
+                    scrollBehavior: "smooth",
+                    scrollbarWidth: "none",
+                    "&::-webkit-scrollbar": { display: "none" },
+                  }}
+                >
+                  {classes.map((classItem, idx) => {
+                    const isActiveSlide = idx === classIndex;
+                    const levelsReady = levelsForClassId === classItem.id;
+                    return (
+                      <Box
+                        key={classItem.id}
+                        sx={{
+                          flex: "0 0 100%",
+                          width: "100%",
+                          scrollSnapAlign: "start",
+                          scrollSnapStop: "always",
+                          display: "flex",
+                          alignItems: "flex-start",
+                          justifyContent: "center",
+                          px: { xs: 7, md: 10 },
+                          py: { xs: 2.5, md: 3 },
+                          boxSizing: "border-box",
+                        }}
+                      >
+                        <ClassGalleryCard
+                          classItem={classItem}
+                          levels={isActiveSlide && levelsReady ? levels : []}
+                          loadingLevels={isActiveSlide && levelsForClassId !== classItem.id}
+                          {...dragHandlers}
+                        />
+                      </Box>
+                    );
+                  })}
+                </Box>
+              )}
             </Box>
           </Box>
         </>
       )}
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3200}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: "100%", fontWeight: 600 }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
