@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Alert,
   Avatar,
@@ -47,6 +48,113 @@ function cloneLevels(levels) {
   }));
 }
 
+function studentCardContainerSx(column, { ghost = false, dragging = false } = {}) {
+  return {
+    display: "flex",
+    alignItems: column ? "flex-start" : "center",
+    flexDirection: column ? "column" : "row",
+    gap: column ? 0.5 : 1,
+    py: column ? 1 : 1.25,
+    px: column ? 0.75 : 1,
+    textAlign: column ? "center" : "left",
+    borderRadius: 2,
+    border: ghost ? `2px solid ${primaryRed}` : `1px solid ${alpha(primaryRed, 0.12)}`,
+    bgcolor: "#fff",
+    boxShadow: ghost
+      ? `0 22px 48px ${alpha(primaryRed, 0.32)}, 0 8px 16px ${alpha("#000", 0.12)}`
+      : `0 2px 8px ${alpha(primaryRed, 0.06)}`,
+    transition: ghost ? "none" : "border-color 0.2s, box-shadow 0.2s, opacity 0.2s",
+    transform: ghost ? "rotate(-1.5deg)" : dragging ? "none" : undefined,
+    opacity: dragging ? 0.3 : ghost ? 0.98 : 1,
+    ...(dragging
+      ? {
+          borderStyle: "dashed",
+          borderColor: alpha(primaryRed, 0.35),
+          bgcolor: alpha(primaryRed, 0.04),
+          boxShadow: "none",
+        }
+      : {}),
+    "& *": {
+      pointerEvents: "none",
+      userSelect: "none",
+    },
+  };
+}
+
+function StudentCardVisual({ student, column }) {
+  return (
+    <>
+      <DragIndicatorIcon
+        sx={{
+          fontSize: 16,
+          color: alpha(primaryRed, 0.45),
+          alignSelf: column ? "center" : "flex-start",
+          mt: column ? 0 : 0.35,
+        }}
+      />
+      {!column ? (
+        <Avatar
+          src={student.profile_image || undefined}
+          sx={{
+            width: 40,
+            height: 40,
+            bgcolor: alpha(primaryRed, 0.12),
+            color: primaryRed,
+            fontWeight: 700,
+            fontSize: "0.9rem",
+          }}
+        >
+          {(student.full_name || student.admission_number || "?").charAt(0).toUpperCase()}
+        </Avatar>
+      ) : null}
+      <Box sx={{ flex: 1, minWidth: 0, width: column ? "100%" : undefined }}>
+        <Typography
+          sx={{
+            fontWeight: 700,
+            color: textPrimary,
+            lineHeight: 1.3,
+            fontSize: column ? "0.8rem" : undefined,
+          }}
+          noWrap={!column}
+        >
+          {student.full_name || student.username || student.admission_number}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ fontSize: column ? "0.7rem" : undefined }}>
+          {student.admission_number}
+          {student.gender ? ` · ${student.gender}` : ""}
+        </Typography>
+      </Box>
+    </>
+  );
+}
+
+function DragStudentGhost({ student, width, x, y, ghostRef, offsetRef }) {
+  return createPortal(
+    <Box
+      ref={(el) => {
+        ghostRef.current = el;
+        if (el && x != null && y != null) {
+          const { offsetX, offsetY } = offsetRef.current;
+          el.style.transform = `translate3d(${x - offsetX}px, ${y - offsetY}px, 0)`;
+        }
+      }}
+      sx={{
+        position: "fixed",
+        left: 0,
+        top: 0,
+        zIndex: 1400,
+        width,
+        pointerEvents: "none",
+        willChange: "transform",
+        ...studentCardContainerSx(true, { ghost: true }),
+      }}
+    >
+      <StudentCardVisual student={student} column />
+    </Box>,
+    document.body
+  );
+}
+
 function DraggableStudentCard({ student, column, disabled, classId, levelId, onPointerDragStart }) {
   const handlePointerDown = (e) => {
     if (disabled || e.button !== 0) return;
@@ -64,29 +172,12 @@ function DraggableStudentCard({ student, column, disabled, classId, levelId, onP
       data-student-id={student.id}
       onPointerDown={handlePointerDown}
       sx={{
-        display: "flex",
-        alignItems: column ? "flex-start" : "center",
-        flexDirection: column ? "column" : "row",
-        gap: column ? 0.5 : 1,
-        py: column ? 1 : 1.25,
-        px: column ? 0.75 : 1,
-        textAlign: column ? "center" : "left",
-        borderRadius: 2,
+        ...studentCardContainerSx(column),
         cursor: disabled ? "default" : "grab",
         touchAction: "none",
         userSelect: "none",
         WebkitUserSelect: "none",
-        border: `1px solid ${alpha(primaryRed, 0.12)}`,
-        bgcolor: "#fff",
-        boxShadow: `0 2px 8px ${alpha(primaryRed, 0.06)}`,
-        transition: "border-color 0.2s, box-shadow 0.2s, opacity 0.2s",
-        "&[data-drag-active='1']": {
-          opacity: 0.55,
-          borderColor: primaryRed,
-          bgcolor: alpha(primaryRed, 0.1),
-          boxShadow: `0 12px 28px ${alpha(primaryRed, 0.22)}`,
-          transform: "scale(0.97)",
-        },
+        "&[data-drag-active='1']": studentCardContainerSx(column, { dragging: true }),
         "&:active": { cursor: disabled ? "default" : "grabbing" },
         "&:hover": disabled
           ? {}
@@ -94,54 +185,10 @@ function DraggableStudentCard({ student, column, disabled, classId, levelId, onP
               borderColor: alpha(primaryRed, 0.35),
               boxShadow: `0 8px 20px ${alpha(primaryRed, 0.12)}`,
             },
-        "& *": {
-          pointerEvents: "none",
-          userSelect: "none",
-        },
       }}
     >
-        <DragIndicatorIcon
-          sx={{
-            fontSize: 16,
-            color: alpha(primaryRed, 0.45),
-            alignSelf: column ? "center" : "flex-start",
-            mt: column ? 0 : 0.35,
-            display: disabled ? "none" : "block",
-          }}
-        />
-        {!column ? (
-          <Avatar
-            src={student.profile_image || undefined}
-            sx={{
-              width: 40,
-              height: 40,
-              bgcolor: alpha(primaryRed, 0.12),
-              color: primaryRed,
-              fontWeight: 700,
-              fontSize: "0.9rem",
-            }}
-          >
-            {(student.full_name || student.admission_number || "?").charAt(0).toUpperCase()}
-          </Avatar>
-        ) : null}
-        <Box sx={{ flex: 1, minWidth: 0, width: column ? "100%" : undefined }}>
-          <Typography
-            sx={{
-              fontWeight: 700,
-              color: textPrimary,
-              lineHeight: 1.3,
-              fontSize: column ? "0.8rem" : undefined,
-            }}
-            noWrap={!column}
-          >
-            {student.full_name || student.username || student.admission_number}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: column ? "0.7rem" : undefined }}>
-            {student.admission_number}
-            {student.gender ? ` · ${student.gender}` : ""}
-          </Typography>
-        </Box>
-      </Box>
+      <StudentCardVisual student={student} column={column} />
+    </Box>
   );
 }
 
@@ -448,6 +495,9 @@ export default function ClassTransferPage() {
   const pointerDragRef = useRef(null);
   const activeCardRef = useRef(null);
   const dragPointerIdRef = useRef(null);
+  const dragGhostElRef = useRef(null);
+  const dragGhostOffsetRef = useRef({ offsetX: 0, offsetY: 0 });
+  const [dragGhost, setDragGhost] = useState(null);
   const [loadingCurricula, setLoadingCurricula] = useState(true);
   const [loadingClasses, setLoadingClasses] = useState(false);
   const [error, setError] = useState("");
@@ -550,6 +600,15 @@ export default function ClassTransferPage() {
     }
     document.body.style.cursor = "";
     pointerDragRef.current = null;
+    setDragGhost(null);
+    dragGhostElRef.current = null;
+  }, []);
+
+  const moveDragGhost = useCallback((clientX, clientY) => {
+    const { offsetX, offsetY } = dragGhostOffsetRef.current;
+    if (dragGhostElRef.current) {
+      dragGhostElRef.current.style.transform = `translate3d(${clientX - offsetX}px, ${clientY - offsetY}px, 0)`;
+    }
   }, []);
 
   const commitTransfer = useCallback(
@@ -623,6 +682,12 @@ export default function ClassTransferPage() {
       if (transferBusy || pointerDragRef.current) return;
 
       const card = e.currentTarget;
+      const rect = card.getBoundingClientRect();
+      dragGhostOffsetRef.current = {
+        offsetX: e.clientX - rect.left,
+        offsetY: e.clientY - rect.top,
+      };
+
       activeCardRef.current = card;
       card.setAttribute("data-drag-active", "1");
       card.style.pointerEvents = "none";
@@ -631,6 +696,7 @@ export default function ClassTransferPage() {
       document.body.classList.add(DRAG_BODY_CLASS);
       document.body.style.cursor = "grabbing";
       pointerDragRef.current = payload;
+      setDragGhost({ student: payload.student, width: rect.width, x: e.clientX, y: e.clientY });
 
       const highlightAt = (clientX, clientY) => {
         document.querySelectorAll("[data-drop-active]").forEach((el) => el.removeAttribute("data-drop-active"));
@@ -641,6 +707,7 @@ export default function ClassTransferPage() {
 
       const onMove = (ev) => {
         if (ev.cancelable) ev.preventDefault();
+        moveDragGhost(ev.clientX, ev.clientY);
         highlightAt(ev.clientX, ev.clientY);
       };
 
@@ -672,7 +739,7 @@ export default function ClassTransferPage() {
       window.addEventListener("pointerup", onUp);
       window.addEventListener("pointercancel", onUp);
     },
-    [clearPointerDragUi, commitTransfer, transferBusy]
+    [clearPointerDragUi, commitTransfer, moveDragGhost, transferBusy]
   );
 
   useEffect(() => () => clearPointerDragUi(), [clearPointerDragUi]);
@@ -1141,6 +1208,17 @@ export default function ClassTransferPage() {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {dragGhost ? (
+        <DragStudentGhost
+          student={dragGhost.student}
+          width={dragGhost.width}
+          x={dragGhost.x}
+          y={dragGhost.y}
+          ghostRef={dragGhostElRef}
+          offsetRef={dragGhostOffsetRef}
+        />
+      ) : null}
     </Box>
   );
 }
