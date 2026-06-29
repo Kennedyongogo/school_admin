@@ -43,7 +43,7 @@ import {
   FactCheck as FactCheckIcon,
 } from "@mui/icons-material";
 import Swal from "sweetalert2";
-import ExamPdfFormPanel from "./ExamPdfFormPanel";
+import PdfExamFormSection from "./PdfExamFormSection";
 import { createManualAnswerEntry, renderManualPdfAnswerRows, renderManualPdfWorkingPapers } from "./pdfManualAnswers";
 import ExamPdfStudentPreviewPanel from "./ExamPdfStudentPreviewPanel";
 import { fetchExamPdfBlobUrl, isPdfFormExamRow } from "./examPdfAdminUtils";
@@ -2540,35 +2540,16 @@ ${imageParts}--${boundary}--`;
                 </Select>
               ) : null}
               {deliveryMode === "pdf_form" ? (
-                <Card variant="outlined" sx={{ borderColor: "#fecaca" }}>
-                  <CardContent>
-                    <Typography sx={{ fontWeight: 800, mb: 1 }}>Exam PDF</Typography>
-                    {!editingId ? (
-                      <Stack spacing={1} sx={{ mb: 2 }}>
-                        <Button variant="outlined" component="label">
-                          Choose PDF file
-                          <input
-                            type="file"
-                            hidden
-                            accept="application/pdf,.pdf"
-                            onChange={(e) => setPendingPdfFile(e.target.files?.[0] || null)}
-                          />
-                        </Button>
-                        {pendingPdfFile ? (
-                          <Typography variant="body2">Selected: {pendingPdfFile.name}</Typography>
-                        ) : null}
-                      </Stack>
-                    ) : null}
-                    <ExamPdfFormPanel
-                      examId={editingId}
-                      pdfTemplatePath={pdfTemplatePath}
-                      onUploadComplete={(data) => {
-                        setPdfFieldSchema(data?.pdf_field_schema_json || []);
-                        setPdfTemplatePath(data?.pdf_template_path || "");
-                      }}
-                    />
-                  </CardContent>
-                </Card>
+                <PdfExamFormSection
+                  examId={editingId}
+                  pendingPdfFile={pendingPdfFile}
+                  pdfTemplatePath={pdfTemplatePath}
+                  onPendingFileChange={setPendingPdfFile}
+                  onUploadComplete={(data) => {
+                    setPdfFieldSchema(data?.pdf_field_schema_json || []);
+                    setPdfTemplatePath(data?.pdf_template_path || "");
+                  }}
+                />
               ) : null}
               {deliveryMode === "questions" ? (
               <Stack direction={{ xs: "column", xl: "row" }} spacing={2} alignItems="flex-start">

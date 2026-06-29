@@ -1,8 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback } from "react";
 import { Alert, Box, Stack, Typography } from "@mui/material";
 import { PremiumDialog, DialogGhostButton } from "../Exams/examUi";
+import { formatWallClockDateTime } from "../Exams/examScheduleTime";
 import ExamPdfStudentPreviewPanel from "../Exams/ExamPdfStudentPreviewPanel";
+import PdfDocumentPreview from "../Exams/PdfDocumentPreview";
 import { createManualAnswerEntry } from "../Exams/pdfManualAnswers";
+import { useFetchedPdfPreview } from "../../utils/pdfPreview";
+import { fetchAssignmentPdfTemplateBlob } from "../Exams/assignmentPdfAdminUtils";
 import AssignmentQuestionFields, { defaultAnswerForQuestionType } from "./AssignmentQuestionFields";
 
 function isPdfAssignment(assignment) {
@@ -19,11 +23,27 @@ function initialAnswersForQuestions(questions) {
 }
 
 export default function AssignmentStudentPreviewDialog({ open, assignment, onClose }) {
-  const [answers, setAnswers] = useState({});
-  const [pdfEntries, setPdfEntries] = useState([createManualAnswerEntry()]);
-  const [pdfWorkingPapers, setPdfWorkingPapers] = useState([]);
+  const [answers, setAnswers] = React.useState({});
+  const [pdfEntries, setPdfEntries] = React.useState([createManualAnswerEntry()]);
+  const [pdfWorkingPapers, setPdfWorkingPapers] = React.useState([]);
 
-  useEffect(() => {
+  const assignmentId = assignment?.id;
+  const hasPdf = Boolean(assignment?.pdf_template_path);
+
+  const fetchBlob = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!assignmentId) throw new Error("Assignment not found.");
+    return fetchAssignmentPdfTemplateBlob(assignmentId, token);
+  }, [assignmentId]);
+
+  const pdfPreview = useFetchedPdfPreview({
+    id: assignmentId,
+    hasPdf,
+    fetchBlob,
+    enabled: open && isPdfAssignment(assignment),
+  });
+
+  React.useEffect(() => {
     if (!open || !assignment) return;
     if (isPdfAssignment(assignment)) {
       setPdfEntries([createManualAnswerEntry()]);
@@ -67,6 +87,7 @@ export default function AssignmentStudentPreviewDialog({ open, assignment, onClo
   };
 
   const questions = Array.isArray(assignment?.questions) ? assignment.questions : [];
+  const pdfAssignment = isPdfAssignment(assignment);
 
   return (
     <PremiumDialog
@@ -101,18 +122,32 @@ export default function AssignmentStudentPreviewDialog({ open, assignment, onClo
 
         {assignment?.due_date ? (
           <Typography variant="caption" color="text.secondary">
-            Due: {new Date(assignment.due_date).toLocaleString()}
+            Due: {formatWallClockDateTime(assignment.due_date)}
           </Typography>
         ) : null}
 
-        {isPdfAssignment(assignment) ? (
-          <ExamPdfStudentPreviewPanel
-            entries={pdfEntries}
-            onEntriesChange={setPdfEntries}
-            workingPapers={pdfWorkingPapers}
-            onAddWorkingPaper={addPreviewWorkingPaper}
-            onRemoveWorkingPaper={removePreviewWorkingPaper}
-          />
+        {pdfAssignment ? (
+          <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+            <Box sx={{ flex: 1.2, minWidth: 0 }}>
+              <PdfDocumentPreview
+                url={pdfPreview.url}
+                loading={pdfPreview.loading}
+                error={pdfPreview.error}
+                title={assignment?.pdf_template_path?.split("/").pop() || "Assignment PDF"}
+                height={{ xs: 400, md: 560 }}
+                emptyMessage="No assignment PDF uploaded yet. Edit the assignment and upload your PDF."
+              />
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0, maxHeight: { md: 560 }, overflow: "auto" }}>
+              <ExamPdfStudentPreviewPanel
+                entries={pdfEntries}
+                onEntriesChange={setPdfEntries}
+                workingPapers={pdfWorkingPapers}
+                onAddWorkingPaper={addPreviewWorkingPaper}
+                onRemoveWorkingPaper={removePreviewWorkingPaper}
+              />
+            </Box>
+          </Stack>
         ) : questions.length ? (
           <Stack spacing={2}>
             {questions.map((q, idx) => {

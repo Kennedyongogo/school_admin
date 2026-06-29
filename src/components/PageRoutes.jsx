@@ -67,6 +67,7 @@ import AssignmentSubmissionsPage from "../Pages/AssignmentSubmissionsPage";
 import AccountingDashboardPage from "../Pages/AccountingDashboardPage";
 import FeeInvoiceViewPage from "../Pages/FeeInvoiceViewPage";
 import HRPage from "../Pages/HRPage";
+import ClassTransferPage from "../Pages/ClassTransferPage";
 import ElimuPlusDashboardPage from "../Pages/ElimuPlusDashboardPage";
 import HRParentCreate from "./HR/HRParentCreate";
 import TrainingEventCreate from "./TrainingOpportunities/TrainingEvents/TrainingEventCreate";
@@ -174,6 +175,7 @@ function PageRoutes() {
             <Route path="elimu-plus" element={<ElimuPlusSchoolProfile />} />
             <Route path="users/create" element={<UsersCreate />} />
             <Route path="users" element={<UsersTable />} />
+            <Route path="class-transfer" element={<ClassTransferPage />} />
             <Route path="curriculum/create" element={<CurriculumCreate />} />
             <Route path="curriculum/terms/activity" element={<TermActivityMonitorPage />} />
             <Route path="curriculum" element={<CurriculumTable />} />

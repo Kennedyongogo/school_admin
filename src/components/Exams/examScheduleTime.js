@@ -47,6 +47,18 @@ export function buildScheduleDateTime(date, timeDayjs) {
   return `${date}T${t}`;
 }
 
+/** Display a stored instant as local wall-clock in the school timezone (admin + portal lists). */
+export function formatWallClockDateTime(iso, timeZone = EXAM_SCHEDULE_TIMEZONE) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  try {
+    return d.toLocaleString(undefined, { timeZone, dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return d.toLocaleString();
+  }
+}
+
 /** Keep TimePicker state time-only so date changes do not shift picked hours. */
 export function normalizeTimePickerValue(value) {
   if (!value || !dayjs.isDayjs(value) || !value.isValid()) return null;

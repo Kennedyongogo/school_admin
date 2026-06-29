@@ -12,6 +12,7 @@ import {
   AccountBalance,
   Quiz,
   AssignmentTurnedIn,
+  TransferWithinAStation,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import { styled, useTheme, alpha } from "@mui/material/styles";
@@ -151,6 +152,7 @@ const MENU_SECTIONS = [
     label: "Administration",
     items: [
       { text: "Users", icon: <PeopleAlt />, path: "/users" },
+      { text: "Class transfer", icon: <TransferWithinAStation />, path: "/class-transfer" },
       { text: "Elimu Plus", icon: <School />, path: "/elimu-plus" },
     ],
   },

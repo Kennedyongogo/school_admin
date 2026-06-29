@@ -4,6 +4,8 @@ import {
   Alert,
   Box,
   Button,
+  Card,
+  CardContent,
   Checkbox,
   Chip,
   FormControl,
@@ -22,6 +24,11 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import dayjs from "dayjs";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { TimePicker } from "@mui/x-date-pickers/TimePicker";
+import { renderTimeViewClock } from "@mui/x-date-pickers/timeViewRenderers";
 import {
   Add as AddIcon,
   ArrowBack as ArrowBackIcon,
@@ -44,11 +51,29 @@ import {
   EmptyTableRow,
 } from "../Exams/examUi";
 import AssignmentStudentPreviewDialog from "./AssignmentStudentPreviewDialog";
+import PdfAssignmentFormSection from "./PdfAssignmentFormSection";
 import { formatChoicesForInput, parseAssignmentChoices, parseChoicesInput } from "./assignmentQuestionUtils";
 import { authJsonHeaders, primaryRed, primaryDark } from "../Exams/examShared";
+import {
+  buildScheduleDateTime,
+  EXAM_SCHEDULE_TIMEZONE,
+  formatWallClockDateTime,
+  normalizeTimePickerValue,
+  wallClockFromInstant,
+} from "../Exams/examScheduleTime";
 
 const authHeaders = authJsonHeaders;
 const accentDark = primaryDark;
+
+const dueTimeFieldSx = {
+  width: "100%",
+  "& .MuiOutlinedInput-root": {
+    borderRadius: 2,
+    "& fieldset": { borderColor: "#FECACA" },
+    "&:hover fieldset": { borderColor: primaryRed },
+    "&.Mui-focused fieldset": { borderColor: primaryRed },
+  },
+};
 
 const QUESTION_TYPES = [
   { value: "short_text", label: "Short text" },
@@ -121,10 +146,14 @@ export default function AssignmentsTab() {
   const [curriculumClassLevelId, setCurriculumClassLevelId] = useState("");
   const [curriculumSubjectId, setCurriculumSubjectId] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [dueTime, setDueTime] = useState(null);
   const [assignedStudentIds, setAssignedStudentIds] = useState([]);
   const [questions, setQuestions] = useState([
     { key: newQuestionKey(), question_text: "", question_type: "short_text", marks: 5, required: false, options: { choices: [] } },
   ]);
+  const [pendingPdfFile, setPendingPdfFile] = useState(null);
+  const [pdfTemplatePath, setPdfTemplatePath] = useState("");
+  const [assignmentStatus, setAssignmentStatus] = useState("draft");
 
   const loadReferenceData = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -230,10 +259,14 @@ export default function AssignmentsTab() {
     setCurriculumClassLevelId("");
     setCurriculumSubjectId("");
     setDueDate("");
+    setDueTime(null);
     setAssignedStudentIds([]);
     setQuestions([
       { key: newQuestionKey(), question_text: "", question_type: "short_text", marks: 5, required: false, options: { choices: [] } },
     ]);
+    setPendingPdfFile(null);
+    setPdfTemplatePath("");
+    setAssignmentStatus("draft");
   };
 
   const openCreate = () => {
@@ -277,11 +310,26 @@ export default function AssignmentsTab() {
     setDescription(detail.description || "");
     setInstructions(detail.instructions || "");
     setAssignmentType(detail.assignment_type || "questions");
+    setPdfTemplatePath(detail.pdf_template_path || "");
+    setPendingPdfFile(null);
+    setAssignmentStatus(detail.status || "draft");
     setCurriculumId(detail.curriculum_id || "");
     setCurriculumClassId(detail.curriculum_class_id || "");
     setCurriculumClassLevelId(detail.curriculum_class_level_id || "");
     setCurriculumSubjectId(detail.curriculum_subject_id || "");
-    setDueDate(detail.due_date ? String(detail.due_date).slice(0, 16) : "");
+    if (detail.due_date) {
+      const wall = wallClockFromInstant(detail.due_date, EXAM_SCHEDULE_TIMEZONE);
+      if (wall) {
+        setDueDate(wall.date);
+        setDueTime(wall.time);
+      } else {
+        setDueDate("");
+        setDueTime(null);
+      }
+    } else {
+      setDueDate("");
+      setDueTime(null);
+    }
     setAssignedStudentIds(Array.isArray(detail.assigned_student_ids) ? detail.assigned_student_ids.map(String) : []);
     setQuestions(
       Array.isArray(detail.questions) && detail.questions.length
@@ -332,6 +380,26 @@ export default function AssignmentsTab() {
       return;
     }
 
+    if (assignmentType === "pdf_form" && publishAfterSave && !pendingPdfFile && !pdfTemplatePath) {
+      await Swal.fire({
+        icon: "warning",
+        title: "PDF required",
+        text: "Choose your assignment PDF before publishing, or save as draft first then upload on edit.",
+      });
+      return;
+    }
+
+    if (dueDate && !dueTime) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Due time required",
+        text: "Select a due time when you set a due date (same as exam scheduling).",
+      });
+      return;
+    }
+
+    const isEdit = mode === "edit" && Boolean(editingId);
+
     const body = {
       title: title.trim(),
       description: description.trim() || null,
@@ -342,8 +410,12 @@ export default function AssignmentsTab() {
       curriculum_class_level_id: curriculumClassLevelId,
       curriculum_subject_id: curriculumSubjectId || null,
       assigned_student_ids: assignedStudentIds,
-      due_date: dueDate ? new Date(dueDate).toISOString() : null,
-      status: publishAfterSave ? "published" : "draft",
+      due_date: dueDate && dueTime ? buildScheduleDateTime(dueDate, dueTime) : null,
+      ...(isEdit
+        ? publishAfterSave
+          ? { status: "published" }
+          : {}
+        : { status: publishAfterSave ? "published" : "draft" }),
       questions:
         assignmentType === "questions"
           ? questions
@@ -382,20 +454,53 @@ export default function AssignmentsTab() {
 
     setSaving(true);
     try {
-      const url = mode === "edit" && editingId ? `/api/assignments/${editingId}` : "/api/assignments";
-      const method = mode === "edit" && editingId ? "PUT" : "POST";
+      const url = isEdit ? `/api/assignments/${editingId}` : "/api/assignments";
+      const method = isEdit ? "PUT" : "POST";
       const res = await fetch(url, { method, headers: authHeaders(token), body: JSON.stringify(body) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.message || "Could not save assignment.");
-      if (publishAfterSave && data.data?.id && data.data?.status !== "published") {
-        await fetch(`/api/assignments/${data.data.id}/publish`, { method: "POST", headers: authHeaders(token) });
+      const savedId = data.data?.id || editingId;
+      if (assignmentType === "pdf_form" && pendingPdfFile && savedId) {
+        const formData = new FormData();
+        formData.append("assignment_pdf_template", pendingPdfFile);
+        const upRes = await fetch(`/api/assignments/${savedId}/pdf-template`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          body: formData,
+        });
+        const upData = await upRes.json().catch(() => ({}));
+        if (!upRes.ok || !upData.success) {
+          throw new Error(upData.message || "Assignment saved but PDF upload failed.");
+        }
+        setPdfTemplatePath(upData.data?.pdf_template_path || "");
+        setPendingPdfFile(null);
       }
-      await Swal.fire({ icon: "success", title: publishAfterSave ? "Published" : "Saved", timer: 900, showConfirmButton: false });
+      if (publishAfterSave && savedId && data.data?.status !== "published") {
+        const pubRes = await fetch(`/api/assignments/${savedId}/publish`, { method: "POST", headers: authHeaders(token) });
+        const pubData = await pubRes.json().catch(() => ({}));
+        if (!pubRes.ok || !pubData.success) {
+          throw new Error(pubData.message || "Saved but publish failed. Upload the PDF and try publishing again.");
+        }
+      }
+      const successTitle = isEdit
+        ? publishAfterSave
+          ? assignmentStatus === "published"
+            ? "Updated"
+            : "Published"
+          : "Updated"
+        : publishAfterSave
+          ? "Published"
+          : "Saved";
+      await Swal.fire({ icon: "success", title: successTitle, timer: 900, showConfirmButton: false });
       setMode("list");
       resetForm();
       await loadAssignments();
     } catch (e) {
-      await Swal.fire({ icon: "error", title: "Save failed", text: e.message || "Could not save." });
+      await Swal.fire({
+        icon: "error",
+        title: mode === "edit" ? "Update failed" : "Save failed",
+        text: e.message || "Could not save.",
+      });
     } finally {
       setSaving(false);
     }
@@ -434,6 +539,7 @@ export default function AssignmentsTab() {
 
   if (mode === "create" || mode === "edit") {
     return (
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
       <TabPanelShell loading={false} error={error} onDismissError={() => setError("")}>
         <Stack spacing={2}>
           <Stack direction="row" alignItems="center" spacing={1}>
@@ -453,7 +559,7 @@ export default function AssignmentsTab() {
             <InputLabel>Type</InputLabel>
             <Select label="Type" value={assignmentType} onChange={(e) => setAssignmentType(e.target.value)}>
               <MenuItem value="questions">Online (questions)</MenuItem>
-              <MenuItem value="pdf_form">PDF-style (typed answers + file uploads)</MenuItem>
+              <MenuItem value="pdf_form">PDF assignment (student adds answers)</MenuItem>
             </Select>
           </FormControl>
 
@@ -511,11 +617,38 @@ export default function AssignmentsTab() {
             </FormControl>
             <TextField
               label="Due date (optional)"
-              type="datetime-local"
+              type="date"
               value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setDueDate(next);
+                if (!next) setDueTime(null);
+              }}
               fullWidth
               InputLabelProps={{ shrink: true }}
+              helperText={`School time (${EXAM_SCHEDULE_TIMEZONE})`}
+            />
+            <TimePicker
+              label="Due time"
+              ampm
+              value={dueTime}
+              disabled={!dueDate}
+              onChange={(v) => {
+                const next = normalizeTimePickerValue(v);
+                if (next) setDueTime(next);
+              }}
+              viewRenderers={{
+                hours: renderTimeViewClock,
+                minutes: renderTimeViewClock,
+              }}
+              slotProps={{
+                textField: {
+                  fullWidth: true,
+                  disabled: !dueDate,
+                  sx: dueTimeFieldSx,
+                  helperText: dueDate ? "Time you pick is what students see" : "Set a due date first",
+                },
+              }}
             />
           </Stack>
 
@@ -685,22 +818,45 @@ export default function AssignmentsTab() {
               </Stack>
             </Box>
           ) : (
-            <Alert severity="info" sx={{ borderRadius: 2 }}>
-              PDF-style assignments let students type answers per question and upload working papers (images/PDF). No template upload is required.
-            </Alert>
+            <PdfAssignmentFormSection
+              mode={mode}
+              assignmentId={editingId}
+              pendingPdfFile={pendingPdfFile}
+              pdfPath={pdfTemplatePath}
+              onPendingFileChange={setPendingPdfFile}
+              onUploadComplete={(data) => {
+                setPdfTemplatePath(data?.pdf_template_path || "");
+                setPendingPdfFile(null);
+              }}
+            />
           )}
 
           <Stack direction="row" spacing={1} justifyContent="flex-end">
             <ExamGhostButton onClick={() => { setMode("list"); resetForm(); }}>Cancel</ExamGhostButton>
             <ExamPrimaryButton onClick={() => void saveAssignment(false)} disabled={saving}>
-              {saving ? "Saving…" : "Save draft"}
+              {saving
+                ? mode === "edit"
+                  ? "Updating…"
+                  : "Saving…"
+                : mode === "edit"
+                  ? assignmentStatus === "published"
+                    ? "Update assignment"
+                    : "Save changes"
+                  : "Save draft"}
             </ExamPrimaryButton>
-            <ExamPrimaryButton onClick={() => void saveAssignment(true)} disabled={saving}>
-              {saving ? "Publishing…" : "Save & publish"}
-            </ExamPrimaryButton>
+            {mode === "create" || assignmentStatus !== "published" ? (
+              <ExamPrimaryButton onClick={() => void saveAssignment(true)} disabled={saving}>
+                {saving
+                  ? "Publishing…"
+                  : mode === "edit"
+                    ? "Publish"
+                    : "Save & publish"}
+              </ExamPrimaryButton>
+            ) : null}
           </Stack>
         </Stack>
       </TabPanelShell>
+      </LocalizationProvider>
     );
   }
 
@@ -755,7 +911,7 @@ export default function AssignmentsTab() {
                     <Typography variant="caption" color="text.secondary" display="block">
                       {r.curriculum_class?.name || "—"}
                       {" · "}
-                      {r.assignment_type === "pdf_form" ? "PDF-style" : "Online"}
+                      {r.assignment_type === "pdf_form" ? "PDF" : "Online"}
                       {r.teacher?.user?.full_name ? ` · ${r.teacher.user.full_name}` : ""}
                     </Typography>
                   </TableCell>
@@ -767,7 +923,7 @@ export default function AssignmentsTab() {
                         label={r.status || "draft"}
                       />
                       <Typography variant="caption" color="text.secondary">
-                        Due: {r.due_date ? new Date(r.due_date).toLocaleString() : "—"}
+                        Due: {formatWallClockDateTime(r.due_date)}
                       </Typography>
                     </Stack>
                   </TableCell>
