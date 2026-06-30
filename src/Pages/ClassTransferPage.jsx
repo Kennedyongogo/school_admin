@@ -4,11 +4,15 @@ import {
   Alert,
   Avatar,
   Box,
+  Button,
+  Checkbox,
   Chip,
   CircularProgress,
   IconButton,
+  InputAdornment,
   Snackbar,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
@@ -21,6 +25,11 @@ import LayersIcon from "@mui/icons-material/Layers";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import SearchIcon from "@mui/icons-material/Search";
+import ClearIcon from "@mui/icons-material/Clear";
+import ClassTransferRegisterPanel from "../components/SchoolProfile/ClassTransferRegisterPanel";
 import {
   authHeaders,
   elimuViewportSx,
@@ -40,6 +49,31 @@ const dropZoneActiveSx = {
   bgcolor: `${alpha(primaryRed, 0.08)} !important`,
   boxShadow: `inset 0 0 0 1px ${alpha(primaryRed, 0.2)}`,
 };
+
+function getGallerySlideSpan(container) {
+  if (!container) return null;
+  const slide = container.querySelector("[data-class-slide]");
+  if (!slide) return null;
+  const gap = parseFloat(getComputedStyle(container).columnGap || getComputedStyle(container).gap) || 0;
+  return slide.offsetWidth + gap;
+}
+
+function levelsCacheKey(classId, search) {
+  const q = String(search || "").trim().toLowerCase();
+  return q ? `${classId}::q::${q}` : String(classId);
+}
+
+function patchLevelsCacheForClass(cacheRef, classId, patchFn) {
+  if (!classId || !cacheRef.current) return;
+  const id = String(classId);
+  Object.keys(cacheRef.current).forEach((key) => {
+    if (key === id || key.startsWith(`${id}::q::`)) {
+      const current = cacheRef.current[key];
+      if (!current) return;
+      cacheRef.current[key] = patchFn(current);
+    }
+  });
+}
 
 function cloneLevels(levels) {
   return (levels || []).map((level) => ({
@@ -128,7 +162,7 @@ function StudentCardVisual({ student, column }) {
   );
 }
 
-function DragStudentGhost({ student, width, x, y, ghostRef, offsetRef }) {
+function DragStudentGhost({ student, width, x, y, count, ghostRef, offsetRef }) {
   return createPortal(
     <Box
       ref={(el) => {
@@ -149,15 +183,43 @@ function DragStudentGhost({ student, width, x, y, ghostRef, offsetRef }) {
         ...studentCardContainerSx(true, { ghost: true }),
       }}
     >
+      {count > 1 ? (
+        <Chip
+          size="small"
+          label={`${count} students`}
+          sx={{
+            position: "absolute",
+            top: -10,
+            right: -8,
+            fontWeight: 800,
+            bgcolor: primaryRed,
+            color: "#fff",
+            height: 22,
+            fontSize: "0.68rem",
+            zIndex: 1,
+          }}
+        />
+      ) : null}
       <StudentCardVisual student={student} column />
     </Box>,
     document.body
   );
 }
 
-function DraggableStudentCard({ student, column, disabled, classId, levelId, onPointerDragStart }) {
+function DraggableStudentCard({
+  student,
+  column,
+  disabled,
+  pickupDisabled,
+  classId,
+  levelId,
+  isSelected,
+  onToggleSelect,
+  onPointerDragStart,
+}) {
   const handlePointerDown = (e) => {
-    if (disabled || e.button !== 0) return;
+    if (disabled || pickupDisabled || e.button !== 0) return;
+    if (e.target.closest("[data-select-checkbox]")) return;
     e.preventDefault();
     onPointerDragStart(e, {
       studentId: student.id,
@@ -170,29 +232,75 @@ function DraggableStudentCard({ student, column, disabled, classId, levelId, onP
   return (
     <Box
       data-student-id={student.id}
-      onPointerDown={handlePointerDown}
       sx={{
-        ...studentCardContainerSx(column),
-        cursor: disabled ? "default" : "grab",
-        touchAction: "none",
-        userSelect: "none",
-        WebkitUserSelect: "none",
-        "&[data-drag-active='1']": studentCardContainerSx(column, { dragging: true }),
-        "&:active": { cursor: disabled ? "default" : "grabbing" },
-        "&:hover": disabled
-          ? {}
-          : {
-              borderColor: alpha(primaryRed, 0.35),
-              boxShadow: `0 8px 20px ${alpha(primaryRed, 0.12)}`,
-            },
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 0.25,
       }}
     >
-      <StudentCardVisual student={student} column={column} />
+      <Checkbox
+        data-select-checkbox
+        size="small"
+        checked={isSelected}
+        disabled={disabled || pickupDisabled}
+        onChange={() => onToggleSelect(student, classId, levelId)}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        sx={{
+          p: 0.35,
+          mt: column ? 0.15 : 0.5,
+          pointerEvents: "auto",
+          color: alpha(primaryRed, 0.45),
+          "&.Mui-checked": { color: primaryRed },
+        }}
+      />
+      <Box
+        data-student-drag-card
+        onPointerDown={handlePointerDown}
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          ...studentCardContainerSx(column, { dragging: false }),
+          ...(isSelected
+            ? {
+                borderColor: primaryRed,
+                bgcolor: alpha(primaryRed, 0.06),
+                boxShadow: `0 0 0 1px ${alpha(primaryRed, 0.2)}`,
+              }
+            : {}),
+          cursor: disabled || pickupDisabled ? "default" : "grab",
+          touchAction: "none",
+          userSelect: "none",
+          WebkitUserSelect: "none",
+          opacity: pickupDisabled ? 0.85 : 1,
+          "&[data-drag-active='1']": studentCardContainerSx(column, { dragging: true }),
+          "&:active": { cursor: disabled || pickupDisabled ? "default" : "grabbing" },
+          "&:hover": disabled || pickupDisabled
+            ? {}
+            : {
+                borderColor: alpha(primaryRed, 0.35),
+                boxShadow: `0 8px 20px ${alpha(primaryRed, 0.12)}`,
+              },
+        }}
+      >
+        <StudentCardVisual student={student} column={column} />
+      </Box>
     </Box>
   );
 }
 
-function StudentRoster({ students, compact, column, transferBusy, classId, levelId, onPointerDragStart }) {
+function StudentRoster({
+  students,
+  compact,
+  column,
+  transferBusy,
+  pickupDisabled,
+  classId,
+  levelId,
+  selectedStudentIds,
+  onToggleSelect,
+  onPointerDragStart,
+}) {
   if (!students.length) {
     return (
       <Box
@@ -225,8 +333,11 @@ function StudentRoster({ students, compact, column, transferBusy, classId, level
           student={student}
           column={column}
           disabled={transferBusy}
+          pickupDisabled={pickupDisabled}
           classId={classId}
           levelId={levelId}
+          isSelected={selectedStudentIds.has(student.id)}
+          onToggleSelect={onToggleSelect}
           onPointerDragStart={onPointerDragStart}
         />
       ))}
@@ -234,8 +345,19 @@ function StudentRoster({ students, compact, column, transferBusy, classId, level
   );
 }
 
-function TermDropColumn({ level, classId, transferBusy, onPointerDragStart }) {
+function TermDropColumn({
+  level,
+  classId,
+  transferBusy,
+  pickupDisabled,
+  selectedCount,
+  onBulkMoveHere,
+  selectedStudentIds,
+  onToggleSelect,
+  onPointerDragStart,
+}) {
   const count = level.student_count ?? level.students?.length ?? 0;
+  const canBulkMove = selectedCount > 0 && !transferBusy;
 
   return (
     <Box
@@ -271,6 +393,24 @@ function TermDropColumn({ level, classId, transferBusy, onPointerDragStart }) {
         <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 600 }}>
           {count} student{count === 1 ? "" : "s"}
         </Typography>
+        {canBulkMove ? (
+          <Button
+            size="small"
+            variant="contained"
+            onClick={() => onBulkMoveHere(classId, level.id)}
+            sx={{
+              mt: 0.75,
+              py: 0.35,
+              fontSize: "0.68rem",
+              fontWeight: 800,
+              borderRadius: 1.5,
+              bgcolor: primaryRed,
+              "&:hover": { bgcolor: primaryDark },
+            }}
+          >
+            Move {selectedCount} here
+          </Button>
+        ) : null}
       </Box>
 
       <Box
@@ -295,8 +435,11 @@ function TermDropColumn({ level, classId, transferBusy, onPointerDragStart }) {
           compact
           column
           transferBusy={transferBusy}
+          pickupDisabled={pickupDisabled}
           classId={classId}
           levelId={level.id}
+          selectedStudentIds={selectedStudentIds}
+          onToggleSelect={onToggleSelect}
           onPointerDragStart={onPointerDragStart}
         />
       </Box>
@@ -304,7 +447,20 @@ function TermDropColumn({ level, classId, transferBusy, onPointerDragStart }) {
   );
 }
 
-function TermColumnsPanel({ levels, loadingLevels, classId, transferBusy, onPointerDragStart }) {
+function TermColumnsPanel({
+  levels,
+  loadingLevels,
+  classId,
+  transferBusy,
+  pickupDisabled,
+  selectedCount,
+  searchQuery,
+  onClearSelection,
+  onBulkMoveHere,
+  selectedStudentIds,
+  onToggleSelect,
+  onPointerDragStart,
+}) {
   if (loadingLevels) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
@@ -321,30 +477,92 @@ function TermColumnsPanel({ levels, loadingLevels, classId, transferBusy, onPoin
     );
   }
 
+  const hasAnyStudents = levels.some((level) => (level.students || []).length > 0);
+
   return (
-    <Box
-      sx={{
-        mt: 2,
-        display: "flex",
-        width: "100%",
-        gap: 0.75,
-        alignItems: "stretch",
-      }}
-    >
-      {levels.map((level) => (
+    <Box sx={{ mt: 2 }}>
+      {selectedCount > 0 ? (
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          flexWrap="wrap"
+          gap={1}
+          sx={{
+            mb: 1.25,
+            px: 1.25,
+            py: 1,
+            borderRadius: 2,
+            bgcolor: alpha(primaryRed, 0.08),
+            border: `1px solid ${alpha(primaryRed, 0.2)}`,
+          }}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 700, color: primaryDark }}>
+            {selectedCount} student{selectedCount === 1 ? "" : "s"} selected
+          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+              Drag selected students together, or use Move here on a term
+            </Typography>
+            <Button size="small" onClick={onClearSelection} sx={{ fontWeight: 700 }}>
+              Clear
+            </Button>
+          </Stack>
+        </Stack>
+      ) : null}
+      {!hasAnyStudents && searchQuery ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25, fontStyle: "italic" }}>
+          No students match &ldquo;{searchQuery}&rdquo; in this class.
+        </Typography>
+      ) : null}
+      <Box
+        sx={{
+          display: "flex",
+          width: "100%",
+          gap: 0.75,
+          alignItems: "stretch",
+        }}
+      >
+        {levels.map((level) => (
           <TermDropColumn
             key={level.id}
             level={level}
             classId={classId}
             transferBusy={transferBusy}
+            pickupDisabled={pickupDisabled}
+            selectedCount={selectedCount}
+            onBulkMoveHere={onBulkMoveHere}
+            selectedStudentIds={selectedStudentIds}
+            onToggleSelect={onToggleSelect}
             onPointerDragStart={onPointerDragStart}
           />
         ))}
+      </Box>
     </Box>
   );
 }
 
-function ClassGalleryCard({ classItem, levels, loadingLevels, transferBusy, onPointerDragStart }) {
+function ClassGalleryCard({
+  classItem,
+  levels,
+  loadingLevels,
+  transferBusy,
+  selectedCount,
+  onClearSelection,
+  onBulkMoveHere,
+  selectedStudentIds,
+  onToggleSelect,
+  onPointerDragStart,
+  isActiveSlide,
+  isDragSession,
+  classViewMode,
+  onClassViewModeChange,
+  classSearchInput = "",
+  onClassSearchInputChange = () => {},
+  classSearchQuery = "",
+  curriculumId,
+  registerRefreshKey,
+}) {
   return (
     <Box
       data-class-card
@@ -352,9 +570,14 @@ function ClassGalleryCard({ classItem, levels, loadingLevels, transferBusy, onPo
         width: "100%",
         borderRadius: "22px",
         bgcolor: "#fff",
-        border: "1px solid rgba(220,38,38,0.12)",
-        boxShadow: "0 16px 48px -12px rgba(220,38,38,0.22)",
+        border: isDragSession && !isActiveSlide
+          ? `2px solid ${alpha(primaryRed, 0.45)}`
+          : "1px solid rgba(220,38,38,0.12)",
+        boxShadow: isDragSession && !isActiveSlide
+          ? `0 12px 40px -8px ${alpha(primaryRed, 0.28)}`
+          : "0 16px 48px -12px rgba(220,38,38,0.22)",
         overflow: "hidden",
+        transition: "border-color 0.2s, box-shadow 0.2s",
       }}
     >
       <Box
@@ -465,25 +688,136 @@ function ClassGalleryCard({ classItem, levels, loadingLevels, transferBusy, onPo
             borderTop: `1px solid ${alpha(primaryRed, 0.1)}`,
           }}
         >
-          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }} flexWrap="wrap" gap={1}>
             <Typography
               variant="overline"
               sx={{ fontWeight: 800, color: primaryDark, letterSpacing: "0.08em", fontSize: "0.68rem" }}
             >
-              Terms in this class
+              {isActiveSlide
+                ? classViewMode === "register"
+                  ? "Term movement register"
+                  : "Terms in this class"
+                : "Drop onto a term"}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-              Press and drag a student card to another term
-            </Typography>
+            {isActiveSlide ? (
+            <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" sx={{ flex: 1, justifyContent: "flex-end" }}>
+              <Button
+                size="small"
+                variant={classViewMode === "transfer" ? "contained" : "outlined"}
+                startIcon={<SwapHorizIcon />}
+                onClick={() => onClassViewModeChange("transfer")}
+                sx={{
+                  fontWeight: 700,
+                  borderRadius: 2,
+                  ...(classViewMode === "transfer"
+                    ? { bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }
+                    : { borderColor: alpha(primaryRed, 0.35), color: primaryDark }),
+                }}
+              >
+                Transfer
+              </Button>
+              <Button
+                size="small"
+                variant={classViewMode === "register" ? "contained" : "outlined"}
+                startIcon={<ViewListIcon />}
+                onClick={() => onClassViewModeChange("register")}
+                sx={{
+                  fontWeight: 700,
+                  borderRadius: 2,
+                  ...(classViewMode === "register"
+                    ? { bgcolor: primaryRed, "&:hover": { bgcolor: primaryDark } }
+                    : { borderColor: alpha(primaryRed, 0.35), color: primaryDark }),
+                }}
+              >
+                Register
+              </Button>
+              <TextField
+                size="small"
+                placeholder="Search name, admission, placement…"
+                value={classSearchInput}
+                onChange={(e) => onClassSearchInputChange(e.target.value)}
+                sx={{
+                  minWidth: { xs: "100%", sm: 200 },
+                  maxWidth: { sm: 280 },
+                  flex: { sm: "1 1 200px" },
+                  "& .MuiOutlinedInput-root": { borderRadius: 2, bgcolor: "#fff" },
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ fontSize: 20, color: alpha(primaryRed, 0.55) }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: classSearchInput ? (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        aria-label="Clear search"
+                        onClick={() => onClassSearchInputChange("")}
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                }}
+              />
+              {classViewMode === "transfer" && !classSearchQuery ? (
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, width: { xs: "100%", sm: "auto" } }}>
+                  Drag within this class or sideways to another class card
+                </Typography>
+              ) : null}
+            </Stack>
+            ) : (
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                Neighbouring class — release on a term column
+              </Typography>
+            )}
           </Stack>
 
-          <TermColumnsPanel
-            levels={levels}
-            loadingLevels={loadingLevels}
-            classId={classItem.id}
-            transferBusy={transferBusy}
-            onPointerDragStart={onPointerDragStart}
-          />
+          {isActiveSlide ? (
+            <>
+              <Box sx={{ display: classViewMode === "transfer" ? "block" : "none" }}>
+                <TermColumnsPanel
+                  levels={levels}
+                  loadingLevels={loadingLevels}
+                  classId={classItem.id}
+                  transferBusy={transferBusy}
+                  pickupDisabled={false}
+                  searchQuery={classSearchQuery}
+                  selectedCount={selectedCount}
+                  onClearSelection={onClearSelection}
+                  onBulkMoveHere={onBulkMoveHere}
+                  selectedStudentIds={selectedStudentIds}
+                  onToggleSelect={onToggleSelect}
+                  onPointerDragStart={onPointerDragStart}
+                />
+              </Box>
+              <Box sx={{ display: classViewMode === "register" ? "block" : "none" }}>
+                <ClassTransferRegisterPanel
+                  classId={classItem.id}
+                  levels={levels}
+                  curriculumId={curriculumId}
+                  searchQuery={classSearchQuery}
+                  refreshKey={registerRefreshKey}
+                  registerVisible={classViewMode === "register"}
+                />
+              </Box>
+            </>
+          ) : (
+            <TermColumnsPanel
+              levels={levels}
+              loadingLevels={loadingLevels}
+              classId={classItem.id}
+              transferBusy={transferBusy}
+              pickupDisabled
+              selectedCount={selectedCount}
+              onClearSelection={onClearSelection}
+              onBulkMoveHere={onBulkMoveHere}
+              selectedStudentIds={selectedStudentIds}
+              onToggleSelect={onToggleSelect}
+              onPointerDragStart={onPointerDragStart}
+            />
+          )}
         </Box>
       </Box>
     </Box>
@@ -510,34 +844,147 @@ export default function ClassTransferPage() {
   const [levelsForClassId, setLevelsForClassId] = useState(null);
   const [loadingLevels, setLoadingLevels] = useState(false);
   const levelsCacheRef = useRef({});
+  const levelsCacheEpochRef = useRef({});
   const levelsRequestRef = useRef(0);
+  const levelsForClassIdRef = useRef(null);
+  const activeDropZoneRef = useRef(null);
+  const bulkDragCardsRef = useRef([]);
   const [transferBusy, setTransferBusy] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [selectedStudents, setSelectedStudents] = useState(() => new Map());
+  const [classViewMode, setClassViewMode] = useState("transfer");
+  const [registerRefreshKey, setRegisterRefreshKey] = useState(0);
+  const [classSearchInput, setClassSearchInput] = useState("");
+  const [classSearchQuery, setClassSearchQuery] = useState("");
+  const [prefetchingLevels, setPrefetchingLevels] = useState(false);
+  const [levelsPrefetchTick, setLevelsPrefetchTick] = useState(0);
 
   const selectedCurriculum = curricula[activeTab] || null;
   const currentClass = classes[classIndex] || null;
+  const selectedStudentIds = useMemo(() => new Set(selectedStudents.keys()), [selectedStudents]);
+  const selectedCount = selectedStudents.size;
 
   const showSnack = useCallback((message, severity = "success") => {
     setSnackbar({ open: true, message, severity });
   }, []);
 
-  const fetchLevelsRaw = useCallback(async (classId) => {
-    const token = localStorage.getItem("token");
-    const res = await fetch(`/api/class-transfer/classes/${encodeURIComponent(classId)}/levels`, {
-      headers: authHeaders(token),
+  const clearSelection = useCallback(() => {
+    setSelectedStudents(new Map());
+  }, []);
+
+  const removeStudentsFromSelection = useCallback((studentIds) => {
+    const ids = [...new Set((studentIds || []).filter(Boolean))];
+    if (!ids.length) return;
+    setSelectedStudents((prev) => {
+      const next = new Map(prev);
+      ids.forEach((id) => next.delete(id));
+      return next.size === prev.size ? prev : next;
     });
+  }, []);
+
+  const toggleStudentSelection = useCallback((student, classId, levelId) => {
+    setSelectedStudents((prev) => {
+      const next = new Map(prev);
+      if (next.has(student.id)) next.delete(student.id);
+      else next.set(student.id, { student, fromClassId: classId, fromLevelId: levelId });
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    clearSelection();
+    setClassViewMode("transfer");
+  }, [activeTab, classIndex, clearSelection]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setClassSearchQuery(classSearchInput.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [classSearchInput]);
+
+  useEffect(() => {
+    clearSelection();
+  }, [classSearchQuery, clearSelection]);
+
+  const fetchLevelsRaw = useCallback(async (classId, search = "") => {
+    const token = localStorage.getItem("token");
+    const params = new URLSearchParams();
+    const q = String(search || "").trim();
+    if (q) params.set("search", q);
+    const query = params.toString();
+    const res = await fetch(
+      `/api/class-transfer/classes/${encodeURIComponent(classId)}/levels${query ? `?${query}` : ""}`,
+      { headers: authHeaders(token) }
+    );
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.success) throw new Error(data.message || "Could not load terms.");
     return Array.isArray(data.data?.levels) ? data.data.levels : [];
   }, []);
 
-  const syncLevelsState = useCallback((classId) => {
-    const cached = levelsCacheRef.current[classId];
-    if (cached) {
-      setLevels(cloneLevels(cached));
-      setLevelsForClassId(classId);
-    }
+  const beginCacheFetch = useCallback((classId) => {
+    return levelsCacheEpochRef.current[classId] || 0;
   }, []);
+
+  const shouldApplyCacheFetch = useCallback((classId, epoch) => {
+    return (levelsCacheEpochRef.current[classId] || 0) === epoch;
+  }, []);
+
+  const bumpCacheEpoch = useCallback((...classIds) => {
+    classIds.forEach((classId) => {
+      if (!classId) return;
+      const id = String(classId);
+      const bumpKey = (key) => {
+        levelsCacheEpochRef.current[key] = (levelsCacheEpochRef.current[key] || 0) + 1;
+      };
+      bumpKey(id);
+      Object.keys(levelsCacheEpochRef.current).forEach((key) => {
+        if (key.startsWith(`${id}::q::`)) bumpKey(key);
+      });
+      Object.keys(levelsCacheRef.current).forEach((key) => {
+        if (key.startsWith(`${id}::q::`)) delete levelsCacheRef.current[key];
+      });
+    });
+  }, []);
+
+  const writeLevelsCache = useCallback(
+    (classId, rows, epoch) => {
+      if (epoch != null && !shouldApplyCacheFetch(classId, epoch)) {
+        return false;
+      }
+      levelsCacheRef.current[classId] = cloneLevels(rows);
+      setLevelsPrefetchTick((t) => t + 1);
+      return true;
+    },
+    [shouldApplyCacheFetch]
+  );
+
+  const ensureLevelsCached = useCallback(
+    async (classId) => {
+      const cacheKey = levelsCacheKey(classId, "");
+      if (!classId || levelsCacheRef.current[cacheKey]) return;
+      const epoch = beginCacheFetch(cacheKey);
+      const rows = await fetchLevelsRaw(classId, "");
+      writeLevelsCache(cacheKey, rows, epoch);
+    },
+    [beginCacheFetch, fetchLevelsRaw, writeLevelsCache]
+  );
+
+  const getLevelsForClass = useCallback((classId) => {
+    void levelsPrefetchTick;
+    const baseKey = levelsCacheKey(classId, "");
+    return levelsCacheRef.current[baseKey] || [];
+  }, [levelsPrefetchTick]);
+
+  const syncLevelsState = useCallback(
+    (classId, search = "") => {
+      const cacheKey = levelsCacheKey(classId, search);
+      const cached = levelsCacheRef.current[cacheKey] ?? levelsCacheRef.current[classId];
+      if (cached) {
+        setLevels(cloneLevels(cached));
+        setLevelsForClassId(classId);
+      }
+    },
+    []
+  );
 
   const bumpClassCounts = useCallback((fromClassId, toClassId) => {
     if (fromClassId === toClassId) return;
@@ -552,39 +999,49 @@ export default function ClassTransferPage() {
 
   const applyLocalMove = useCallback(
     ({ student, fromClassId, fromLevelId, toClassId, toLevelId }) => {
+      bumpCacheEpoch(fromClassId, toClassId);
+
       const removeFromClass = (classId, levelId, studentId) => {
-        if (!levelsCacheRef.current[classId]) return;
-        levelsCacheRef.current[classId] = levelsCacheRef.current[classId].map((level) => {
-          if (level.id !== levelId) return level;
-          const students = (level.students || []).filter((s) => s.id !== studentId);
-          return { ...level, students, student_count: students.length };
-        });
+        patchLevelsCacheForClass(levelsCacheRef, classId, (levels) =>
+          levels.map((level) => {
+            if (String(level.id) !== String(levelId)) return level;
+            const students = (level.students || []).filter((s) => String(s.id) !== String(studentId));
+            return { ...level, students, student_count: students.length };
+          })
+        );
       };
 
       const addToClass = (classId, levelId, stud) => {
-        if (!levelsCacheRef.current[classId]) return;
-        levelsCacheRef.current[classId] = levelsCacheRef.current[classId].map((level) => {
-          if (level.id !== levelId) return level;
-          if ((level.students || []).some((s) => s.id === stud.id)) return level;
-          const students = [...(level.students || []), stud];
-          return { ...level, students, student_count: students.length };
-        });
+        patchLevelsCacheForClass(levelsCacheRef, classId, (levels) =>
+          levels.map((level) => {
+            if (String(level.id) !== String(levelId)) return level;
+            if ((level.students || []).some((s) => String(s.id) === String(stud.id))) return level;
+            const students = [...(level.students || []), stud];
+            return { ...level, students, student_count: students.length };
+          })
+        );
       };
 
       removeFromClass(fromClassId, fromLevelId, student.id);
       addToClass(toClassId, toLevelId, student);
+      setLevelsPrefetchTick((t) => t + 1);
 
       if (levelsForClassId === fromClassId || levelsForClassId === toClassId) {
-        syncLevelsState(levelsForClassId);
+        syncLevelsState(levelsForClassId, classSearchQuery);
       }
       bumpClassCounts(fromClassId, toClassId);
     },
-    [bumpClassCounts, levelsForClassId, syncLevelsState]
+    [bumpCacheEpoch, bumpClassCounts, classSearchQuery, levelsForClassId, syncLevelsState]
   );
 
   const clearPointerDragUi = useCallback(() => {
     document.body.classList.remove(DRAG_BODY_CLASS);
     document.querySelectorAll("[data-drop-active]").forEach((el) => el.removeAttribute("data-drop-active"));
+    bulkDragCardsRef.current.forEach((card) => {
+      card.removeAttribute("data-drag-active");
+      card.style.pointerEvents = "";
+    });
+    bulkDragCardsRef.current = [];
     if (activeCardRef.current) {
       activeCardRef.current.removeAttribute("data-drag-active");
       activeCardRef.current.style.pointerEvents = "";
@@ -616,12 +1073,24 @@ export default function ClassTransferPage() {
       const source = sourceSnapshot;
       if (!source) return;
 
-      if (source.fromClassId === targetClassId && source.fromLevelId === targetLevelId) {
+      if (
+        String(source.fromClassId) === String(targetClassId) &&
+        String(source.fromLevelId) === String(targetLevelId)
+      ) {
         return;
       }
 
       const token = localStorage.getItem("token");
       setTransferBusy(true);
+
+      try {
+        await ensureLevelsCached(source.fromClassId);
+        await ensureLevelsCached(targetClassId);
+      } catch (e) {
+        setTransferBusy(false);
+        showSnack(e.message || "Could not load class terms.", "error");
+        return;
+      }
 
       const snapshot = {
         fromClassId: source.fromClassId,
@@ -630,7 +1099,10 @@ export default function ClassTransferPage() {
         toLevelId: targetLevelId,
         student: source.student,
         fromLevels: cloneLevels(levelsCacheRef.current[source.fromClassId]),
-        toLevels: source.fromClassId === targetClassId ? null : cloneLevels(levelsCacheRef.current[targetClassId]),
+        toLevels:
+          String(source.fromClassId) === String(targetClassId)
+            ? null
+            : cloneLevels(levelsCacheRef.current[targetClassId]),
         classesSnapshot: classes.map((c) => ({ ...c })),
       };
 
@@ -641,6 +1113,7 @@ export default function ClassTransferPage() {
         toClassId: targetClassId,
         toLevelId: targetLevelId,
       });
+      removeStudentsFromSelection([studentId]);
 
       try {
         const res = await fetch(`/api/class-transfer/students/${encodeURIComponent(studentId)}/move`, {
@@ -658,28 +1131,172 @@ export default function ClassTransferPage() {
           const updated = data.data.student;
           levelsCacheRef.current[targetClassId] = levelsCacheRef.current[targetClassId].map((level) => ({
             ...level,
-            students: (level.students || []).map((s) => (s.id === updated.id ? { ...s, ...updated } : s)),
+            students: (level.students || []).map((s) =>
+              String(s.id) === String(updated.id) ? { ...s, ...updated } : s
+            ),
           }));
-          if (levelsForClassId === targetClassId) syncLevelsState(targetClassId);
+        }
+
+        setLevelsPrefetchTick((t) => t + 1);
+        if (levelsForClassId === snapshot.fromClassId || levelsForClassId === targetClassId) {
+          syncLevelsState(levelsForClassId, classSearchQuery);
         }
 
         showSnack(data.message || "Student moved successfully.");
+        setRegisterRefreshKey((k) => k + 1);
       } catch (e) {
+        bumpCacheEpoch(snapshot.fromClassId, snapshot.toClassId);
         levelsCacheRef.current[snapshot.fromClassId] = snapshot.fromLevels;
         if (snapshot.toLevels) levelsCacheRef.current[snapshot.toClassId] = snapshot.toLevels;
         setClasses(snapshot.classesSnapshot);
-        if (levelsForClassId) syncLevelsState(levelsForClassId);
+        setLevelsPrefetchTick((t) => t + 1);
+        if (levelsForClassId) syncLevelsState(levelsForClassId, classSearchQuery);
         showSnack(e.message || "Could not move student.", "error");
       } finally {
         setTransferBusy(false);
       }
     },
-    [applyLocalMove, classes, levelsForClassId, showSnack, syncLevelsState]
+    [
+      applyLocalMove,
+      bumpCacheEpoch,
+      classSearchQuery,
+      classes,
+      ensureLevelsCached,
+      levelsForClassId,
+      removeStudentsFromSelection,
+      showSnack,
+      syncLevelsState,
+    ]
   );
+
+  const commitBulkTransfer = useCallback(
+    async (targetClassId, targetLevelId) => {
+      const items = [...selectedStudents.values()].filter(
+        (item) =>
+          !(
+            String(item.fromClassId) === String(targetClassId) &&
+            String(item.fromLevelId) === String(targetLevelId)
+          )
+      );
+      if (!items.length) {
+        showSnack("Selected students are already in that term.", "info");
+        removeStudentsFromSelection([...selectedStudents.keys()]);
+        return;
+      }
+
+      const movedIds = items.map((item) => item.student.id);
+      const token = localStorage.getItem("token");
+      setTransferBusy(true);
+
+      try {
+        const classIds = new Set(items.map((i) => i.fromClassId));
+        classIds.add(targetClassId);
+        await Promise.all([...classIds].map((id) => ensureLevelsCached(id)));
+      } catch (e) {
+        setTransferBusy(false);
+        showSnack(e.message || "Could not load class terms.", "error");
+        return;
+      }
+
+      const affectedClassIds = new Set(items.flatMap((item) => [item.fromClassId, targetClassId]));
+      const levelsSnapshots = {};
+      affectedClassIds.forEach((id) => {
+        if (levelsCacheRef.current[id]) levelsSnapshots[id] = cloneLevels(levelsCacheRef.current[id]);
+      });
+      const classesSnapshot = classes.map((c) => ({ ...c }));
+
+      items.forEach((item) => {
+        applyLocalMove({
+          student: item.student,
+          fromClassId: item.fromClassId,
+          fromLevelId: item.fromLevelId,
+          toClassId: targetClassId,
+          toLevelId: targetLevelId,
+        });
+      });
+      removeStudentsFromSelection(movedIds);
+
+      try {
+        const res = await fetch("/api/class-transfer/students/move-bulk", {
+          method: "POST",
+          headers: { ...authHeaders(token), "Content-Type": "application/json" },
+          body: JSON.stringify({
+            student_ids: items.map((item) => item.student.id),
+            curriculum_class_id: targetClassId,
+            curriculum_class_level_id: targetLevelId,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.message || "Could not move students.");
+
+        const results = Array.isArray(data.data?.results) ? data.data.results : [];
+        results.forEach((row) => {
+          if (!row.student || !levelsCacheRef.current[targetClassId]) return;
+          levelsCacheRef.current[targetClassId] = levelsCacheRef.current[targetClassId].map((level) => ({
+            ...level,
+            students: (level.students || []).map((s) => (s.id === row.student.id ? { ...s, ...row.student } : s)),
+          }));
+        });
+        if (levelsForClassId === targetClassId) syncLevelsState(targetClassId, classSearchQuery);
+
+        showSnack(data.message || `Moved ${items.length} student(s).`);
+        setRegisterRefreshKey((k) => k + 1);
+      } catch (e) {
+        Object.entries(levelsSnapshots).forEach(([id, snapshot]) => {
+          levelsCacheRef.current[id] = snapshot;
+        });
+        setClasses(classesSnapshot);
+        if (levelsForClassId) syncLevelsState(levelsForClassId, classSearchQuery);
+        showSnack(e.message || "Could not move students.", "error");
+      } finally {
+        setTransferBusy(false);
+      }
+    },
+    [
+      applyLocalMove,
+      classSearchQuery,
+      classes,
+      ensureLevelsCached,
+      levelsForClassId,
+      removeStudentsFromSelection,
+      selectedStudents,
+      showSnack,
+      syncLevelsState,
+    ]
+  );
+
+  const onBulkMoveHere = useCallback(
+    (targetClassId, targetLevelId) => {
+      if (!targetClassId || !targetLevelId || transferBusy || !selectedCount) return;
+      void commitBulkTransfer(targetClassId, targetLevelId);
+    },
+    [commitBulkTransfer, selectedCount, transferBusy]
+  );
+
+  const maybeAutoScrollGallery = useCallback((clientX) => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const margin = 88;
+    const speed = 22;
+    if (clientX < rect.left + margin) {
+      container.scrollLeft = Math.max(0, container.scrollLeft - speed);
+    } else if (clientX > rect.right - margin) {
+      container.scrollLeft = Math.min(
+        container.scrollWidth - container.clientWidth,
+        container.scrollLeft + speed
+      );
+    }
+  }, []);
 
   const onPointerDragStart = useCallback(
     (e, payload) => {
       if (transferBusy || pointerDragRef.current) return;
+
+      void Promise.all(classes.map((c) => ensureLevelsCached(c.id)));
+
+      const bulkDrag = selectedStudentIds.has(payload.studentId) && selectedCount > 1;
+      const dragCount = bulkDrag ? selectedCount : 1;
 
       const card = e.currentTarget;
       const rect = card.getBoundingClientRect();
@@ -688,26 +1305,48 @@ export default function ClassTransferPage() {
         offsetY: e.clientY - rect.top,
       };
 
-      activeCardRef.current = card;
-      card.setAttribute("data-drag-active", "1");
-      card.style.pointerEvents = "none";
-      if (card.setPointerCapture) card.setPointerCapture(e.pointerId);
-      dragPointerIdRef.current = e.pointerId;
+      bulkDragCardsRef.current = [];
+      if (bulkDrag) {
+        selectedStudentIds.forEach((id) => {
+          const wrapper = document.querySelector(`[data-student-id="${CSS.escape(String(id))}"]`);
+          const dragCard = wrapper?.querySelector("[data-student-drag-card]");
+          if (dragCard) {
+            dragCard.setAttribute("data-drag-active", "1");
+            dragCard.style.pointerEvents = "none";
+            bulkDragCardsRef.current.push(dragCard);
+          }
+        });
+      } else {
+        activeCardRef.current = card;
+        card.setAttribute("data-drag-active", "1");
+        card.style.pointerEvents = "none";
+        if (card.setPointerCapture) card.setPointerCapture(e.pointerId);
+        dragPointerIdRef.current = e.pointerId;
+      }
+
       document.body.classList.add(DRAG_BODY_CLASS);
       document.body.style.cursor = "grabbing";
-      pointerDragRef.current = payload;
-      setDragGhost({ student: payload.student, width: rect.width, x: e.clientX, y: e.clientY });
+      pointerDragRef.current = { ...payload, bulk: bulkDrag };
+      setDragGhost({
+        student: payload.student,
+        width: rect.width,
+        x: e.clientX,
+        y: e.clientY,
+        count: dragCount,
+      });
 
       const highlightAt = (clientX, clientY) => {
         document.querySelectorAll("[data-drop-active]").forEach((el) => el.removeAttribute("data-drop-active"));
         const under = document.elementFromPoint(clientX, clientY);
-        const zone = under?.closest?.("[data-term-drop-zone]");
+        const zone = under?.closest?.("[data-term-drop-zone]") || null;
+        activeDropZoneRef.current = zone;
         zone?.setAttribute("data-drop-active", "1");
       };
 
       const onMove = (ev) => {
         if (ev.cancelable) ev.preventDefault();
         moveDragGhost(ev.clientX, ev.clientY);
+        maybeAutoScrollGallery(ev.clientX);
         highlightAt(ev.clientX, ev.clientY);
       };
 
@@ -717,15 +1356,25 @@ export default function ClassTransferPage() {
         window.removeEventListener("pointercancel", onUp);
 
         const under = document.elementFromPoint(ev.clientX, ev.clientY);
-        const zone = under?.closest?.("[data-term-drop-zone]");
+        const zoneFromPoint = under?.closest?.("[data-term-drop-zone]") || null;
+        const zoneFromHighlight =
+          document.querySelector("[data-term-drop-zone][data-drop-active='1']") || activeDropZoneRef.current;
+        const zone = zoneFromPoint || zoneFromHighlight;
         const source = pointerDragRef.current;
+
         clearPointerDragUi();
+        activeDropZoneRef.current = null;
 
         if (!zone || !source) return;
 
         const targetClassId = zone.getAttribute("data-class-id");
         const targetLevelId = zone.getAttribute("data-level-id");
         if (!targetClassId || !targetLevelId) return;
+
+        if (source.bulk) {
+          void commitBulkTransfer(targetClassId, targetLevelId);
+          return;
+        }
 
         void commitTransfer({
           studentId: source.studentId,
@@ -739,7 +1388,18 @@ export default function ClassTransferPage() {
       window.addEventListener("pointerup", onUp);
       window.addEventListener("pointercancel", onUp);
     },
-    [clearPointerDragUi, commitTransfer, moveDragGhost, transferBusy]
+    [
+      classes,
+      clearPointerDragUi,
+      commitBulkTransfer,
+      commitTransfer,
+      ensureLevelsCached,
+      maybeAutoScrollGallery,
+      moveDragGhost,
+      selectedCount,
+      selectedStudentIds,
+      transferBusy,
+    ]
   );
 
   useEffect(() => () => clearPointerDragUi(), [clearPointerDragUi]);
@@ -783,6 +1443,7 @@ export default function ClassTransferPage() {
       setClasses(Array.isArray(data.data?.classes) ? data.data.classes : []);
       setClassIndex(0);
       levelsCacheRef.current = {};
+      levelsCacheEpochRef.current = {};
       setLevels([]);
       setLevelsForClassId(null);
     } catch (e) {
@@ -795,7 +1456,7 @@ export default function ClassTransferPage() {
   }, []);
 
   const loadLevels = useCallback(
-    async (classId) => {
+    async (classId, search = "") => {
       const token = localStorage.getItem("token");
       if (!token || !classId) {
         setLevels([]);
@@ -803,37 +1464,48 @@ export default function ClassTransferPage() {
         return;
       }
 
-      const cached = levelsCacheRef.current[classId];
+      const cacheKey = levelsCacheKey(classId, search);
+      const cached = levelsCacheRef.current[cacheKey];
       if (cached) {
         setLevels(cloneLevels(cached));
+        levelsForClassIdRef.current = String(classId);
         setLevelsForClassId(classId);
         setLoadingLevels(false);
         return;
       }
 
       const requestId = ++levelsRequestRef.current;
-      setLevels([]);
-      setLevelsForClassId(null);
+      const epoch = beginCacheFetch(cacheKey);
+      if (levelsForClassIdRef.current !== String(classId)) {
+        setLevels([]);
+        levelsForClassIdRef.current = null;
+        setLevelsForClassId(null);
+      }
       setLoadingLevels(true);
 
       try {
-        const rows = await fetchLevelsRaw(classId);
+        const rows = await fetchLevelsRaw(classId, search);
         if (requestId !== levelsRequestRef.current) return;
-        levelsCacheRef.current[classId] = cloneLevels(rows);
-        setLevels(cloneLevels(rows));
+        const applied = writeLevelsCache(cacheKey, rows, epoch);
+        const resolvedRows = applied
+          ? levelsCacheRef.current[cacheKey]
+          : levelsCacheRef.current[cacheKey] || rows;
+        setLevels(cloneLevels(resolvedRows));
+        levelsForClassIdRef.current = String(classId);
         setLevelsForClassId(classId);
       } catch (e) {
         if (requestId !== levelsRequestRef.current) return;
         setError(e.message || "Could not load terms.");
         setLevels([]);
-        setLevelsForClassId(null);
+        levelsForClassIdRef.current = String(classId);
+        setLevelsForClassId(classId);
       } finally {
         if (requestId === levelsRequestRef.current) {
           setLoadingLevels(false);
         }
       }
     },
-    [fetchLevelsRaw]
+    [beginCacheFetch, fetchLevelsRaw, writeLevelsCache]
   );
 
   useEffect(() => {
@@ -843,6 +1515,8 @@ export default function ClassTransferPage() {
   useEffect(() => {
     if (selectedCurriculum?.id) {
       void loadClasses(selectedCurriculum.id);
+      setClassSearchInput("");
+      setClassSearchQuery("");
     } else {
       setClasses([]);
       setCurriculumMeta(null);
@@ -852,29 +1526,63 @@ export default function ClassTransferPage() {
 
   useEffect(() => {
     if (currentClass?.id) {
-      void loadLevels(currentClass.id);
+      void loadLevels(currentClass.id, classSearchQuery);
     } else {
       setLevels([]);
       setLevelsForClassId(null);
     }
-  }, [currentClass?.id, loadLevels]);
+  }, [currentClass?.id, classSearchQuery, loadLevels]);
 
-  const applyClassLevelState = useCallback((classId) => {
-    if (!classId) {
-      setLevels([]);
-      setLevelsForClassId(null);
-      return;
-    }
-    const cached = levelsCacheRef.current[classId];
-    if (cached) {
-      setLevels(cloneLevels(cached));
-      setLevelsForClassId(classId);
-      setLoadingLevels(false);
-    } else {
-      setLevels([]);
-      setLevelsForClassId(null);
-    }
-  }, []);
+  useEffect(() => {
+    if (!classes.length) return undefined;
+    let cancelled = false;
+    const prefetch = async () => {
+      setPrefetchingLevels(true);
+      try {
+        for (const classItem of classes) {
+          if (cancelled) return;
+          if (levelsCacheRef.current[levelsCacheKey(classItem.id, "")]) continue;
+          try {
+            const epoch = beginCacheFetch(levelsCacheKey(classItem.id, ""));
+            const rows = await fetchLevelsRaw(classItem.id, "");
+            if (!cancelled) {
+              writeLevelsCache(levelsCacheKey(classItem.id, ""), rows, epoch);
+            }
+          } catch {
+            /* skip class on prefetch failure */
+          }
+        }
+      } finally {
+        if (!cancelled) setPrefetchingLevels(false);
+      }
+    };
+    void prefetch();
+    return () => {
+      cancelled = true;
+    };
+  }, [beginCacheFetch, classes, fetchLevelsRaw, writeLevelsCache]);
+
+  const isTransferSession = Boolean(dragGhost || selectedCount > 0);
+
+  const applyClassLevelState = useCallback(
+    (classId) => {
+      if (!classId) {
+        setLevels([]);
+        setLevelsForClassId(null);
+        return;
+      }
+      const cacheKey = levelsCacheKey(classId, classSearchQuery);
+      const cached = levelsCacheRef.current[cacheKey];
+      if (cached) {
+        setLevels(cloneLevels(cached));
+        setLevelsForClassId(classId);
+        setLoadingLevels(false);
+        return;
+      }
+      void loadLevels(classId, classSearchQuery);
+    },
+    [classSearchQuery, loadLevels]
+  );
 
   const selectClassIndex = useCallback(
     (index) => {
@@ -889,7 +1597,8 @@ export default function ClassTransferPage() {
     (index) => {
       const container = scrollRef.current;
       if (!container) return;
-      container.scrollTo({ left: index * container.clientWidth, behavior: "smooth" });
+      const span = getGallerySlideSpan(container) || container.clientWidth;
+      container.scrollTo({ left: index * span, behavior: "smooth" });
       selectClassIndex(index);
     },
     [selectClassIndex]
@@ -913,7 +1622,8 @@ export default function ClassTransferPage() {
   const onGalleryScroll = useCallback(() => {
     const container = scrollRef.current;
     if (!container || !classes.length) return;
-    const index = Math.round(container.scrollLeft / container.clientWidth);
+    const span = getGallerySlideSpan(container) || container.clientWidth;
+    const index = Math.round(container.scrollLeft / span);
     const clamped = Math.min(Math.max(0, index), classes.length - 1);
     setClassIndex((prev) => {
       if (prev === clamped) return prev;
@@ -936,12 +1646,17 @@ export default function ClassTransferPage() {
     levelsCacheRef.current = {};
     void loadCurricula();
     if (selectedCurriculum?.id) void loadClasses(selectedCurriculum.id);
-    if (currentClass?.id) void loadLevels(currentClass.id);
+    if (currentClass?.id) void loadLevels(currentClass.id, classSearchQuery);
   };
 
-  const dragHandlers = {
+  const transferHandlers = {
     transferBusy,
     onPointerDragStart,
+    selectedCount,
+    onClearSelection: clearSelection,
+    onBulkMoveHere,
+    selectedStudentIds,
+    onToggleSelect: toggleStudentSelection,
   };
 
   return (
@@ -960,7 +1675,7 @@ export default function ClassTransferPage() {
     >
       <ExamHero
         title="Class transfer"
-        subtitle="Pick a curriculum, browse classes with the arrows, and drag students between term columns."
+        subtitle="Pick a curriculum, browse classes in the carousel, and drag students between term columns — including neighbouring class cards."
         icon={<TransferWithinAStationIcon sx={{ fontSize: 28, color: "#fff" }} />}
         actions={
           <IconButton
@@ -1150,9 +1865,10 @@ export default function ClassTransferPage() {
                   sx={{
                     width: "100%",
                     display: "flex",
+                    gap: 2,
                     overflowX: "auto",
                     overflowY: "visible",
-                    scrollSnapType: "x mandatory",
+                    scrollSnapType: dragGhost ? "none" : "x mandatory",
                     scrollBehavior: "smooth",
                     scrollbarWidth: "none",
                     "&::-webkit-scrollbar": { display: "none" },
@@ -1160,28 +1876,46 @@ export default function ClassTransferPage() {
                 >
                   {classes.map((classItem, idx) => {
                     const isActiveSlide = idx === classIndex;
+                    const cachedLevels = getLevelsForClass(classItem.id);
                     const levelsReady = levelsForClassId === classItem.id;
+                    const slideLevels = isActiveSlide && levelsReady ? levels : cachedLevels;
+                    const slideLoading = isActiveSlide
+                      ? loadingLevels
+                      : prefetchingLevels && !cachedLevels.length;
                     return (
                       <Box
                         key={classItem.id}
+                        data-class-slide
                         sx={{
-                          flex: "0 0 100%",
-                          width: "100%",
+                          flex: "0 0 86%",
                           scrollSnapAlign: "start",
                           scrollSnapStop: "always",
                           display: "flex",
                           alignItems: "flex-start",
                           justifyContent: "center",
-                          px: { xs: 7, md: 10 },
+                          px: { xs: 1.5, md: 2 },
                           py: { xs: 2.5, md: 3 },
                           boxSizing: "border-box",
+                          opacity: isActiveSlide ? 1 : isTransferSession ? 0.96 : 0.52,
+                          transform: isActiveSlide ? "none" : "scale(0.985)",
+                          transition: "opacity 0.2s, transform 0.2s",
+                          pointerEvents: "auto",
                         }}
                       >
                         <ClassGalleryCard
                           classItem={classItem}
-                          levels={isActiveSlide && levelsReady ? levels : []}
-                          loadingLevels={isActiveSlide && levelsForClassId !== classItem.id}
-                          {...dragHandlers}
+                          levels={slideLevels}
+                          loadingLevels={slideLoading}
+                          isActiveSlide={isActiveSlide}
+                          isDragSession={isTransferSession}
+                          classViewMode={isActiveSlide ? classViewMode : "transfer"}
+                          onClassViewModeChange={setClassViewMode}
+                          curriculumId={selectedCurriculum?.id}
+                          registerRefreshKey={registerRefreshKey}
+                          classSearchInput={classSearchInput}
+                          onClassSearchInputChange={setClassSearchInput}
+                          classSearchQuery={classSearchQuery}
+                          {...transferHandlers}
                         />
                       </Box>
                     );
@@ -1215,6 +1949,7 @@ export default function ClassTransferPage() {
           width={dragGhost.width}
           x={dragGhost.x}
           y={dragGhost.y}
+          count={dragGhost.count || 1}
           ghostRef={dragGhostElRef}
           offsetRef={dragGhostOffsetRef}
         />

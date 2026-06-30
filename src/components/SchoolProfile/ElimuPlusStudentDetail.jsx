@@ -31,6 +31,7 @@ import {
   resolveAssetUrl,
 } from "./elimuPlusShared";
 import { ElimuPlusHero, FormSection, HeroActionButton } from "./elimuPlusUi";
+import StudentPlacementTimeline from "./StudentPlacementTimeline";
 
 function formatClassDisplay(cc) {
   if (!cc) return "";
@@ -100,6 +101,9 @@ export default function ElimuPlusStudentDetail() {
   const [student, setStudent] = useState(location.state?.studentRow || null);
   const [loading, setLoading] = useState(!location.state?.studentRow);
   const [error, setError] = useState(null);
+  const [placementEntries, setPlacementEntries] = useState([]);
+  const [placementLoading, setPlacementLoading] = useState(true);
+  const [placementError, setPlacementError] = useState("");
 
   const goBack = () => navigate("/elimu-plus", { state: { tab: 3 } });
 
@@ -139,6 +143,36 @@ export default function ElimuPlusStudentDetail() {
       }
     };
     if (studentId) void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [studentId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPlacement = async () => {
+      if (!studentId) return;
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      setPlacementLoading(true);
+      setPlacementError("");
+      try {
+        const res = await fetch(`/api/students/${encodeURIComponent(studentId)}/placement-register`, {
+          headers: authHeaders(token),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.message || "Could not load term register.");
+        if (!cancelled) setPlacementEntries(Array.isArray(data.data?.entries) ? data.data.entries : []);
+      } catch (e) {
+        if (!cancelled) {
+          setPlacementError(e.message || "Could not load term register.");
+          setPlacementEntries([]);
+        }
+      } finally {
+        if (!cancelled) setPlacementLoading(false);
+      }
+    };
+    void loadPlacement();
     return () => {
       cancelled = true;
     };
@@ -311,6 +345,17 @@ export default function ElimuPlusStudentDetail() {
               <ReadOnlyField label="Emergency contact phone" value={student.emergency_contact_phone} />
               <ReadOnlyField label="Alumni" value={student.is_alumni ? "Yes" : "No"} />
             </FieldStack>
+          </FormSection>
+
+          <FormSection title="Term register — school journey">
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6 }}>
+              Movement history across curricula, classes, and terms — admissions, term starts, and transfers.
+            </Typography>
+            <StudentPlacementTimeline
+              entries={placementEntries}
+              loading={placementLoading}
+              error={placementError}
+            />
           </FormSection>
 
           <FormSection title="Account status">
